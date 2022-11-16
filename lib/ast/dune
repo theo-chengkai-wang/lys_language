@@ -1,0 +1,3 @@
+(library
+ (name lys_ast)
+ (libraries core))

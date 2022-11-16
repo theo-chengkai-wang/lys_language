@@ -1,0 +1,7 @@
+(menhir
+ (modules parser))
+
+(library
+ (name lys_parsing)
+ (libraries core
+ lys_ast))

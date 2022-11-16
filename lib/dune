@@ -1,2 +1,5 @@
 (library
- (name lys_language))
+ (name lys_language)
+ (libraries
+ lys_ast
+ lys_parsing))

@@ -1,4 +1,4 @@
 (executable
  (public_name lys_language)
  (name main)
- (libraries lys_language))
+ (libraries lys_ast lys_parsing))
