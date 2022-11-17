@@ -1,6 +1,8 @@
 (menhir
  (modules parser))
 
+(ocamllex lexer)
+
 (library
  (name lys_parsing)
  (libraries core

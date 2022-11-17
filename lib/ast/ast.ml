@@ -1,5 +1,5 @@
-type identifier = string
-type meta_identifier = string
+type identifier = string [@@deriving show]
+type meta_identifier = string [@@deriving show]
 
 type typ =
   | TBool
@@ -8,9 +8,10 @@ type typ =
   | TBox of context * typ
   | TProd of typ * typ
   | TSum of typ * typ
+[@@deriving show]
 
-and identifier_defn = identifier * typ (*x : A*)
-and context = identifier_defn list (*\Psi*)
+and identifier_defn = identifier * typ (*x : A*) [@@deriving show]
+and context = identifier_defn list (*\Psi*) [@@deriving show]
 
 type binary_op =
   | ADD
@@ -26,9 +27,10 @@ type binary_op =
   | LT
   | AND
   | OR
+[@@deriving show]
 
-type unary_op = NEG | NOT
-type constant = Integer of int | Boolean of bool
+type unary_op = NEG | NOT [@@deriving show]
+type constant = Integer of int | Boolean of bool [@@deriving show]
 
 type expression =
   | Identifier of identifier (*x*)
@@ -40,7 +42,8 @@ type expression =
   | Snd of expression (*snd e*)
   | Left of typ * typ * expression (*L[A,B] e*)
   | Right of typ * typ * expression (*R[A,B] e*)
-  | Match of expression * identifier_defn * expression * identifier_defn * expression
+  | Match of
+      expression * identifier_defn * expression * identifier_defn * expression
     (*match e with
       L (x: A) -> e' | R (y: B) -> e'' translates to 1 expr and 2 lambdas*)
   | Lambda of identifier_defn * expression (*fun (x : A) -> e*)
@@ -53,15 +56,16 @@ type expression =
       e[f] in e'*)
   | Box of context * expression (*box (x:A, y:B |- e)*)
   | LetBox of meta_identifier * expression * expression (*let box u = e in e'*)
-  | Closure of meta_identifier * expression list
-(*u with (e1, e2, e3, ...)*)
+  | Closure of meta_identifier * expression list (*u with (e1, e2, e3, ...)*)
+[@@deriving show]
 
 (*inspired from Cornell course,used as directives to the REPL loop*)
-type directive = Reset | Env | Quit
+type directive = Reset | Env | Quit [@@deriving show]
 
 type top_level_defn =
   | Definition of identifier_defn * expression
   | Expression of expression
   | Directive of directive
+[@@deriving show]
 
-type program = top_level_defn list
+type program = top_level_defn list [@@deriving show]

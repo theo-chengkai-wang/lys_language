@@ -1,2 +1,8 @@
 (test
- (name lys_language))
+ (name lys_language)
+ (modules lys_language))
+
+(test
+ (name parsing_test)
+ (modules parsing_test)
+ (preprocess (pps ppx_expect)))
