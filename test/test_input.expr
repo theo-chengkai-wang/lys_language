@@ -1,1 +1,1 @@
-(f g) h
+match x with L (y:int) -> a | R (y:int) -> b
