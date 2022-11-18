@@ -2,10 +2,17 @@
 open Lys_ast.Ast
 
 (*TODO: ATTEMPT Constructs an Application AST node from an expression with the function and a list of expressions f is applied to*)
-(*exception EmptyListError
-let mkapp _ = Application (Identifier "x", Identifier "y")
-*)
+exception EmptyListError
 
+let mkapp f xs = 
+    let rev_xs = List.rev xs in 
+    let rec mkapp_aux f rxs = 
+        match rxs with
+        | [x] -> Application (f, x)
+        | x::rxs -> Application (mkapp_aux f rxs, x)
+        | [] -> raise EmptyListError
+    in 
+    mkapp_aux f rev_xs
 %}
 
 %token <int> INT
@@ -129,12 +136,14 @@ simple_expr:
     | LEFT_PAREN e1 = expr COMMA e2 = expr RIGHT_PAREN {Prod (e1, e2)}
     | u = identifier; WITH; s = sim_sub {Closure (u, s)} // TODO resolve conflict with MATCH
 
+args: s=simple_expr {s} // HACK? 
+
 expr:
     | s = simple_expr {s}
     (* bigger constructs *)
     | IF e1 = expr THEN e2 = expr ELSE e3=expr {IfThenElse (e1, e2, e3)}
     | FUN arg = id_typ_declaration "->" e = expr {Lambda (arg, e)}
-    | s1 = expr; s2 = simple_expr %prec APP {Application (s1, s2)} // TODO Figure out -- perhaps manually assign levels to make this work.
+    | s1 = simple_expr; s2 = args+ %prec APP {mkapp s1 s2} // TODO Figure out -- perhaps manually assign levels to make this work.
     | FST e = expr {Fst e}
     | SND e = expr {Snd e}
     | INL LEFT_BRACKET t1=typ COMMA t2=typ RIGHT_BRACKET e = expr {Left (t1, t2, e)}
