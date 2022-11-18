@@ -58,7 +58,6 @@
 %right "->"
 %left APP
 // // Match with
-// %nonassoc MATCH_WITH
 // metavariable with
 %left WITH
 
@@ -73,6 +72,9 @@
 %left "+" "-"
 %left "*" "/"
 %nonassoc UMINUS
+
+%nonassoc MATCH
+
 
 
 // %start <lys_ast.Ast.program> prog
@@ -98,6 +100,8 @@ start:
     | EOF {None}
     | e = expr EOF {Some e}
 
+// TODO use simple expr strategy for app and match
+
 expr:
     | LEFT_PAREN; e = expr; RIGHT_PAREN {e}
     | c = constant {Constant c}
@@ -105,7 +109,7 @@ expr:
     | a = arith { a }
     | b = bool { b }
     | c = comp { c }
-    | u = meta_identifier WITH s = expr {Closure (u, [s])} // TODO resolve conflict with MATCH
+    | u = identifier; WITH; s = sim_sub {Closure (u, s)} // TODO resolve conflict with MATCH
     (* bigger constructs *)
     | IF e1 = expr THEN e2 = expr ELSE e3=expr {IfThenElse (e1, e2, e3)}
     | FUN arg = id_typ_declaration "->" e = expr {Lambda (arg, e)}
@@ -115,11 +119,11 @@ expr:
     | SND e = expr {Snd e}
     | INL LEFT_BRACKET t1=typ COMMA t2=typ RIGHT_BRACKET e = expr {Left (t1, t2, e)}
     | INR LEFT_BRACKET t1=typ COMMA t2=typ RIGHT_BRACKET e = expr {Right (t1, t2, e)}
-    | MATCH e1 = expr WITH INL id_decl1 = id_typ_declaration "->" e2 = expr "|" INR id_decl2 = id_typ_declaration "->" e3 = expr {Match (e1, id_decl1, e2, id_decl2, e3)}
+    | MATCH e1 = expr WITH INL id_decl1 = id_typ_declaration "->" e2 = expr "|" INR id_decl2 = id_typ_declaration "->" e3 = expr %prec MATCH {Match (e1, id_decl1, e2, id_decl2, e3)}
     | LET decl = id_typ_declaration EQ e1 = expr IN e2 = expr %prec DEFN_EQ {LetBinding (decl, e1, e2)}
     | LET REC decl = id_typ_declaration EQ e1 = expr IN e2 = expr %prec DEFN_EQ {LetRec (decl, e1, e2)}
     | BOX LEFT_PAREN decl_list = separated_list(COMMA, id_typ_declaration) TURNSTILE e = expr RIGHT_PAREN {Box (decl_list, e)}
-    | LET BOX u = meta_identifier EQ e1 = expr IN e2 = expr {LetBox (u, e1, e2)}
+    | LET BOX u = identifier EQ e1 = expr IN e2 = expr {LetBox (u, e1, e2)}
 
 constant:
     | i = INT {Integer i}
@@ -129,16 +133,12 @@ constant:
 identifier:
     | i = ID {i};
 
-meta_identifier:
-    | u = ID {u};
-
 id_typ_declaration:
     | i = identifier COLON t = typ {(i, t)}
     | LEFT_PAREN d = id_typ_declaration RIGHT_PAREN {d};
 
 sim_sub: 
-    | l = separated_list(COMMA, expr) {l} 
-    | LEFT_PAREN s = sim_sub RIGHT_PAREN {s};
+    | LEFT_PAREN l = separated_list(COMMA, expr) RIGHT_PAREN {l} 
 
 typ:
     | BOOL_typ {TBool}

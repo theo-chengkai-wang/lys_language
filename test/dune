@@ -5,4 +5,4 @@
 (test
  (name parsing_test)
  (modules parsing_test)
- (preprocess (pps ppx_expect)))
+ (libraries ounit2 lys_ast lys_parsing))
