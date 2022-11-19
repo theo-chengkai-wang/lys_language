@@ -1,7 +1,7 @@
 %{
 open Lys_ast.Ast
 
-(*TODO: ATTEMPT Constructs an Application AST node from an expression with the function and a list of expressions f is applied to*)
+(*TODO: ATTEMPT Constructs an Application AST node from an expression with the function and a list of expressions f is applied to
 exception EmptyListError
 
 let mkapp f xs = 
@@ -12,7 +12,7 @@ let mkapp f xs =
         | x::rxs -> Application (mkapp_aux f rxs, x)
         | [] -> raise EmptyListError
     in 
-    mkapp_aux f rev_xs
+    mkapp_aux f rev_xs*)
 %}
 
 %token <int> INT
@@ -88,9 +88,8 @@ let mkapp f xs =
 %nonassoc UMINUS
 
 // Want simple expressions to be at the highest priority
+%nonassoc SIMPLE_EXPR
 %nonassoc TRUE FALSE INT ID LEFT_PAREN
-
-
 
 // %start <lys_ast.Ast.program> prog
 // TODO temporarily just do expressions
@@ -107,43 +106,30 @@ let mkapp f xs =
 
 // top_level
 
-// TODO: How to make application WITH SPACES left-associative?
-// https://github.com/Timothy-G-Griffin/cc_cl_cam_ac_uk/blob/master/slang/parser.mly
-// Solution? https://stackoverflow.com/questions/2847399/on-ocamlyacc-function-application-grammar-and-precedence
-
 start:
     | EOF {None}
     | e = expr EOF {Some e}
-
-// TODO use simple expr strategy for app and match: https://github.com/ocaml/ocaml/blob/trunk/parsing/parser.mly#L2352
-
-(* The two following are copied from the OCaml parser.mly, used to generate non-empty lists of space-separated NTs *)
-// reversed_nonempty_llist(X):
-// | x = X { [ x ] }
-// | xs = reversed_nonempty_llist(X) x = X { x :: xs }
-
-// nonempty_llist(X): l = reversed_nonempty_llist(X) {List.rev l}
-
-(*Approach inspired from OCaml compiler*)
 
 simple_expr:
     | LEFT_PAREN; e = expr; RIGHT_PAREN {e}
     | c = constant {Constant c}
     | i = identifier {Identifier i}
-    | a = arith { a }
-    | b = bool { b }
-    | c = comp { c }
     | LEFT_PAREN e1 = expr COMMA e2 = expr RIGHT_PAREN {Prod (e1, e2)}
     | u = identifier; WITH; s = sim_sub {Closure (u, s)} // TODO resolve conflict with MATCH
 
-args: s=simple_expr {s} // HACK? 
+application_expr:
+    | s1 = application_expr; s2 = simple_expr  {Application (s1, s2)}
+    | s1 = simple_expr; s2 = simple_expr {Application (s1, s2)}
 
 expr:
     | s = simple_expr {s}
+    | a = application_expr {a}
+    | a = arith { a }
+    | c = comp { c }
+    | b = bool { b }
     (* bigger constructs *)
     | IF e1 = expr THEN e2 = expr ELSE e3=expr {IfThenElse (e1, e2, e3)}
     | FUN arg = id_typ_declaration "->" e = expr {Lambda (arg, e)}
-    | s1 = simple_expr; s2 = args+ %prec APP {mkapp s1 s2} // TODO Figure out -- perhaps manually assign levels to make this work.
     | FST e = expr {Fst e}
     | SND e = expr {Snd e}
     | INL LEFT_BRACKET t1=typ COMMA t2=typ RIGHT_BRACKET e = expr {Left (t1, t2, e)}

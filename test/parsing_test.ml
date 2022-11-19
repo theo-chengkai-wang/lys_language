@@ -40,9 +40,20 @@ let test_app _ =
   assert_equal
     (Some
        (Ast.Application
-          ( Ast.Identifier "f",
-            Ast.BinaryOp (Ast.ADD, Identifier "x", Identifier "y") )))
-    (parse_expression (Lexing.from_string "f (x + y)"))
+          ( Ast.Application
+              ( Ast.Application
+                  ( Ast.Application
+                      ( Ast.Application
+                          ( Ast.Lambda (("x", Ast.TInt), Ast.Identifier "e"),
+                            Ast.Identifier "f" ),
+                        Ast.Identifier "g" ),
+                    Ast.Identifier "h" ),
+                Ast.Prod
+                  (Ast.Constant (Ast.Integer 1), Ast.Constant (Ast.Integer 2))
+              ),
+            Ast.Left (Ast.TInt, Ast.TInt, Ast.Constant (Ast.Integer 1)) )))
+    (parse_expression
+       (Lexing.from_string "(fun (x:int) -> e) f g h (1, 2) (L[int, int] 1)"))
 
 let test_box _ =
   assert_equal
