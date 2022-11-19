@@ -75,6 +75,9 @@ let mkapp f xs =
 %left WITH
 
 %left PATTERN_OR
+%nonassoc CLO
+%nonassoc MATCH_WITH
+
 %left DEFN_EQ // precedence for = signs in definitions
 // bool
 %left AND OR
@@ -115,7 +118,6 @@ simple_expr:
     | c = constant {Constant c}
     | i = identifier {Identifier i}
     | LEFT_PAREN e1 = expr COMMA e2 = expr RIGHT_PAREN {Prod (e1, e2)}
-    | u = identifier; WITH; s = sim_sub {Closure (u, s)} // TODO resolve conflict with MATCH
 
 application_expr:
     | s1 = application_expr; s2 = simple_expr  {Application (s1, s2)}
@@ -127,6 +129,7 @@ expr:
     | a = arith { a }
     | c = comp { c }
     | b = bool { b }
+    | u = identifier; WITH; s = sim_sub {Closure (u, s)} // not a simple_expr because it contains a WITH application
     (* bigger constructs *)
     | IF e1 = expr THEN e2 = expr ELSE e3=expr {IfThenElse (e1, e2, e3)}
     | FUN arg = id_typ_declaration "->" e = expr {Lambda (arg, e)}
@@ -134,7 +137,7 @@ expr:
     | SND e = expr {Snd e}
     | INL LEFT_BRACKET t1=typ COMMA t2=typ RIGHT_BRACKET e = expr {Left (t1, t2, e)}
     | INR LEFT_BRACKET t1=typ COMMA t2=typ RIGHT_BRACKET e = expr {Right (t1, t2, e)}
-    | MATCH e1 = simple_expr WITH INL id_decl1 = id_typ_declaration "->" e2 = expr "|" INR id_decl2 = id_typ_declaration "->" e3 = expr %prec MATCH {Match (e1, id_decl1, e2, id_decl2, e3)}
+    | MATCH e1 = simple_expr WITH INL id_decl1 = id_typ_declaration "->" e2 = expr "|" INR id_decl2 = id_typ_declaration "->" e3 = expr {Match (e1, id_decl1, e2, id_decl2, e3)}
     | LET decl = id_typ_declaration EQ e1 = expr IN e2 = expr %prec DEFN_EQ {LetBinding (decl, e1, e2)}
     | LET REC decl = id_typ_declaration EQ e1 = expr IN e2 = expr %prec DEFN_EQ {LetRec (decl, e1, e2)}
     | BOX LEFT_PAREN decl_list = separated_list(COMMA, id_typ_declaration) TURNSTILE e = expr RIGHT_PAREN {Box (decl_list, e)}

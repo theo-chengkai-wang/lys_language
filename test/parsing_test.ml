@@ -77,7 +77,19 @@ let test_with _ =
           ("u", [ Ast.Constant (Ast.Integer 1); Ast.Constant (Ast.Integer 2) ])))
     (parse_expression (Lexing.from_string "u with (1, 2)"))
 
-(*TODO: Tests for Let, Let rec, Arithmetic, Boolean algebra, If then else, Sum types*)
+let test_match _ =
+  assert_equal
+    (Some
+       (Ast.Match
+          ( Ast.Identifier "x",
+            ("y", Ast.TInt),
+            Ast.Identifier "a",
+            ("z", Ast.TInt),
+            Ast.Identifier "b" )))
+    (parse_expression
+       (Lexing.from_string "match x with L (y:int) -> a | R (z:int) -> b"))
+
+(*TODO: Tests for Let, Let rec, Arithmetic, Boolean algebra, If then else, Sum types, Product types, and precedence, associativity*)
 
 (* Name the test cases and group them together *)
 let suite =
@@ -93,6 +105,7 @@ let suite =
          "test_box" >:: test_box;
          "test_unbox" >:: test_unbox;
          "test_with" >:: test_with;
+         "test_match" >:: test_match;
        ]
 
 let () = run_test_tt_main suite
