@@ -63,20 +63,18 @@ let mkapp f xs =
 %token EOF
 
 (* Operator Definitions*)
-// TODO: refine precedence according to https://github.com/ocaml/ocaml/blob/trunk/parsing/parser.mly
+// TODO: refine precedence according to https://github.com/ocaml/ocaml/blob/trunk/parsing/parser.mly -- ACTUALLY PROPERLY DEAL WITH THIS SHIT PLEASE
 // typs
 %right typ_FUNCTION_ARROW
 %left typ_SUM typ_PRODUCT
+
 // Functions
 %right "->"
-%left APP
 // // Match with
 // metavariable with
 %left WITH
 
 %left PATTERN_OR
-%nonassoc CLO
-%nonassoc MATCH_WITH
 
 %left DEFN_EQ // precedence for = signs in definitions
 // bool
