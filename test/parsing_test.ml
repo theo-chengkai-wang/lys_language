@@ -101,6 +101,8 @@ let test_inr _ =
 
 (*TODO: Tests for Let, Let rec, Arithmetic, Boolean algebra, If then else, and precedence, associativity*)
 
+(*TODO: Migrate to expect test*)
+
 (* Name the test cases and group them together *)
 let suite =
   "suite"
