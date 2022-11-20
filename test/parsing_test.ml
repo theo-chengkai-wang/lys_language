@@ -99,9 +99,13 @@ let test_inr _ =
     (Some (Ast.Right (Ast.TInt, Ast.TBool, Ast.Constant (Ast.Boolean true))))
     (parse_expression (Lexing.from_string "R[int, bool] true"))
 
-(*TODO: Tests for Let, Let rec, Arithmetic, Boolean algebra, If then else, and precedence, associativity*)
+(*
+   TODO: Tests for Let, Let rec, Arithmetic, Boolean algebra, If then else, and precedence, associativity
+*)
 
-(*TODO: Migrate to expect test*)
+(*
+   TODO: Migrate to expect test
+*)
 
 (* Name the test cases and group them together *)
 let suite =
