@@ -1,1 +1,4 @@
-if x=1 then e2 else e3
+fun (z:[x:bool] int) -> 
+    let box u = z in 
+        (box (y1: bool, y2: bool*bool |- 
+            (u with (y1))))
