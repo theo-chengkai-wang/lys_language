@@ -95,7 +95,7 @@ let mkapp f xs =
 // %start <lys_ast.Ast.program> prog
 // TODO temporarily just do expressions
 // TODO Specify types for non terminals
-%start <Lys_ast.Ast.expression option> start
+%start <Lys_ast.Ast.program> start
 
 %%
 
@@ -106,10 +106,11 @@ let mkapp f xs =
 // prog: p = rev_prog {List.rev p}
 
 // top_level
+// TODO: to be changed to actual
 
 start:
-    | EOF {None}
-    | e = expr EOF {Some e}
+    | EOF {[]}
+    | e = expr EOF {[Expression e]}
 
 simple_expr:
     | LEFT_PAREN; e = expr; RIGHT_PAREN {e}
@@ -139,7 +140,7 @@ expr:
     | LET decl = id_typ_declaration EQ e1 = expr IN e2 = expr %prec DEFN_EQ {LetBinding (decl, e1, e2)}
     | LET REC decl = id_typ_declaration EQ e1 = expr IN e2 = expr %prec DEFN_EQ {LetRec (decl, e1, e2)}
     | BOX LEFT_PAREN decl_list = separated_list(COMMA, id_typ_declaration) TURNSTILE e = expr RIGHT_PAREN {Box (decl_list, e)}
-    | LET BOX u = identifier EQ e1 = expr IN e2 = expr {LetBox (u, e1, e2)}
+    | LET BOX u = identifier EQ e1 = expr IN e2 = expr {LetBox (u, e1, e2)} // TODO: distinguish metaidentifier and identifier
 
 constant:
     | i = INT {Integer i}

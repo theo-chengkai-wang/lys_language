@@ -11,15 +11,23 @@ let parse_with_error lexbuf =
   try Parser.start Lexer.read lexbuf with
   | SyntaxError msg ->
       fprintf stderr "%a: Syntax error: %s\n" print_position lexbuf msg;
-      None
+      exit (-1)
   | Parser.Error ->
       fprintf stderr ("%a: Parsing error at character \"%s\" \n") print_position lexbuf (Lexing.lexeme lexbuf);
       exit (-1)
 
-let parse_expression = parse_with_error
+let parse_program = parse_with_error
+
+let parse_expression lexbuf = 
+  (*Parse the first expression*)
+  let tree = parse_program lexbuf in
+  match tree with
+  |(Expression expr)::_ -> Some expr
+  | _ -> None
 
 let parse_and_print lexbuf =
-  let parsed_tree = parse_expression lexbuf in
+  (*TODO: Modify this to actual impl for the entire program*)
+  let parsed_tree = parse_program lexbuf in
   match parsed_tree with
-  | None -> print_endline "Parsing failed."
-  | Some tree -> print_endline (Lys_ast.Ast.show_expression tree)
+  | (Expression expr)::_ -> print_endline (Lys_ast.Ast.show_expression expr)
+  | _ -> print_endline "End of parse"

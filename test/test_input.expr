@@ -1,4 +1,1 @@
-fun (z:[x:bool] int) -> 
-    let box u = z in 
-        (box (y1: bool, y2: bool*bool |- 
-            (u with (y1))))
+f g h
