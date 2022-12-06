@@ -16,6 +16,9 @@ let test_bool_false _ =
   assert_equal (Some (Ast.Constant (Ast.Boolean false)))
     (parse_expression (Lexing.from_string "false"))
 
+let test_unit _ =
+  assert_equal (Some (Ast.Constant Ast.Unit)) (parse_expression (Lexing.from_string "()"))
+
 let test_prod _ =
   assert_equal
     (Some (Ast.Prod (Ast.Identifier "x", Ast.Identifier "y")))
@@ -118,6 +121,7 @@ let suite =
          "test_snd" >:: test_snd;
          "test_fun" >:: test_fun;
          "test_app" >:: test_app;
+         "test_unit" >:: test_unit;
          "test_box" >:: test_box;
          "test_unbox" >:: test_unbox;
          "test_with" >:: test_with;

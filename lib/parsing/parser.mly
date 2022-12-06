@@ -19,6 +19,8 @@ let mkapp f xs =
 %token <string> ID
 %token BOOL_typ
 %token INT_typ
+%token UNIT_typ
+%token UNIT
 %token TRUE
 %token FALSE 
 %token NOT
@@ -145,7 +147,8 @@ expr:
 constant:
     | i = INT {Integer i}
     | TRUE {Boolean true}
-    | FALSE {Boolean false};
+    | FALSE {Boolean false}
+    | UNIT {Unit};
 
 identifier:
     | i = ID {i};
@@ -160,6 +163,7 @@ sim_sub:
 typ:
     | BOOL_typ {TBool}
     | INT_typ {TInt}
+    | UNIT_typ {TUnit}
     | t1 = typ; "->"; t2 = typ %prec typ_FUNCTION_ARROW {TFun (t1, t2)}
     | t1 = typ; "*"; t2 = typ %prec typ_PRODUCT {TProd (t1, t2)}
     | t1 = typ; "+"; t2 = typ %prec typ_SUM {TSum (t1, t2)}

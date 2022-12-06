@@ -6,6 +6,7 @@ type identifier = string [@@deriving show]
 type meta_identifier = string [@@deriving show]
 
 type typ =
+  | TUnit
   | TBool
   | TInt
   | TFun of typ * typ
@@ -34,7 +35,7 @@ type binary_op =
 [@@deriving show]
 
 type unary_op = NEG | NOT [@@deriving show]
-type constant = Integer of int | Boolean of bool [@@deriving show]
+type constant = Integer of int | Boolean of bool | Unit [@@deriving show]
 
 type expression =
   | Identifier of identifier (*x*)

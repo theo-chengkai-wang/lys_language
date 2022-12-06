@@ -28,6 +28,8 @@ rule read =
     | "false" {FALSE}
     | "bool" {BOOL_typ}
     | "int" {INT_typ}
+    | "unit" {UNIT_typ}
+    | "()" {UNIT}
     | "not" {NOT}
     | "and" {AND}
     | "or" {OR}
