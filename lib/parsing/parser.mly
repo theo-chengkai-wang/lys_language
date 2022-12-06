@@ -164,6 +164,7 @@ typ:
     | BOOL_typ {TBool}
     | INT_typ {TInt}
     | UNIT_typ {TUnit}
+    | i = ID {TIdentifier i}
     | t1 = typ; "->"; t2 = typ %prec typ_FUNCTION_ARROW {TFun (t1, t2)}
     | t1 = typ; "*"; t2 = typ %prec typ_PRODUCT {TProd (t1, t2)}
     | t1 = typ; "+"; t2 = typ %prec typ_SUM {TSum (t1, t2)}

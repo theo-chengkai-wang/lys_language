@@ -9,6 +9,7 @@ type typ =
   | TUnit
   | TBool
   | TInt
+  | TIdentifier of identifier
   | TFun of typ * typ
   | TBox of context * typ
   | TProd of typ * typ
