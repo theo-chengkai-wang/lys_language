@@ -168,7 +168,8 @@ typ:
     | t1 = typ; "->"; t2 = typ %prec typ_FUNCTION_ARROW {TFun (t1, t2)}
     | t1 = typ; "*"; t2 = typ %prec typ_PRODUCT {TProd (t1, t2)}
     | t1 = typ; "+"; t2 = typ %prec typ_SUM {TSum (t1, t2)}
-    | LEFT_BRACKET decl_list = separated_list(COMMA, id_typ_declaration) RIGHT_BRACKET t = typ {TBox (decl_list, t)};
+    | LEFT_BRACKET decl_list = separated_list(COMMA, id_typ_declaration) RIGHT_BRACKET t = typ {TBox (decl_list, t)}
+    | LEFT_PAREN t = typ RIGHT_PAREN {t};
 
 arith:
     | e1 = expr "+" e2 = expr {BinaryOp (ADD, e1, e2)}
