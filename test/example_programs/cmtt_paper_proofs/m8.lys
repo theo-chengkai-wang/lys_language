@@ -1,0 +1,7 @@
+let m8: [x: A](A -> B) -> [y: B]C -> [z: A]C = 
+    fun (x1: [x:A](A->B)) -> 
+        fun (x2: [y: B]C) -> 
+            let box u = x1 in 
+                let box v = x2 in
+                    box (z: A |- v with ((u with (z)) z))
+in ()

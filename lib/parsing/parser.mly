@@ -148,7 +148,7 @@ constant:
     | i = INT {Integer i}
     | TRUE {Boolean true}
     | FALSE {Boolean false}
-    | UNIT {Unit};
+    | LEFT_PAREN RIGHT_PAREN {Unit};
 
 identifier:
     | i = ID {i};
