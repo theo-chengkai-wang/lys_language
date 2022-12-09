@@ -17,7 +17,8 @@ let test_bool_false _ =
     (parse_expression (Lexing.from_string "false"))
 
 let test_unit _ =
-  assert_equal (Some (Ast.Constant Ast.Unit)) (parse_expression (Lexing.from_string "()"))
+  assert_equal (Some (Ast.Constant Ast.Unit))
+    (parse_expression (Lexing.from_string "()"))
 
 let test_prod _ =
   assert_equal
@@ -102,12 +103,148 @@ let test_inr _ =
     (Some (Ast.Right (Ast.TInt, Ast.TBool, Ast.Constant (Ast.Boolean true))))
     (parse_expression (Lexing.from_string "R[int, bool] true"))
 
-(*
-   TODO: Tests for Let, Let rec, Arithmetic, Boolean algebra, If then else, and precedence, associativity
-*)
+let test_reg_parse_unit_and_not_unit _ =
+  assert_equal
+    (Some
+       (Ast.LetBinding
+          ( ("x", Ast.TBox ([], Ast.TIdentifier "A")),
+            Ast.Box ([], Ast.Identifier "A"),
+            Ast.LetBox ("u", Ast.Identifier "x", Ast.Closure ("u", [])) )))
+    (parse_expression
+       (Lexing.from_string
+          "let x: []A = box (|- A) in\nlet box u = x in\n    u with ()\n"))
+
+let test_let _ =
+  assert_equal
+    (Some
+       (Ast.LetBinding
+          (("x", Ast.TIdentifier "A"), Ast.Identifier "y", Ast.Identifier "b")))
+    (parse_expression (Lexing.from_string "let x: A = y in b"))
+
+let test_let_rec _ =
+  assert_equal
+    (Some
+       (Ast.LetRec
+          ( ("x", Ast.TFun (Ast.TIdentifier "A", Ast.TIdentifier "B")),
+            Ast.Identifier "y",
+            Ast.Identifier "b" )))
+    (parse_expression (Lexing.from_string "let rec x: A -> B = y in b"))
+
+let test_if_else _ =
+  assert_equal
+    (Some
+       (Ast.IfThenElse
+          (Ast.Identifier "b", Ast.Identifier "e1", Ast.Identifier "e2")))
+    (parse_expression (Lexing.from_string "if b then e1 else e2"))
+
+let test_binop_plus _ =
+  assert_equal
+    (Some (Ast.BinaryOp (Ast.ADD, Ast.Identifier "a", Ast.Identifier "b")))
+    (parse_expression (Lexing.from_string "a + b"))
+
+let test_binop_sub _ =
+  assert_equal
+    (Some (Ast.BinaryOp (Ast.SUB, Ast.Identifier "a", Ast.Identifier "b")))
+    (parse_expression (Lexing.from_string "a - b"))
+
+let test_binop_mul _ =
+  assert_equal
+    (Some (Ast.BinaryOp (Ast.MUL, Ast.Identifier "a", Ast.Identifier "b")))
+    (parse_expression (Lexing.from_string "a * b"))
+
+let test_binop_div _ =
+  assert_equal
+    (Some (Ast.BinaryOp (Ast.DIV, Ast.Identifier "a", Ast.Identifier "b")))
+    (parse_expression (Lexing.from_string "a / b"))
+
+let test_binop_mod _ =
+  assert_equal
+    (Some (Ast.BinaryOp (Ast.MOD, Ast.Identifier "a", Ast.Identifier "b")))
+    (parse_expression (Lexing.from_string "a % b"))
+
+let test_binop_eq _ =
+  assert_equal
+    (Some (Ast.BinaryOp (Ast.EQ, Ast.Identifier "a", Ast.Identifier "b")))
+    (parse_expression (Lexing.from_string "a = b"))
+
+let test_binop_neq _ =
+  assert_equal
+    (Some (Ast.BinaryOp (Ast.NEQ, Ast.Identifier "a", Ast.Identifier "b")))
+    (parse_expression (Lexing.from_string "a != b"))
+
+let test_binop_lte _ =
+  assert_equal
+    (Some (Ast.BinaryOp (Ast.LTE, Ast.Identifier "a", Ast.Identifier "b")))
+    (parse_expression (Lexing.from_string "a <= b"))
+
+let test_binop_gte _ =
+  assert_equal
+    (Some (Ast.BinaryOp (Ast.GTE, Ast.Identifier "a", Ast.Identifier "b")))
+    (parse_expression (Lexing.from_string "a >= b"))
+
+let test_binop_lt _ =
+  assert_equal
+    (Some (Ast.BinaryOp (Ast.LTE, Ast.Identifier "a", Ast.Identifier "b")))
+    (parse_expression (Lexing.from_string "a < b"))
+
+let test_binop_gt _ =
+  assert_equal
+    (Some (Ast.BinaryOp (Ast.GTE, Ast.Identifier "a", Ast.Identifier "b")))
+    (parse_expression (Lexing.from_string "a > b"))
+
+let test_binop_and _ =
+  assert_equal
+    (Some (Ast.BinaryOp (Ast.AND, Ast.Identifier "a", Ast.Identifier "b")))
+    (parse_expression (Lexing.from_string "a and b"))
+
+let test_binop_or _ =
+  assert_equal
+    (Some (Ast.BinaryOp (Ast.OR, Ast.Identifier "a", Ast.Identifier "b")))
+    (parse_expression (Lexing.from_string "a or b"))
+
+let test_unop_not _ =
+  assert_equal
+    (Some (Ast.UnaryOp (Ast.NOT, Ast.Identifier "a")))
+    (parse_expression (Lexing.from_string "not a"))
+
+let test_binop_neg _ =
+  assert_equal
+    (Some (Ast.UnaryOp (Ast.NEG, Ast.Identifier "a")))
+    (parse_expression (Lexing.from_string "-a"))
+
+let test_precedence_arith_bool _ =
+  assert_equal
+    (Some
+       (Ast.BinaryOp
+          ( Ast.OR,
+            Ast.BinaryOp
+              ( Ast.OR,
+                Ast.BinaryOp
+                  ( Ast.AND,
+                    Ast.BinaryOp
+                      ( Ast.EQ,
+                        Ast.BinaryOp
+                          (Ast.ADD, Ast.Identifier "a", Ast.Identifier "b"),
+                        Ast.UnaryOp (Ast.NEG, Ast.Identifier "c") ),
+                    Ast.UnaryOp (Ast.NOT, Ast.Identifier "d") ),
+                Ast.BinaryOp
+                  (Ast.LTE, Ast.Identifier "e", Ast.Constant (Ast.Integer 2)) ),
+            Ast.BinaryOp
+              ( Ast.GT,
+                Ast.Identifier "f",
+                Ast.BinaryOp
+                  ( Ast.DIV,
+                    Ast.Constant (Ast.Integer 10),
+                    Ast.UnaryOp (Ast.NEG, Ast.Identifier "x") ) ) )))
+    (parse_expression
+       (Lexing.from_string "a+b = -c and not d or e <= 2 or f > 10/-x"))
 
 (*
    TODO: Migrate to expect test
+*)
+
+(*
+   TODO: Tests for precedence, associativity
 *)
 
 (* Name the test cases and group them together *)
@@ -116,6 +253,7 @@ let suite =
   >::: [
          "test_int" >:: test_int;
          "test_bool_true" >:: test_bool_true;
+         "test_bool_false" >:: test_bool_false;
          "test_prod" >:: test_prod;
          "test_fst" >:: test_fst;
          "test_snd" >:: test_snd;
@@ -127,7 +265,25 @@ let suite =
          "test_with" >:: test_with;
          "test_match" >:: test_match;
          "test_inl" >:: test_inl;
-         "test_inr" >:: test_inr
+         "test_inr" >:: test_inr;
+         "test_reg_parse_unit_and_not_unit" >:: test_reg_parse_unit_and_not_unit;
+         "test_let" >:: test_let;
+         "test_let_rec" >:: test_let_rec;
+         "test_if_else" >:: test_if_else;
+         "test_let" >:: test_let;
+         "test_binop_plus" >:: test_binop_plus;
+         "test_binop_sub" >:: test_binop_sub;
+         "test_binop_mul" >:: test_binop_mul;
+         "test_binop_div" >:: test_binop_div;
+         "test_binop_mod" >:: test_binop_mod;
+         "test_binop_eq" >:: test_binop_eq;
+         "test_binop_neq" >:: test_binop_neq;
+         "test_binop_lte" >:: test_binop_lte;
+         "test_binop_gte" >:: test_binop_gte;
+         "test_binop_or" >:: test_binop_or;
+         "test_unop_not" >:: test_unop_not;
+         "test_binop_neg" >:: test_binop_neg;
+         "test_precedence_arith_bool" >:: test_precedence_arith_bool;
        ]
 
 let () = run_test_tt_main suite
