@@ -24,6 +24,7 @@ rule read =
     parse
     | white {read lexbuf}
     | newline  { next_line lexbuf; read lexbuf }
+    | "(*" {comment lexbuf}
     | "true" {TRUE}
     | "false" {FALSE}
     | "bool" {BOOL_typ}
@@ -71,3 +72,7 @@ rule read =
     | id    {ID (Lexing.lexeme lexbuf)}
     | eof {EOF}
     | _ {raise (SyntaxError ("Lexer - Illegal character: " ^ Lexing.lexeme lexbuf))}
+and comment = 
+  parse
+  | "*)" {read lexbuf}
+  | _ (*skip*) {comment lexbuf}

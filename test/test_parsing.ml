@@ -239,6 +239,12 @@ let test_precedence_arith_bool _ =
     (parse_expression
        (Lexing.from_string "a+b = -c and not d or e <= 2 or f > 10/-x"))
 
+let test_comment _ =
+  assert_equal (Some (Ast.Identifier "a"))
+    (parse_expression
+       (Lexing.from_string
+          "(*something something*)a (*something something \n something8*)"))
+
 (*
    TODO: Migrate to expect test
 *)
@@ -284,6 +290,7 @@ let suite =
          "test_unop_not" >:: test_unop_not;
          "test_binop_neg" >:: test_binop_neg;
          "test_precedence_arith_bool" >:: test_precedence_arith_bool;
+         "test_comment" >:: test_comment
        ]
 
 let () = run_test_tt_main suite
