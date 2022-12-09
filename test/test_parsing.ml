@@ -250,8 +250,93 @@ let test_comment _ =
 *)
 
 (*
-   TODO: Tests for precedence, associativity, top level directives, definitions
+   TODO: Tests for precedence, associativity
 *)
+
+let test_defn _ =
+  assert_equal
+    [ Ast.Definition (("x", Ast.TInt), Ast.Constant (Ast.Integer 2)) ]
+    (parse_program (Lexing.from_string "let (x:int) = 2;;"))
+
+let test_rec_defn _ =
+  assert_equal
+    [
+      Ast.RecursiveDefinition
+        ( ("pow", Ast.TFun (Ast.TFun (Ast.TInt, Ast.TInt), Ast.TInt)),
+          Ast.Lambda
+            ( ("p", Ast.TInt),
+              Ast.Lambda
+                ( ("x", Ast.TInt),
+                  Ast.IfThenElse
+                    ( Ast.BinaryOp
+                        ( Ast.EQ,
+                          Ast.Identifier "p",
+                          Ast.Constant (Ast.Integer 0) ),
+                      Ast.Constant (Ast.Integer 1),
+                      Ast.BinaryOp
+                        ( Ast.MUL,
+                          Ast.Identifier "x",
+                          Ast.Application
+                            ( Ast.Identifier "pow",
+                              Ast.BinaryOp
+                                ( Ast.SUB,
+                                  Ast.Identifier "p",
+                                  Ast.Constant (Ast.Integer 1) ) ) ) ) ) ) );
+    ]
+    (parse_program
+       (Lexing.from_string
+          "let rec (pow: int -> int -> int) = fun (p: int) -> fun (x: int) -> \
+           if p = 0 then 1 else x * (pow (p - 1));;"))
+
+let test_program_sep _ =
+  assert_equal
+    [
+      Ast.Definition (("x", Ast.TInt), Ast.Constant (Ast.Integer 2));
+      Ast.RecursiveDefinition
+        ( ("pow", Ast.TFun (Ast.TFun (Ast.TInt, Ast.TInt), Ast.TInt)),
+          Ast.Lambda
+            ( ("p", Ast.TInt),
+              Ast.Lambda
+                ( ("x", Ast.TInt),
+                  Ast.IfThenElse
+                    ( Ast.BinaryOp
+                        ( Ast.EQ,
+                          Ast.Identifier "p",
+                          Ast.Constant (Ast.Integer 0) ),
+                      Ast.Constant (Ast.Integer 1),
+                      Ast.BinaryOp
+                        ( Ast.MUL,
+                          Ast.Identifier "x",
+                          Ast.Application
+                            ( Ast.Identifier "pow",
+                              Ast.BinaryOp
+                                ( Ast.SUB,
+                                  Ast.Identifier "p",
+                                  Ast.Constant (Ast.Integer 1) ) ) ) ) ) ) );
+      Ast.Expression
+        (Ast.Application
+           ( Ast.Application (Ast.Identifier "pow", Ast.Identifier "x"),
+             Ast.Identifier "x" ));
+    ]
+    (parse_program
+       (Lexing.from_string
+          "let (x:int) = 2;;\n\
+          \ let rec (pow: int -> int -> int) = fun (p: int) -> fun (x: int) -> \
+           if p = 0 then 1 else x * (pow (p - 1));; \n\
+           pow x x;;\n"))
+
+let test_directive_env _ =
+  assert_equal [ Ast.Directive Ast.Env ]
+    (parse_program (Lexing.from_string "ENV;;"))
+
+let test_directive_quit _ =
+  assert_equal [ Ast.Directive Ast.Quit ]
+    (parse_program (Lexing.from_string "QUIT;;"))
+
+let test_directive_reset _ =
+  assert_equal
+    [ Ast.Directive Ast.Reset ]
+    (parse_program (Lexing.from_string "RESET;;"))
 
 (* Name the test cases and group them together *)
 let suite =
@@ -290,7 +375,13 @@ let suite =
          "test_unop_not" >:: test_unop_not;
          "test_binop_neg" >:: test_binop_neg;
          "test_precedence_arith_bool" >:: test_precedence_arith_bool;
-         "test_comment" >:: test_comment
+         "test_comment" >:: test_comment;
+         "test_program_sep" >:: test_program_sep;
+         "test_directive_env" >:: test_directive_env;
+         "test_directive_quit" >:: test_directive_quit;
+         "test_directive_reset" >:: test_directive_reset;
+         "test_defn" >:: test_defn;
+         "test_rec_defn" >:: test_rec_defn;
        ]
 
 let () = run_test_tt_main suite
