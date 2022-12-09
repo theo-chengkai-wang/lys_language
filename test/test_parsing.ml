@@ -1,5 +1,3 @@
-(*Example tests*)
-
 open OUnit2
 open Lys_ast
 open Lys_parsing.Lex_and_parse
