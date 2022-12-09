@@ -70,6 +70,7 @@ type directive = Reset | Env | Quit [@@deriving show]
 
 type top_level_defn =
   | Definition of identifier_defn * expression
+  | RecursiveDefinition of identifier_defn * expression
   | Expression of expression
   | Directive of directive
 [@@deriving show]

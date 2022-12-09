@@ -25,6 +25,7 @@ rule read =
     | white {read lexbuf}
     | newline  { next_line lexbuf; read lexbuf }
     | "(*" {comment lexbuf}
+    | ";" {SEMICOLON}
     | "true" {TRUE}
     | "false" {FALSE}
     | "bool" {BOOL_typ}
@@ -68,6 +69,9 @@ rule read =
     | "in" {IN}
     | "rec" {REC}
     | "box" {BOX}
+    | "RESET" {DIR_RESET}
+    | "ENV" {DIR_ENV}
+    | "QUIT" {DIR_QUIT}
     | int   { INT (int_of_string (Lexing.lexeme lexbuf)) }
     | id    {ID (Lexing.lexeme lexbuf)}
     | eof {EOF}

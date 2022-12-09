@@ -250,7 +250,7 @@ let test_comment _ =
 *)
 
 (*
-   TODO: Tests for precedence, associativity
+   TODO: Tests for precedence, associativity, top level directives, definitions
 *)
 
 (* Name the test cases and group them together *)

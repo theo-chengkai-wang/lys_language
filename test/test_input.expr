@@ -1,2 +1,9 @@
-(*test*)a+b = -c and not d or e <= 2 or f > 10/-x (*r
-est*)
+ENV;;
+QUIT;;
+CLEAR;;
+
+let (x:int) = 2;;
+
+let rec (pow: int -> int -> int) = fun (p: int) -> fun (x: int) -> if p = 0 then 1 else x * (pow (p - 1));; 
+
+pow 2 2;;

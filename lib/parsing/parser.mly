@@ -43,6 +43,7 @@ let mkapp f xs =
 %token FUN
 %token ARROW "->"
 %token COMMA ","
+%token SEMICOLON ";"
 %token LEFT_PAREN "("
 %token RIGHT_PAREN ")"
 %token FST
@@ -63,15 +64,19 @@ let mkapp f xs =
 %token PATTERN_OR "|"
 // %token EOL
 %token EOF
+%token DIR_RESET
+%token DIR_ENV
+%token DIR_QUIT
 
 (* Operator Definitions*)
 // TODO: refine precedence according to https://github.com/ocaml/ocaml/blob/trunk/parsing/parser.mly -- ACTUALLY PROPERLY DEAL WITH THIS SHIT PLEASE
-// typs
-%right typ_FUNCTION_ARROW
+// typ sum and prod
 %left typ_SUM typ_PRODUCT
 
 // Functions
 %right "->"
+// typ arrow
+%right typ_FUNCTION_ARROW
 // // Match with
 // metavariable with
 %left WITH
@@ -110,9 +115,25 @@ let mkapp f xs =
 // top_level
 // TODO: to be changed to actual
 
-start:
+start: p = prog {p}
+
+prog: 
     | EOF {[]}
-    | e = expr EOF {[Expression e]}
+    | t = top_level SEMICOLON SEMICOLON p = prog {t::p}
+
+top_level:
+    | d = directive {Directive d}
+    | d = definition {d}
+    | e = expr {Expression e}
+
+directive:
+    | DIR_ENV {Env}
+    | DIR_QUIT {Quit}
+    | DIR_RESET {Reset}
+
+definition:
+    | LET decl = id_typ_declaration EQ e1 = expr {Definition (decl, e1)}
+    | LET REC decl = id_typ_declaration EQ e1 = expr {RecursiveDefinition (decl, e1)}
 
 simple_expr:
     | LEFT_PAREN; e = expr; RIGHT_PAREN {e}
