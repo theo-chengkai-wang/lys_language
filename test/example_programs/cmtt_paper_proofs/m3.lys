@@ -1,1 +1,2 @@
 let [x: A]A = box (x: A |- x) in ()
+;;
