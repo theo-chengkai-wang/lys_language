@@ -1,0 +1,4 @@
+(library
+ (name lys_ast)
+ (libraries core)
+ (preprocess (pps ppx_deriving.show ppx_deriving.ord)))

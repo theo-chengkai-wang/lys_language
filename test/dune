@@ -1,2 +1,8 @@
 (test
- (name lys_language))
+ (name lys_language)
+ (modules lys_language))
+
+(test
+ (name test_parsing)
+ (modules test_parsing)
+ (libraries ounit2 lys_ast lys_parsing))

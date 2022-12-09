@@ -1,0 +1,3 @@
+let m5: []A -> A = 
+    fun (x: []A) -> let box u = x in u with ()
+in ()

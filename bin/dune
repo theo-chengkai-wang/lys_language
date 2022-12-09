@@ -1,4 +1,4 @@
-(executable
- (public_name lys_language)
- (name main)
- (libraries lys_language))
+(executables
+ (public_names lys_language parse_print)
+ (names main parse_print)
+ (libraries lys_ast lys_parsing core core_unix.command_unix))

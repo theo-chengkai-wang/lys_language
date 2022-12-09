@@ -1,0 +1,4 @@
+let m6: [x:C]A -> [y1:D][y2:C]A = 
+    fun (x1: [x:C]A) -> 
+        let box u = x1 in box (y1: D |- box (y2: C |- u with (y2)))
+in ()
