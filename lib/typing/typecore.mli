@@ -1,3 +1,3 @@
-val type_check_program: Lys_ast.Ast.program -> unit
-val type_check_expression: Lys_ast.Ast.typ -> Lys_ast.Ast.expression -> unit
-val type_inference_expression: Lys_ast.Ast.expression -> Lys_ast.Ast.typ
+val type_check_program: Lys_ast.Ast.Program.t -> unit
+val type_check_expression: Lys_ast.Ast.Typ.t -> Lys_ast.Ast.Expr.t -> unit
+val type_inference_expression: Lys_ast.Ast.Expr.t -> Lys_ast.Ast.Typ.t
