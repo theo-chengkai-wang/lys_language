@@ -2,4 +2,5 @@
  (name lys_language)
  (libraries
  lys_ast
- lys_parsing))
+ lys_parsing
+ lys_typing))
