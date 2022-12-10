@@ -22,11 +22,12 @@ let parse_program = parse_with_error
 let parse_expression lexbuf =
   (*Utility function: only parse the first element if it is an expression*)
   let tree = parse_program lexbuf in
-  match tree with Expression expr :: _ -> Some expr | _ -> None
+  match tree with
+  | Lys_ast.Ast.TopLevelDefn.Expression expr :: _ -> Some expr
+  | _ -> None
 
 let parse_and_print lexbuf =
-  (*TODO: Modify this to actual impl for the entire program*)
   let tree_list = parse_program lexbuf in
   List.fold tree_list ~init:() ~f:(fun _ top_level ->
-      print_endline (Lys_ast.Ast.show_top_level_defn top_level); print_endline "")
-
+      print_endline (Lys_ast.Ast.TopLevelDefn.show top_level);
+      print_endline "")

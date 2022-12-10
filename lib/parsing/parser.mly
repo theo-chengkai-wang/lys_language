@@ -102,7 +102,7 @@ let mkapp f xs =
 // %start <lys_ast.Ast.program> prog
 // TODO temporarily just do expressions
 // TODO Specify types for non terminals
-%start <Lys_ast.Ast.program> start
+%start <Lys_ast.Ast.Program.t> start
 
 %%
 
@@ -122,28 +122,25 @@ prog:
     | t = top_level SEMICOLON SEMICOLON p = prog {t::p}
 
 top_level:
-    | d = directive {Directive d}
-    | d = definition {d}
-    | e = expr {Expression e}
+    | d = directive {TopLevelDefn.Directive d}
+    | LET decl = id_typ_declaration EQ e1 = expr {TopLevelDefn.Definition (decl, e1)}
+    | LET REC decl = id_typ_declaration EQ e1 = expr {TopLevelDefn.RecursiveDefinition (decl, e1)}
+    | e = expr {TopLevelDefn.Expression e}
 
 directive:
-    | DIR_ENV {Env}
-    | DIR_QUIT {Quit}
-    | DIR_RESET {Reset}
-
-definition:
-    | LET decl = id_typ_declaration EQ e1 = expr {Definition (decl, e1)}
-    | LET REC decl = id_typ_declaration EQ e1 = expr {RecursiveDefinition (decl, e1)}
+    | DIR_ENV {Directive.Env}
+    | DIR_QUIT {Directive.Quit}
+    | DIR_RESET {Directive.Reset}
 
 simple_expr:
     | LEFT_PAREN; e = expr; RIGHT_PAREN {e}
-    | c = constant {Constant c}
-    | i = identifier {Identifier i}
-    | LEFT_PAREN e1 = expr COMMA e2 = expr RIGHT_PAREN {Prod (e1, e2)}
+    | c = constant {Expr.Constant c}
+    | i = identifier {Expr.Identifier i}
+    | LEFT_PAREN e1 = expr COMMA e2 = expr RIGHT_PAREN {Expr.Prod (e1, e2)}
 
 application_expr:
-    | s1 = application_expr; s2 = simple_expr  {Application (s1, s2)}
-    | s1 = simple_expr; s2 = simple_expr {Application (s1, s2)}
+    | s1 = application_expr; s2 = simple_expr  {Expr.Application (s1, s2)}
+    | s1 = simple_expr; s2 = simple_expr {Expr.Application (s1, s2)}
 
 expr:
     | s = simple_expr {s}
@@ -151,25 +148,25 @@ expr:
     | a = arith { a }
     | c = comp { c }
     | b = bool { b }
-    | u = identifier; WITH; s = sim_sub {Closure (u, s)} // not a simple_expr because it contains a WITH application
+    | u = identifier; WITH; s = sim_sub {Expr.Closure (u, s)} // not a simple_expr because it contains a WITH application
     (* bigger constructs *)
-    | IF e1 = expr THEN e2 = expr ELSE e3=expr {IfThenElse (e1, e2, e3)}
-    | FUN arg = id_typ_declaration "->" e = expr {Lambda (arg, e)}
-    | FST e = expr {Fst e}
-    | SND e = expr {Snd e}
-    | INL LEFT_BRACKET t1=typ COMMA t2=typ RIGHT_BRACKET e = expr {Left (t1, t2, e)}
-    | INR LEFT_BRACKET t1=typ COMMA t2=typ RIGHT_BRACKET e = expr {Right (t1, t2, e)}
-    | MATCH e1 = simple_expr WITH INL id_decl1 = id_typ_declaration "->" e2 = expr "|" INR id_decl2 = id_typ_declaration "->" e3 = expr {Match (e1, id_decl1, e2, id_decl2, e3)}
-    | LET decl = id_typ_declaration EQ e1 = expr IN e2 = expr %prec DEFN_EQ {LetBinding (decl, e1, e2)}
-    | LET REC decl = id_typ_declaration EQ e1 = expr IN e2 = expr %prec DEFN_EQ {LetRec (decl, e1, e2)}
-    | BOX LEFT_PAREN decl_list = separated_list(COMMA, id_typ_declaration) TURNSTILE e = expr RIGHT_PAREN {Box (decl_list, e)}
-    | LET BOX u = identifier EQ e1 = expr IN e2 = expr {LetBox (u, e1, e2)} // TODO: distinguish metaidentifier and identifier
+    | IF e1 = expr THEN e2 = expr ELSE e3=expr {Expr.IfThenElse (e1, e2, e3)}
+    | FUN arg = id_typ_declaration "->" e = expr {Expr.Lambda (arg, e)}
+    | FST e = expr {Expr.Fst e}
+    | SND e = expr {Expr.Snd e}
+    | INL LEFT_BRACKET t1=typ COMMA t2=typ RIGHT_BRACKET e = expr {Expr.Left (t1, t2, e)}
+    | INR LEFT_BRACKET t1=typ COMMA t2=typ RIGHT_BRACKET e = expr {Expr.Right (t1, t2, e)}
+    | MATCH e1 = simple_expr WITH INL id_decl1 = id_typ_declaration "->" e2 = expr "|" INR id_decl2 = id_typ_declaration "->" e3 = expr {Expr.Match (e1, id_decl1, e2, id_decl2, e3)}
+    | LET decl = id_typ_declaration EQ e1 = expr IN e2 = expr %prec DEFN_EQ {Expr.LetBinding (decl, e1, e2)}
+    | LET REC decl = id_typ_declaration EQ e1 = expr IN e2 = expr %prec DEFN_EQ {Expr.LetRec (decl, e1, e2)}
+    | BOX LEFT_PAREN decl_list = separated_list(COMMA, id_typ_declaration) TURNSTILE e = expr RIGHT_PAREN {Expr.Box (decl_list, e)}
+    | LET BOX u = identifier EQ e1 = expr IN e2 = expr {Expr.LetBox (u, e1, e2)} // TODO: distinguish metaidentifier and identifier
 
 constant:
-    | i = INT {Integer i}
-    | TRUE {Boolean true}
-    | FALSE {Boolean false}
-    | LEFT_PAREN RIGHT_PAREN {Unit};
+    | i = INT {Constant.Integer i}
+    | TRUE {Constant.Boolean true}
+    | FALSE {Constant.Boolean false}
+    | LEFT_PAREN RIGHT_PAREN {Constant.Unit};
 
 identifier:
     | i = ID {i};
@@ -182,33 +179,33 @@ sim_sub:
     | LEFT_PAREN l = separated_list(COMMA, expr) RIGHT_PAREN {l} 
 
 typ:
-    | BOOL_typ {TBool}
-    | INT_typ {TInt}
-    | UNIT_typ {TUnit}
-    | i = ID {TIdentifier i}
-    | t1 = typ; "->"; t2 = typ %prec typ_FUNCTION_ARROW {TFun (t1, t2)}
-    | t1 = typ; "*"; t2 = typ %prec typ_PRODUCT {TProd (t1, t2)}
-    | t1 = typ; "+"; t2 = typ %prec typ_SUM {TSum (t1, t2)}
-    | LEFT_BRACKET decl_list = separated_list(COMMA, id_typ_declaration) RIGHT_BRACKET t = typ {TBox (decl_list, t)}
+    | BOOL_typ {Typ.TBool}
+    | INT_typ {Typ.TInt}
+    | UNIT_typ {Typ.TUnit}
+    | i = ID {Typ.TIdentifier i}
+    | t1 = typ; "->"; t2 = typ %prec typ_FUNCTION_ARROW {Typ.TFun (t1, t2)}
+    | t1 = typ; "*"; t2 = typ %prec typ_PRODUCT {Typ.TProd (t1, t2)}
+    | t1 = typ; "+"; t2 = typ %prec typ_SUM {Typ.TSum (t1, t2)}
+    | LEFT_BRACKET decl_list = separated_list(COMMA, id_typ_declaration) RIGHT_BRACKET t = typ {Typ.TBox (decl_list, t)}
     | LEFT_PAREN t = typ RIGHT_PAREN {t};
 
 arith:
-    | e1 = expr "+" e2 = expr {BinaryOp (ADD, e1, e2)}
-    | e1 = expr "-" e2 = expr {BinaryOp (SUB, e1, e2)}
-    | e1 = expr "*" e2 = expr {BinaryOp (MUL, e1, e2)}
-    | e1 = expr "/" e2 = expr {BinaryOp (DIV, e1, e2)}
-    | e1 = expr "%" e2 = expr {BinaryOp (MOD, e1, e2)}
-    | "-" e = expr %prec UMINUS {UnaryOp (NEG, e)};
+    | e1 = expr "+" e2 = expr {Expr.BinaryOp (BinaryOperator.ADD, e1, e2)}
+    | e1 = expr "-" e2 = expr {Expr.BinaryOp (BinaryOperator.SUB, e1, e2)}
+    | e1 = expr "*" e2 = expr {Expr.BinaryOp (BinaryOperator.MUL, e1, e2)}
+    | e1 = expr "/" e2 = expr {Expr.BinaryOp (BinaryOperator.DIV, e1, e2)}
+    | e1 = expr "%" e2 = expr {Expr.BinaryOp (BinaryOperator.MOD, e1, e2)}
+    | "-" e = expr %prec UMINUS {Expr.UnaryOp (UnaryOperator.NEG, e)};
 
 comp:
-    | e1 = expr ">" e2 = expr {BinaryOp (GT, e1, e2)}
-    | e1 = expr "<" e2 = expr {BinaryOp (LT, e1, e2)}
-    | e1 = expr ">=" e2 = expr {BinaryOp (GTE, e1, e2)}
-    | e1 = expr "<=" e2 = expr {BinaryOp (LTE, e1, e2)}
-    | e1 = expr "=" e2 = expr {BinaryOp (EQ, e1, e2)}
-    | e1 = expr "!=" e2 = expr {BinaryOp (NEQ, e1, e2)};
+    | e1 = expr ">" e2 = expr {Expr.BinaryOp (GT, e1, e2)}
+    | e1 = expr "<" e2 = expr {Expr.BinaryOp (LT, e1, e2)}
+    | e1 = expr ">=" e2 = expr {Expr.BinaryOp (GTE, e1, e2)}
+    | e1 = expr "<=" e2 = expr {Expr.BinaryOp (LTE, e1, e2)}
+    | e1 = expr "=" e2 = expr {Expr.BinaryOp (EQ, e1, e2)}
+    | e1 = expr "!=" e2 = expr {Expr.BinaryOp (NEQ, e1, e2)};
 
 bool:
-    | e1 = expr AND e2 = expr {BinaryOp (AND, e1, e2)}
-    | e1 = expr OR e2 = expr {BinaryOp (OR, e1, e2)}
-    | NOT e = expr {UnaryOp (NOT, e)};
+    | e1 = expr AND e2 = expr {Expr.BinaryOp (AND, e1, e2)}
+    | e1 = expr OR e2 = expr {Expr.BinaryOp (OR, e1, e2)}
+    | NOT e = expr {Expr.UnaryOp (NOT, e)};
