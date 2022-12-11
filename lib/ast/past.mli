@@ -1,5 +1,5 @@
 module type Identifier_type = sig
-  type t = string [@@deriving sexp, show]
+  type t = string [@@deriving sexp, show, equal, compare]
 end
 
 module rec Identifier : Identifier_type
@@ -14,15 +14,15 @@ and Typ : sig
     | TBox of Context.t * t
     | TProd of t * t
     | TSum of t * t
-  [@@deriving sexp, show]
+  [@@deriving sexp, show, equal, compare]
 end
 
 and IdentifierDefn : sig
-  type t = Identifier.t * Typ.t [@@deriving sexp, show]
+  type t = Identifier.t * Typ.t [@@deriving sexp, show, equal, compare]
 end
 
 and Context : sig
-  type t = IdentifierDefn.t list [@@deriving sexp, show]
+  type t = IdentifierDefn.t list [@@deriving sexp, show, equal, compare]
 end
 
 and BinaryOperator : sig
@@ -40,15 +40,15 @@ and BinaryOperator : sig
     | LT
     | AND
     | OR
-  [@@deriving sexp, show]
+  [@@deriving sexp, show, equal, compare]
 end
 
 and UnaryOperator : sig
-  type t = NEG | NOT [@@deriving sexp, show]
+  type t = NEG | NOT [@@deriving sexp, show, equal, compare]
 end
 
 and Constant : sig
-  type t = Integer of int | Boolean of bool | Unit [@@deriving sexp, show]
+  type t = Integer of int | Boolean of bool | Unit [@@deriving sexp, show, equal, compare]
 end
 
 and Expr : sig
@@ -75,11 +75,11 @@ and Expr : sig
     | Box of Context.t * t (*box (x:A, y:B |- e)*)
     | LetBox of Identifier.t * t * t (*let box u = e in e'*)
     | Closure of Identifier.t * t list (*u with (e1, e2, e3, ...)*)
-  [@@deriving sexp, show]
+  [@@deriving sexp, show, equal, compare]
 end
 
 and Directive : sig
-  type t = Reset | Env | Quit [@@deriving sexp, show]
+  type t = Reset | Env | Quit [@@deriving sexp, show, equal, compare]
 end
 
 and TopLevelDefn : sig
@@ -88,9 +88,9 @@ and TopLevelDefn : sig
     | RecursiveDefinition of IdentifierDefn.t * Expr.t
     | Expression of Expr.t
     | Directive of Directive.t
-  [@@deriving sexp, show]
+  [@@deriving sexp, show, equal, compare]
 end
 
 and Program : sig
-  type t = TopLevelDefn.t list [@@deriving sexp, show]
+  type t = TopLevelDefn.t list [@@deriving sexp, show, equal, compare]
 end

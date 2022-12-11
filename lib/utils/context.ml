@@ -4,7 +4,7 @@ module type Context_S_type = sig
   type key [@@deriving sexp, show, equal, compare]
   type ('a, 'b) s [@@deriving sexp, show, equal, compare]
 
-  val create_empty_context : (key, 'b) s
+  val create_empty_context : unit -> (key, 'b) s
   val add_mapping : (key, 'b) s -> key -> 'b -> (key, 'b) s
   val delete_last_mapping : (key, 'b) s -> key -> (key, 'b) s
   val get_last_mapping : (key, 'b) s -> key -> 'b option
@@ -37,7 +37,7 @@ module NaiveContext : Context_type = struct
       type key = Key.t [@@deriving sexp, show, equal, compare]
       type ('a, 'b) s = ('a, 'b) t [@@deriving sexp, show, equal, compare]
 
-      let create_empty_context = []
+      let create_empty_context () = []
       let add_mapping ctx a b = (a, b) :: ctx
 
       let rec delete_last_mapping ctx a =
