@@ -1,5 +1,9 @@
-(* open Lys_ast
+open Lys_ast
 open Core
+
+(*
+  TODO: Maybe instead of doing 1 pass, do 2 passes to distinguish Past->Ast and Type checking AST.   
+*)
 
 (* meta_ctx->ctx->Past.Expr.t -> Past.Typ.t -> Ast.Expr.t * Ast.Typ.t *)
 let type_check_expression meta_ctx ctx past_expr past_typ =
@@ -13,8 +17,8 @@ let type_inference_expression meta_ctx ctx past_expr =
 let process_decl meta_ctx ctx past_expr past_typ =
   ( Ast.Expr.Constant Ast.Constant.Unit,
     Ast.Typ.TUnit,
-    NaiveTypingContext,
-    NaiveTypingContext.empty_context )
+    Typing_context.ObjTypingContext.create_empty_context,
+    Typing_context.MetaTypingContext.create_empty_context )
 
 (* meta_ctx->ctx->Past.program->Ast.Program *)
 let type_check_program_aux meta_ctx ctx program =
@@ -24,4 +28,4 @@ let type_check_program_aux meta_ctx ctx program =
 
 let type_check_program program =
   type_check_program_aux NaiveTypingContext.empty_context
-    NaiveTypingContext.empty_context program *)
+    NaiveTypingContext.empty_context program
