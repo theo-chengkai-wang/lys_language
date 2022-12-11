@@ -1,5 +1,5 @@
 %{
-open Lys_ast.Ast
+open Lys_ast.Past
 
 (*TODO: ATTEMPT Constructs an Application AST node from an expression with the function and a list of expressions f is applied to
 exception EmptyListError
@@ -102,7 +102,7 @@ let mkapp f xs =
 // %start <lys_ast.Ast.program> prog
 // TODO temporarily just do expressions
 // TODO Specify types for non terminals
-%start <Lys_ast.Ast.Program.t> start
+%start <Lys_ast.Past.Program.t> start
 
 %%
 
@@ -182,7 +182,7 @@ typ:
     | BOOL_typ {Typ.TBool}
     | INT_typ {Typ.TInt}
     | UNIT_typ {Typ.TUnit}
-    | i = ID {Typ.TIdentifier i}
+    | i = ID {Typ.TIdentifier (i)}
     | t1 = typ; "->"; t2 = typ %prec typ_FUNCTION_ARROW {Typ.TFun (t1, t2)}
     | t1 = typ; "*"; t2 = typ %prec typ_PRODUCT {Typ.TProd (t1, t2)}
     | t1 = typ; "+"; t2 = typ %prec typ_SUM {Typ.TSum (t1, t2)}

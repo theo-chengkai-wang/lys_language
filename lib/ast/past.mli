@@ -1,10 +1,8 @@
-module rec Identifier : sig
+module type Identifier_type = sig
   type t = string [@@deriving sexp, show]
 end
 
-and MetaIdentifier : sig
-  type t = string [@@deriving sexp, show]
-end
+module rec Identifier : Identifier_type
 
 and Typ : sig
   type t =
@@ -75,8 +73,8 @@ and Expr : sig
       (*let rec f: A->B =
         e[f] in e'*)
     | Box of Context.t * t (*box (x:A, y:B |- e)*)
-    | LetBox of MetaIdentifier.t * t * t (*let box u = e in e'*)
-    | Closure of MetaIdentifier.t * t list (*u with (e1, e2, e3, ...)*)
+    | LetBox of Identifier.t * t * t (*let box u = e in e'*)
+    | Closure of Identifier.t * t list (*u with (e1, e2, e3, ...)*)
   [@@deriving sexp, show]
 end
 

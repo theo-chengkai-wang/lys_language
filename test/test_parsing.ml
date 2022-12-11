@@ -3,137 +3,137 @@ open Lys_ast
 open Lys_parsing.Lex_and_parse
 
 let test_int _ =
-  assert_equal (Some (Ast.Expr.Constant (Ast.Constant.Integer 2)))
+  assert_equal (Some (Past.Expr.Constant (Past.Constant.Integer 2)))
     (parse_expression (Lexing.from_string "2;;"))
 
 let test_bool_true _ =
-  assert_equal (Some (Ast.Expr.Constant (Ast.Constant.Boolean true)))
+  assert_equal (Some (Past.Expr.Constant (Past.Constant.Boolean true)))
     (parse_expression (Lexing.from_string "true;;"))
 
 let test_bool_false _ =
-  assert_equal (Some (Ast.Expr.Constant (Ast.Constant.Boolean false)))
+  assert_equal (Some (Past.Expr.Constant (Past.Constant.Boolean false)))
     (parse_expression (Lexing.from_string "false;;"))
 
 let test_unit _ =
-  assert_equal (Some (Ast.Expr.Constant Ast.Constant.Unit))
+  assert_equal (Some (Past.Expr.Constant Past.Constant.Unit))
     (parse_expression (Lexing.from_string "();;"))
 
 let test_prod _ =
   assert_equal
-    (Some (Ast.Expr.Prod (Ast.Expr.Identifier "x", Ast.Expr.Identifier "y")))
+    (Some (Past.Expr.Prod (Past.Expr.Identifier "x", Past.Expr.Identifier "y")))
     (parse_expression (Lexing.from_string "(x, y);;"))
 
 let test_fst _ =
   assert_equal
     (Some
-       (Ast.Expr.Fst
-          (Ast.Expr.Prod (Ast.Expr.Identifier "x", Ast.Expr.Identifier "y"))))
+       (Past.Expr.Fst
+          (Past.Expr.Prod (Past.Expr.Identifier "x", Past.Expr.Identifier "y"))))
     (parse_expression (Lexing.from_string "fst (x, y);;"))
 
 let test_snd _ =
   assert_equal
     (Some
-       (Ast.Expr.Snd
-          (Ast.Expr.Prod (Ast.Expr.Identifier "x", Ast.Expr.Identifier "y"))))
+       (Past.Expr.Snd
+          (Past.Expr.Prod (Past.Expr.Identifier "x", Past.Expr.Identifier "y"))))
     (parse_expression (Lexing.from_string "snd (x, y);;"))
 
 let test_fun _ =
   assert_equal
-    (Some (Ast.Expr.Lambda (("x", Ast.Typ.TBool), Ast.Expr.Identifier "e")))
+    (Some (Past.Expr.Lambda (("x", Past.Typ.TBool), Past.Expr.Identifier "e")))
     (parse_expression (Lexing.from_string "fun (x: bool) -> e;;"))
 
 let test_app _ =
   assert_equal
     (Some
-       (Ast.Expr.Application
-          ( Ast.Expr.Application
-              ( Ast.Expr.Application
-                  ( Ast.Expr.Application
-                      ( Ast.Expr.Application
-                          ( Ast.Expr.Lambda
-                              (("x", Ast.Typ.TInt), Ast.Expr.Identifier "e"),
-                            Ast.Expr.Identifier "f" ),
-                        Ast.Expr.Identifier "g" ),
-                    Ast.Expr.Identifier "h" ),
-                Ast.Expr.Prod
-                  ( Ast.Expr.Constant (Ast.Constant.Integer 1),
-                    Ast.Expr.Constant (Ast.Constant.Integer 2) ) ),
-            Ast.Expr.Left
-              ( Ast.Typ.TInt,
-                Ast.Typ.TInt,
-                Ast.Expr.Constant (Ast.Constant.Integer 1) ) )))
+       (Past.Expr.Application
+          ( Past.Expr.Application
+              ( Past.Expr.Application
+                  ( Past.Expr.Application
+                      ( Past.Expr.Application
+                          ( Past.Expr.Lambda
+                              (("x", Past.Typ.TInt), Past.Expr.Identifier "e"),
+                            Past.Expr.Identifier "f" ),
+                        Past.Expr.Identifier "g" ),
+                    Past.Expr.Identifier "h" ),
+                Past.Expr.Prod
+                  ( Past.Expr.Constant (Past.Constant.Integer 1),
+                    Past.Expr.Constant (Past.Constant.Integer 2) ) ),
+            Past.Expr.Left
+              ( Past.Typ.TInt,
+                Past.Typ.TInt,
+                Past.Expr.Constant (Past.Constant.Integer 1) ) )))
     (parse_expression
        (Lexing.from_string "(fun (x:int) -> e) f g h (1, 2) (L[int, int] 1);;"))
 
 let test_box _ =
   assert_equal
     (Some
-       (Ast.Expr.Box
-          ( [ ("x", Ast.Typ.TInt); ("y", Ast.Typ.TBool) ],
-            Ast.Expr.Identifier "a" )))
+       (Past.Expr.Box
+          ( [ ("x", Past.Typ.TInt); ("y", Past.Typ.TBool) ],
+            Past.Expr.Identifier "a" )))
     (parse_expression (Lexing.from_string "box (x: int, y: bool |- a);;"))
 
 let test_unbox _ =
   assert_equal
     (Some
-       (Ast.Expr.LetBox
+       (Past.Expr.LetBox
           ( "u",
-            Ast.Expr.Box
-              ( [ ("x", Ast.Typ.TInt); ("y", Ast.Typ.TBool) ],
-                Ast.Expr.Identifier "a" ),
-            Ast.Expr.Identifier "e" )))
+            Past.Expr.Box
+              ( [ ("x", Past.Typ.TInt); ("y", Past.Typ.TBool) ],
+                Past.Expr.Identifier "a" ),
+            Past.Expr.Identifier "e" )))
     (parse_expression
        (Lexing.from_string "let box u = box (x: int, y: bool |- a) in e;;"))
 
 let test_with _ =
   assert_equal
     (Some
-       (Ast.Expr.Closure
+       (Past.Expr.Closure
           ( "u",
             [
-              Ast.Expr.Constant (Ast.Constant.Integer 1);
-              Ast.Expr.Constant (Ast.Constant.Integer 2);
+              Past.Expr.Constant (Past.Constant.Integer 1);
+              Past.Expr.Constant (Past.Constant.Integer 2);
             ] )))
     (parse_expression (Lexing.from_string "u with (1, 2);;"))
 
 let test_match _ =
   assert_equal
     (Some
-       (Ast.Expr.Match
-          ( Ast.Expr.Identifier "x",
-            ("y", Ast.Typ.TInt),
-            Ast.Expr.Identifier "a",
-            ("z", Ast.Typ.TInt),
-            Ast.Expr.Identifier "b" )))
+       (Past.Expr.Match
+          ( Past.Expr.Identifier "x",
+            ("y", Past.Typ.TInt),
+            Past.Expr.Identifier "a",
+            ("z", Past.Typ.TInt),
+            Past.Expr.Identifier "b" )))
     (parse_expression
        (Lexing.from_string "match x with L (y:int) -> a | R (z:int) -> b;;"))
 
 let test_inl _ =
   assert_equal
     (Some
-       (Ast.Expr.Left
-          ( Ast.Typ.TInt,
-            Ast.Typ.TBool,
-            Ast.Expr.Constant (Ast.Constant.Integer 1) )))
+       (Past.Expr.Left
+          ( Past.Typ.TInt,
+            Past.Typ.TBool,
+            Past.Expr.Constant (Past.Constant.Integer 1) )))
     (parse_expression (Lexing.from_string "L[int, bool] 1;;"))
 
 let test_inr _ =
   assert_equal
     (Some
-       (Ast.Expr.Right
-          ( Ast.Typ.TInt,
-            Ast.Typ.TBool,
-            Ast.Expr.Constant (Ast.Constant.Boolean true) )))
+       (Past.Expr.Right
+          ( Past.Typ.TInt,
+            Past.Typ.TBool,
+            Past.Expr.Constant (Past.Constant.Boolean true) )))
     (parse_expression (Lexing.from_string "R[int, bool] true;;"))
 
 let test_reg_parse_unit_and_not_unit _ =
   assert_equal
     (Some
-       (Ast.Expr.LetBinding
-          ( ("x", Ast.Typ.TBox ([], Ast.Typ.TIdentifier "A")),
-            Ast.Expr.Box ([], Ast.Expr.Identifier "A"),
-            Ast.Expr.LetBox
-              ("u", Ast.Expr.Identifier "x", Ast.Expr.Closure ("u", [])) )))
+       (Past.Expr.LetBinding
+          ( ("x", Past.Typ.TBox ([], Past.Typ.TIdentifier "A")),
+            Past.Expr.Box ([], Past.Expr.Identifier "A"),
+            Past.Expr.LetBox
+              ("u", Past.Expr.Identifier "x", Past.Expr.Closure ("u", [])) )))
     (parse_expression
        (Lexing.from_string
           "let x: []A = box (|- A) in\nlet box u = x in\n    u with ();;\n"))
@@ -141,194 +141,194 @@ let test_reg_parse_unit_and_not_unit _ =
 let test_let _ =
   assert_equal
     (Some
-       (Ast.Expr.LetBinding
-          ( ("x", Ast.Typ.TIdentifier "A"),
-            Ast.Expr.Identifier "y",
-            Ast.Expr.Identifier "b" )))
+       (Past.Expr.LetBinding
+          ( ("x", Past.Typ.TIdentifier "A"),
+            Past.Expr.Identifier "y",
+            Past.Expr.Identifier "b" )))
     (parse_expression (Lexing.from_string "let x: A = y in b;;"))
 
 let test_let_rec _ =
   assert_equal
     (Some
-       (Ast.Expr.LetRec
+       (Past.Expr.LetRec
           ( ( "x",
-              Ast.Typ.TFun (Ast.Typ.TIdentifier "A", Ast.Typ.TIdentifier "B") ),
-            Ast.Expr.Identifier "y",
-            Ast.Expr.Identifier "b" )))
+              Past.Typ.TFun (Past.Typ.TIdentifier "A", Past.Typ.TIdentifier "B") ),
+            Past.Expr.Identifier "y",
+            Past.Expr.Identifier "b" )))
     (parse_expression (Lexing.from_string "let rec x: A -> B = y in b;;"))
 
 let test_if_else _ =
   assert_equal
     (Some
-       (Ast.Expr.IfThenElse
-          ( Ast.Expr.Identifier "b",
-            Ast.Expr.Identifier "e1",
-            Ast.Expr.Identifier "e2" )))
+       (Past.Expr.IfThenElse
+          ( Past.Expr.Identifier "b",
+            Past.Expr.Identifier "e1",
+            Past.Expr.Identifier "e2" )))
     (parse_expression (Lexing.from_string "if b then e1 else e2;;"))
 
 let test_binop_plus _ =
   assert_equal
     (Some
-       (Ast.Expr.BinaryOp
-          ( Ast.BinaryOperator.ADD,
-            Ast.Expr.Identifier "a",
-            Ast.Expr.Identifier "b" )))
+       (Past.Expr.BinaryOp
+          ( Past.BinaryOperator.ADD,
+            Past.Expr.Identifier "a",
+            Past.Expr.Identifier "b" )))
     (parse_expression (Lexing.from_string "a + b;;"))
 
 let test_binop_sub _ =
   assert_equal
     (Some
-       (Ast.Expr.BinaryOp
-          ( Ast.BinaryOperator.SUB,
-            Ast.Expr.Identifier "a",
-            Ast.Expr.Identifier "b" )))
+       (Past.Expr.BinaryOp
+          ( Past.BinaryOperator.SUB,
+            Past.Expr.Identifier "a",
+            Past.Expr.Identifier "b" )))
     (parse_expression (Lexing.from_string "a - b;;"))
 
 let test_binop_mul _ =
   assert_equal
     (Some
-       (Ast.Expr.BinaryOp
-          ( Ast.BinaryOperator.MUL,
-            Ast.Expr.Identifier "a",
-            Ast.Expr.Identifier "b" )))
+       (Past.Expr.BinaryOp
+          ( Past.BinaryOperator.MUL,
+            Past.Expr.Identifier "a",
+            Past.Expr.Identifier "b" )))
     (parse_expression (Lexing.from_string "a * b;;"))
 
 let test_binop_div _ =
   assert_equal
     (Some
-       (Ast.Expr.BinaryOp
-          ( Ast.BinaryOperator.DIV,
-            Ast.Expr.Identifier "a",
-            Ast.Expr.Identifier "b" )))
+       (Past.Expr.BinaryOp
+          ( Past.BinaryOperator.DIV,
+            Past.Expr.Identifier "a",
+            Past.Expr.Identifier "b" )))
     (parse_expression (Lexing.from_string "a / b;;"))
 
 let test_binop_mod _ =
   assert_equal
     (Some
-       (Ast.Expr.BinaryOp
-          ( Ast.BinaryOperator.MOD,
-            Ast.Expr.Identifier "a",
-            Ast.Expr.Identifier "b" )))
+       (Past.Expr.BinaryOp
+          ( Past.BinaryOperator.MOD,
+            Past.Expr.Identifier "a",
+            Past.Expr.Identifier "b" )))
     (parse_expression (Lexing.from_string "a % b;;"))
 
 let test_binop_eq _ =
   assert_equal
     (Some
-       (Ast.Expr.BinaryOp
-          ( Ast.BinaryOperator.EQ,
-            Ast.Expr.Identifier "a",
-            Ast.Expr.Identifier "b" )))
+       (Past.Expr.BinaryOp
+          ( Past.BinaryOperator.EQ,
+            Past.Expr.Identifier "a",
+            Past.Expr.Identifier "b" )))
     (parse_expression (Lexing.from_string "a = b;;"))
 
 let test_binop_neq _ =
   assert_equal
     (Some
-       (Ast.Expr.BinaryOp
-          ( Ast.BinaryOperator.NEQ,
-            Ast.Expr.Identifier "a",
-            Ast.Expr.Identifier "b" )))
+       (Past.Expr.BinaryOp
+          ( Past.BinaryOperator.NEQ,
+            Past.Expr.Identifier "a",
+            Past.Expr.Identifier "b" )))
     (parse_expression (Lexing.from_string "a != b;;"))
 
 let test_binop_lte _ =
   assert_equal
     (Some
-       (Ast.Expr.BinaryOp
-          ( Ast.BinaryOperator.LTE,
-            Ast.Expr.Identifier "a",
-            Ast.Expr.Identifier "b" )))
+       (Past.Expr.BinaryOp
+          ( Past.BinaryOperator.LTE,
+            Past.Expr.Identifier "a",
+            Past.Expr.Identifier "b" )))
     (parse_expression (Lexing.from_string "a <= b;;"))
 
 let test_binop_gte _ =
   assert_equal
     (Some
-       (Ast.Expr.BinaryOp
-          ( Ast.BinaryOperator.GTE,
-            Ast.Expr.Identifier "a",
-            Ast.Expr.Identifier "b" )))
+       (Past.Expr.BinaryOp
+          ( Past.BinaryOperator.GTE,
+            Past.Expr.Identifier "a",
+            Past.Expr.Identifier "b" )))
     (parse_expression (Lexing.from_string "a >= b;;"))
 
 let test_binop_lt _ =
   assert_equal
     (Some
-       (Ast.Expr.BinaryOp
-          ( Ast.BinaryOperator.LT,
-            Ast.Expr.Identifier "a",
-            Ast.Expr.Identifier "b" )))
+       (Past.Expr.BinaryOp
+          ( Past.BinaryOperator.LT,
+            Past.Expr.Identifier "a",
+            Past.Expr.Identifier "b" )))
     (parse_expression (Lexing.from_string "a < b;;"))
 
 let test_binop_gt _ =
   assert_equal
     (Some
-       (Ast.Expr.BinaryOp
-          ( Ast.BinaryOperator.GT,
-            Ast.Expr.Identifier "a",
-            Ast.Expr.Identifier "b" )))
+       (Past.Expr.BinaryOp
+          ( Past.BinaryOperator.GT,
+            Past.Expr.Identifier "a",
+            Past.Expr.Identifier "b" )))
     (parse_expression (Lexing.from_string "a > b;;"))
 
 let test_binop_and _ =
   assert_equal
     (Some
-       (Ast.Expr.BinaryOp
-          ( Ast.BinaryOperator.AND,
-            Ast.Expr.Identifier "a",
-            Ast.Expr.Identifier "b" )))
+       (Past.Expr.BinaryOp
+          ( Past.BinaryOperator.AND,
+            Past.Expr.Identifier "a",
+            Past.Expr.Identifier "b" )))
     (parse_expression (Lexing.from_string "a and b;;"))
 
 let test_binop_or _ =
   assert_equal
     (Some
-       (Ast.Expr.BinaryOp
-          ( Ast.BinaryOperator.OR,
-            Ast.Expr.Identifier "a",
-            Ast.Expr.Identifier "b" )))
+       (Past.Expr.BinaryOp
+          ( Past.BinaryOperator.OR,
+            Past.Expr.Identifier "a",
+            Past.Expr.Identifier "b" )))
     (parse_expression (Lexing.from_string "a or b;;"))
 
 let test_unop_not _ =
   assert_equal
-    (Some (Ast.Expr.UnaryOp (Ast.UnaryOperator.NOT, Ast.Expr.Identifier "a")))
+    (Some (Past.Expr.UnaryOp (Past.UnaryOperator.NOT, Past.Expr.Identifier "a")))
     (parse_expression (Lexing.from_string "not a;;"))
 
 let test_binop_neg _ =
   assert_equal
-    (Some (Ast.Expr.UnaryOp (Ast.UnaryOperator.NEG, Ast.Expr.Identifier "a")))
+    (Some (Past.Expr.UnaryOp (Past.UnaryOperator.NEG, Past.Expr.Identifier "a")))
     (parse_expression (Lexing.from_string "-a;;"))
 
 let test_precedence_arith_bool _ =
   assert_equal
     (Some
-       (Ast.Expr.BinaryOp
-          ( Ast.BinaryOperator.OR,
-            Ast.Expr.BinaryOp
-              ( Ast.BinaryOperator.OR,
-                Ast.Expr.BinaryOp
-                  ( Ast.BinaryOperator.AND,
-                    Ast.Expr.BinaryOp
-                      ( Ast.BinaryOperator.EQ,
-                        Ast.Expr.BinaryOp
-                          ( Ast.BinaryOperator.ADD,
-                            Ast.Expr.Identifier "a",
-                            Ast.Expr.Identifier "b" ),
-                        Ast.Expr.UnaryOp
-                          (Ast.UnaryOperator.NEG, Ast.Expr.Identifier "c") ),
-                    Ast.Expr.UnaryOp
-                      (Ast.UnaryOperator.NOT, Ast.Expr.Identifier "d") ),
-                Ast.Expr.BinaryOp
-                  ( Ast.BinaryOperator.LTE,
-                    Ast.Expr.Identifier "e",
-                    Ast.Expr.Constant (Ast.Constant.Integer 2) ) ),
-            Ast.Expr.BinaryOp
-              ( Ast.BinaryOperator.GT,
-                Ast.Expr.Identifier "f",
-                Ast.Expr.BinaryOp
-                  ( Ast.BinaryOperator.DIV,
-                    Ast.Expr.Constant (Ast.Constant.Integer 10),
-                    Ast.Expr.UnaryOp
-                      (Ast.UnaryOperator.NEG, Ast.Expr.Identifier "x") ) ) )))
+       (Past.Expr.BinaryOp
+          ( Past.BinaryOperator.OR,
+            Past.Expr.BinaryOp
+              ( Past.BinaryOperator.OR,
+                Past.Expr.BinaryOp
+                  ( Past.BinaryOperator.AND,
+                    Past.Expr.BinaryOp
+                      ( Past.BinaryOperator.EQ,
+                        Past.Expr.BinaryOp
+                          ( Past.BinaryOperator.ADD,
+                            Past.Expr.Identifier "a",
+                            Past.Expr.Identifier "b" ),
+                        Past.Expr.UnaryOp
+                          (Past.UnaryOperator.NEG, Past.Expr.Identifier "c") ),
+                    Past.Expr.UnaryOp
+                      (Past.UnaryOperator.NOT, Past.Expr.Identifier "d") ),
+                Past.Expr.BinaryOp
+                  ( Past.BinaryOperator.LTE,
+                    Past.Expr.Identifier "e",
+                    Past.Expr.Constant (Past.Constant.Integer 2) ) ),
+            Past.Expr.BinaryOp
+              ( Past.BinaryOperator.GT,
+                Past.Expr.Identifier "f",
+                Past.Expr.BinaryOp
+                  ( Past.BinaryOperator.DIV,
+                    Past.Expr.Constant (Past.Constant.Integer 10),
+                    Past.Expr.UnaryOp
+                      (Past.UnaryOperator.NEG, Past.Expr.Identifier "x") ) ) )))
     (parse_expression
        (Lexing.from_string "a+b = -c and not d or e <= 2 or f > 10/-x;;"))
 
 let test_comment _ =
-  assert_equal (Some (Ast.Expr.Identifier "a"))
+  assert_equal (Some (Past.Expr.Identifier "a"))
     (parse_expression
        (Lexing.from_string
           "(*something something*)a (*something something \n something8*);;"))
@@ -344,37 +344,37 @@ let test_comment _ =
 let test_defn _ =
   assert_equal
     [
-      Ast.TopLevelDefn.Definition
-        (("x", Ast.Typ.TInt), Ast.Expr.Constant (Ast.Constant.Integer 2));
+      Past.TopLevelDefn.Definition
+        (("x", Past.Typ.TInt), Past.Expr.Constant (Past.Constant.Integer 2));
     ]
     (parse_program (Lexing.from_string "let (x:int) = 2;;"))
 
 let test_rec_defn _ =
   assert_equal
     [
-      Ast.TopLevelDefn.RecursiveDefinition
+      Past.TopLevelDefn.RecursiveDefinition
         ( ( "pow",
-            Ast.Typ.TFun
-              (Ast.Typ.TFun (Ast.Typ.TInt, Ast.Typ.TInt), Ast.Typ.TInt) ),
-          Ast.Expr.Lambda
-            ( ("p", Ast.Typ.TInt),
-              Ast.Expr.Lambda
-                ( ("x", Ast.Typ.TInt),
-                  Ast.Expr.IfThenElse
-                    ( Ast.Expr.BinaryOp
-                        ( Ast.BinaryOperator.EQ,
-                          Ast.Expr.Identifier "p",
-                          Ast.Expr.Constant (Ast.Constant.Integer 0) ),
-                      Ast.Expr.Constant (Ast.Constant.Integer 1),
-                      Ast.Expr.BinaryOp
-                        ( Ast.BinaryOperator.MUL,
-                          Ast.Expr.Identifier "x",
-                          Ast.Expr.Application
-                            ( Ast.Expr.Identifier "pow",
-                              Ast.Expr.BinaryOp
-                                ( Ast.BinaryOperator.SUB,
-                                  Ast.Expr.Identifier "p",
-                                  Ast.Expr.Constant (Ast.Constant.Integer 1) )
+            Past.Typ.TFun
+              (Past.Typ.TFun (Past.Typ.TInt, Past.Typ.TInt), Past.Typ.TInt) ),
+          Past.Expr.Lambda
+            ( ("p", Past.Typ.TInt),
+              Past.Expr.Lambda
+                ( ("x", Past.Typ.TInt),
+                  Past.Expr.IfThenElse
+                    ( Past.Expr.BinaryOp
+                        ( Past.BinaryOperator.EQ,
+                          Past.Expr.Identifier "p",
+                          Past.Expr.Constant (Past.Constant.Integer 0) ),
+                      Past.Expr.Constant (Past.Constant.Integer 1),
+                      Past.Expr.BinaryOp
+                        ( Past.BinaryOperator.MUL,
+                          Past.Expr.Identifier "x",
+                          Past.Expr.Application
+                            ( Past.Expr.Identifier "pow",
+                              Past.Expr.BinaryOp
+                                ( Past.BinaryOperator.SUB,
+                                  Past.Expr.Identifier "p",
+                                  Past.Expr.Constant (Past.Constant.Integer 1) )
                             ) ) ) ) ) );
     ]
     (parse_program
@@ -385,37 +385,37 @@ let test_rec_defn _ =
 let test_program_sep _ =
   assert_equal
     [
-      Ast.TopLevelDefn.Definition
-        (("x", Ast.Typ.TInt), Ast.Expr.Constant (Ast.Constant.Integer 2));
-      Ast.TopLevelDefn.RecursiveDefinition
+      Past.TopLevelDefn.Definition
+        (("x", Past.Typ.TInt), Past.Expr.Constant (Past.Constant.Integer 2));
+      Past.TopLevelDefn.RecursiveDefinition
         ( ( "pow",
-            Ast.Typ.TFun
-              (Ast.Typ.TFun (Ast.Typ.TInt, Ast.Typ.TInt), Ast.Typ.TInt) ),
-          Ast.Expr.Lambda
-            ( ("p", Ast.Typ.TInt),
-              Ast.Expr.Lambda
-                ( ("x", Ast.Typ.TInt),
-                  Ast.Expr.IfThenElse
-                    ( Ast.Expr.BinaryOp
-                        ( Ast.BinaryOperator.EQ,
-                          Ast.Expr.Identifier "p",
-                          Ast.Expr.Constant (Ast.Constant.Integer 0) ),
-                      Ast.Expr.Constant (Ast.Constant.Integer 1),
-                      Ast.Expr.BinaryOp
-                        ( Ast.BinaryOperator.MUL,
-                          Ast.Expr.Identifier "x",
-                          Ast.Expr.Application
-                            ( Ast.Expr.Identifier "pow",
-                              Ast.Expr.BinaryOp
-                                ( Ast.BinaryOperator.SUB,
-                                  Ast.Expr.Identifier "p",
-                                  Ast.Expr.Constant (Ast.Constant.Integer 1) )
+            Past.Typ.TFun
+              (Past.Typ.TFun (Past.Typ.TInt, Past.Typ.TInt), Past.Typ.TInt) ),
+          Past.Expr.Lambda
+            ( ("p", Past.Typ.TInt),
+              Past.Expr.Lambda
+                ( ("x", Past.Typ.TInt),
+                  Past.Expr.IfThenElse
+                    ( Past.Expr.BinaryOp
+                        ( Past.BinaryOperator.EQ,
+                          Past.Expr.Identifier "p",
+                          Past.Expr.Constant (Past.Constant.Integer 0) ),
+                      Past.Expr.Constant (Past.Constant.Integer 1),
+                      Past.Expr.BinaryOp
+                        ( Past.BinaryOperator.MUL,
+                          Past.Expr.Identifier "x",
+                          Past.Expr.Application
+                            ( Past.Expr.Identifier "pow",
+                              Past.Expr.BinaryOp
+                                ( Past.BinaryOperator.SUB,
+                                  Past.Expr.Identifier "p",
+                                  Past.Expr.Constant (Past.Constant.Integer 1) )
                             ) ) ) ) ) );
-      Ast.TopLevelDefn.Expression
-        (Ast.Expr.Application
-           ( Ast.Expr.Application
-               (Ast.Expr.Identifier "pow", Ast.Expr.Identifier "x"),
-             Ast.Expr.Identifier "x" ));
+      Past.TopLevelDefn.Expression
+        (Past.Expr.Application
+           ( Past.Expr.Application
+               (Past.Expr.Identifier "pow", Past.Expr.Identifier "x"),
+             Past.Expr.Identifier "x" ));
     ]
     (parse_program
        (Lexing.from_string
@@ -426,17 +426,17 @@ let test_program_sep _ =
 
 let test_directive_env _ =
   assert_equal
-    [ Ast.TopLevelDefn.Directive Ast.Directive.Env ]
+    [ Past.TopLevelDefn.Directive Past.Directive.Env ]
     (parse_program (Lexing.from_string "ENV;;"))
 
 let test_directive_quit _ =
   assert_equal
-    [ Ast.TopLevelDefn.Directive Ast.Directive.Quit ]
+    [ Past.TopLevelDefn.Directive Past.Directive.Quit ]
     (parse_program (Lexing.from_string "QUIT;;"))
 
 let test_directive_reset _ =
   assert_equal
-    [ Ast.TopLevelDefn.Directive Ast.Directive.Reset ]
+    [ Past.TopLevelDefn.Directive Past.Directive.Reset ]
     (parse_program (Lexing.from_string "RESET;;"))
 
 (* Name the test cases and group them together *)
