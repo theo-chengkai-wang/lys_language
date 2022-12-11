@@ -2,4 +2,4 @@
  (name lys_typing)
  (libraries core
  lys_ast)
- (preprocess (pps ppx_deriving.show ppx_deriving.ord ppx_sexp_conv)))
+ (preprocess (pps ppx_deriving.show ppx_deriving.ord ppx_sexp_conv ppx_compare)))

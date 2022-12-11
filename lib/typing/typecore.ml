@@ -1,34 +1,27 @@
-open Lys_ast
+(* open Lys_ast
+open Core
 
-module type Context = sig
-  type ('a, 'b) t [@@derive sexp, show]
+(* meta_ctx->ctx->Past.Expr.t -> Past.Typ.t -> Ast.Expr.t * Ast.Typ.t *)
+let type_check_expression meta_ctx ctx past_expr past_typ =
+  (Ast.Expr.Constant Ast.Constant.Unit, Ast.Typ.TUnit)
 
-  val empty_context : ('a, 'b) t
-  val add_mapping : ('a, 'b) t -> 'a -> 'b -> ('a, 'b) t
-  val delete_last_mapping : ('a, 'b) t -> 'a -> ('a, 'b) t
-  val get_last_mapping : ('a, 'b) t -> 'a -> 'b option
-end
+(* meta_ctx -> ctx -> Past.Expr.t -> (Ast.Expr.t * Ast.Typ.t) *)
+let type_inference_expression meta_ctx ctx past_expr =
+  (Ast.Expr.Constant Ast.Constant.Unit, Ast.Typ.TUnit)
 
-module NaiveTypingContext : Context = struct
-  type ('a, 'b) t = ('a * 'b) list [@@derive sexp, show]
+(* meta_ctx -> ctx -> (Past.Expr.t) -> Past.Typ.t -> (Ast.Expr.t*Ast.Typ.t* MetaContext.t *Context.t)*)
+let process_decl meta_ctx ctx past_expr past_typ =
+  ( Ast.Expr.Constant Ast.Constant.Unit,
+    Ast.Typ.TUnit,
+    NaiveTypingContext,
+    NaiveTypingContext.empty_context )
 
-  let empty_context : ('a, 'b) t = []
-  let add_mapping ctx a b = (a, b) :: ctx
+(* meta_ctx->ctx->Past.program->Ast.Program *)
+let type_check_program_aux meta_ctx ctx program =
+  match  program with
+  | 
+  | (Ast.TopLevelDefn.Definition)::program
 
-  let rec delete_last_mapping ctx a =
-    match ctx with
-    | [] -> []
-    | (k, v) :: ctx ->
-        if k = a then ctx else (k, v) :: delete_last_mapping ctx a
-
-  let rec get_last_mapping ctx a =
-    match ctx with
-    | [] -> None
-    | (k, v) :: ctx -> if k = a then Some v else get_last_mapping ctx a
-end
-
-let type_check_program program = ()
-let type_check_program_aux meta_ctx ctx program = ()
-let type_check_expression _ _ = ()
-let type_inference_expression _ = Past.Typ.TUnit
-let type_inference_directive _ = ()
+let type_check_program program =
+  type_check_program_aux NaiveTypingContext.empty_context
+    NaiveTypingContext.empty_context program *)

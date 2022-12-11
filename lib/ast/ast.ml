@@ -2,7 +2,7 @@ open Core
 
 module type Identifier_type = sig
   (*Hide implementation*)
-  type t [@@deriving sexp, show]
+  type t [@@deriving sexp, show, compare, equal]
 
   val of_string : string -> t
 end
@@ -21,17 +21,17 @@ module type MetaIdentifier_type = sig
 end
 
 module rec ObjIdentifier : ObjIdentifier_type = struct
-  type t = string [@@deriving sexp, show]
+  type t = string [@@deriving sexp, show, compare, equal]
   let of_string x = x
 end
 
 and MetaIdentifier: MetaIdentifier_type = struct
-  type t = string [@@deriving sexp, show]
+  type t = string [@@deriving sexp, show, compare, equal]
   let of_string x = x
 end
 
 and TypeIdentifier: TypeIdentifier_type = struct
-  type t = string [@@deriving sexp, show]
+  type t = string [@@deriving sexp, show, compare, equal]
   let of_string x = x
 end
 
@@ -45,7 +45,7 @@ and Typ : sig
     | TBox of Context.t * t
     | TProd of t * t
     | TSum of t * t
-  [@@deriving sexp, show]
+  [@@deriving sexp, show, compare, equal]
 end = struct
   type t =
     | TUnit
@@ -56,19 +56,19 @@ end = struct
     | TBox of Context.t * t
     | TProd of t * t
     | TSum of t * t
-  [@@deriving sexp, show]
+  [@@deriving sexp, show, compare, equal]
 end
 
 and IdentifierDefn : sig
-  type t = ObjIdentifier.t * Typ.t [@@deriving sexp, show]
+  type t = ObjIdentifier.t * Typ.t [@@deriving sexp, show, compare, equal]
 end = struct
-  type t = ObjIdentifier.t * Typ.t [@@deriving sexp, show]
+  type t = ObjIdentifier.t * Typ.t [@@deriving sexp, show, compare, equal]
 end
 
 and Context : sig
-  type t = IdentifierDefn.t list [@@deriving sexp, show]
+  type t = IdentifierDefn.t list [@@deriving sexp, show, compare, equal]
 end = struct
-  type t = IdentifierDefn.t list [@@deriving sexp, show]
+  type t = IdentifierDefn.t list [@@deriving sexp, show, compare, equal]
 end
 
 and BinaryOperator : sig
@@ -86,7 +86,7 @@ and BinaryOperator : sig
     | LT
     | AND
     | OR
-  [@@deriving sexp, show]
+  [@@deriving sexp, show, compare, equal]
 end = struct
   type t =
     | ADD
@@ -102,19 +102,19 @@ end = struct
     | LT
     | AND
     | OR
-  [@@deriving sexp, show]
+  [@@deriving sexp, show, compare, equal]
 end
 
 and UnaryOperator : sig
-  type t = NEG | NOT [@@deriving sexp, show]
+  type t = NEG | NOT [@@deriving sexp, show, compare, equal]
 end = struct
-  type t = NEG | NOT [@@deriving sexp, show]
+  type t = NEG | NOT [@@deriving sexp, show, compare, equal]
 end
 
 and Constant : sig
-  type t = Integer of int | Boolean of bool | Unit [@@deriving sexp, show]
+  type t = Integer of int | Boolean of bool | Unit [@@deriving sexp, show, compare, equal]
 end = struct
-  type t = Integer of int | Boolean of bool | Unit [@@deriving sexp, show]
+  type t = Integer of int | Boolean of bool | Unit [@@deriving sexp, show, compare, equal]
 end
 
 and Expr : sig
@@ -141,7 +141,7 @@ and Expr : sig
     | Box of Context.t * t (*box (x:A, y:B |- e)*)
     | LetBox of MetaIdentifier.t * t * t (*let box u = e in e'*)
     | Closure of MetaIdentifier.t * t list (*u with (e1, e2, e3, ...)*)
-  [@@deriving sexp, show]
+  [@@deriving sexp, show, compare, equal]
 end = struct
   type t =
     | Identifier of ObjIdentifier.t (*x*)
@@ -166,13 +166,13 @@ end = struct
     | Box of Context.t * t (*box (x:A, y:B |- e)*)
     | LetBox of MetaIdentifier.t * t * t (*let box u = e in e'*)
     | Closure of MetaIdentifier.t * t list (*u with (e1, e2, e3, ...)*)
-  [@@deriving sexp, show]
+  [@@deriving sexp, show, compare, equal]
 end
 
 and Directive : sig
-  type t = Reset | Env | Quit [@@deriving sexp, show]
+  type t = Reset | Env | Quit [@@deriving sexp, show, compare, equal]
 end = struct
-  type t = Reset | Env | Quit [@@deriving sexp, show]
+  type t = Reset | Env | Quit [@@deriving sexp, show, compare, equal]
 end
 
 and TopLevelDefn : sig
@@ -181,7 +181,7 @@ and TopLevelDefn : sig
   | RecursiveDefinition of Typ.t * IdentifierDefn.t * Expr.t
   | Expression of Typ.t * Expr.t
   | Directive of Directive.t
-  [@@deriving sexp, show]
+  [@@deriving sexp, show, compare, equal]
 end = struct
   (*Note added type for defns (not useful for now but useful for when adding inference) and exprs for the REPL*)
   type t =
@@ -189,11 +189,11 @@ end = struct
     | RecursiveDefinition of Typ.t * IdentifierDefn.t * Expr.t
     | Expression of Typ.t * Expr.t
     | Directive of Directive.t
-  [@@deriving sexp, show]
+  [@@deriving sexp, show, compare, equal]
 end
 
 and Program : sig
-  type t = TopLevelDefn.t list [@@deriving sexp, show]
+  type t = TopLevelDefn.t list [@@deriving sexp, show, compare, equal]
 end = struct
-  type t = TopLevelDefn.t list [@@deriving sexp, show]
+  type t = TopLevelDefn.t list [@@deriving sexp, show, compare, equal]
 end
