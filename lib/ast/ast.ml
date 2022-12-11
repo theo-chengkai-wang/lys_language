@@ -1,12 +1,38 @@
 open Core
 
 module type Identifier_type = sig
-  (*Uniform identifier type for all identifiers*)
-  type t = string [@@deriving sexp, show]
+  (*Hide implementation*)
+  type t [@@deriving sexp, show]
+
+  val of_string : string -> t
 end
 
-module rec Identifier : Identifier_type = struct
+module type ObjIdentifier_type = sig
+  include Identifier_type
+end
+
+module type TypeIdentifier_type = sig
+  (*Unused for now*)
+  include Identifier_type
+end
+
+module type MetaIdentifier_type = sig
+  include Identifier_type
+end
+
+module rec ObjIdentifier : ObjIdentifier_type = struct
   type t = string [@@deriving sexp, show]
+  let of_string x = x
+end
+
+and MetaIdentifier: MetaIdentifier_type = struct
+  type t = string [@@deriving sexp, show]
+  let of_string x = x
+end
+
+and TypeIdentifier: TypeIdentifier_type = struct
+  type t = string [@@deriving sexp, show]
+  let of_string x = x
 end
 
 and Typ : sig
@@ -14,7 +40,7 @@ and Typ : sig
     | TUnit
     | TBool
     | TInt
-    | TIdentifier of Identifier.t
+    | TIdentifier of TypeIdentifier.t
     | TFun of t * t
     | TBox of Context.t * t
     | TProd of t * t
@@ -25,7 +51,7 @@ end = struct
     | TUnit
     | TBool
     | TInt
-    | TIdentifier of Identifier.t
+    | TIdentifier of TypeIdentifier.t
     | TFun of t * t
     | TBox of Context.t * t
     | TProd of t * t
@@ -34,9 +60,9 @@ end = struct
 end
 
 and IdentifierDefn : sig
-  type t = Identifier.t * Typ.t [@@deriving sexp, show]
+  type t = ObjIdentifier.t * Typ.t [@@deriving sexp, show]
 end = struct
-  type t = Identifier.t * Typ.t [@@deriving sexp, show]
+  type t = ObjIdentifier.t * Typ.t [@@deriving sexp, show]
 end
 
 and Context : sig
@@ -93,7 +119,7 @@ end
 
 and Expr : sig
   type t =
-    | Identifier of Identifier.t (*x*)
+    | Identifier of ObjIdentifier.t (*x*)
     | Constant of Constant.t (*c*)
     | UnaryOp of UnaryOperator.t * t (*unop e*)
     | BinaryOp of BinaryOperator.t * t * t (*e op e'*)
@@ -113,12 +139,12 @@ and Expr : sig
       (*let rec f: A->B =
         e[f] in e'*)
     | Box of Context.t * t (*box (x:A, y:B |- e)*)
-    | LetBox of Identifier.t * t * t (*let box u = e in e'*)
-    | Closure of Identifier.t * t list (*u with (e1, e2, e3, ...)*)
+    | LetBox of MetaIdentifier.t * t * t (*let box u = e in e'*)
+    | Closure of MetaIdentifier.t * t list (*u with (e1, e2, e3, ...)*)
   [@@deriving sexp, show]
 end = struct
   type t =
-    | Identifier of Identifier.t (*x*)
+    | Identifier of ObjIdentifier.t (*x*)
     | Constant of Constant.t (*c*)
     | UnaryOp of UnaryOperator.t * t (*unop e*)
     | BinaryOp of BinaryOperator.t * t * t (*e op e'*)
@@ -138,8 +164,8 @@ end = struct
       (*let rec f: A->B =
         e[f] in e'*)
     | Box of Context.t * t (*box (x:A, y:B |- e)*)
-    | LetBox of Identifier.t * t * t (*let box u = e in e'*)
-    | Closure of Identifier.t * t list (*u with (e1, e2, e3, ...)*)
+    | LetBox of MetaIdentifier.t * t * t (*let box u = e in e'*)
+    | Closure of MetaIdentifier.t * t list (*u with (e1, e2, e3, ...)*)
   [@@deriving sexp, show]
 end
 
@@ -151,16 +177,17 @@ end
 
 and TopLevelDefn : sig
   type t =
-    | Definition of IdentifierDefn.t * Expr.t
-    | RecursiveDefinition of IdentifierDefn.t * Expr.t
-    | Expression of Expr.t
-    | Directive of Directive.t
+  | Definition of Typ.t * IdentifierDefn.t * Expr.t
+  | RecursiveDefinition of Typ.t * IdentifierDefn.t * Expr.t
+  | Expression of Typ.t * Expr.t
+  | Directive of Directive.t
   [@@deriving sexp, show]
 end = struct
+  (*Note added type for defns (not useful for now but useful for when adding inference) and exprs for the REPL*)
   type t =
-    | Definition of IdentifierDefn.t * Expr.t
-    | RecursiveDefinition of IdentifierDefn.t * Expr.t
-    | Expression of Expr.t
+    | Definition of Typ.t * IdentifierDefn.t * Expr.t
+    | RecursiveDefinition of Typ.t * IdentifierDefn.t * Expr.t
+    | Expression of Typ.t * Expr.t
     | Directive of Directive.t
   [@@deriving sexp, show]
 end
