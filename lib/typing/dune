@@ -1,5 +1,5 @@
 (library
  (name lys_typing)
  (libraries core
- lys_ast)
+ lys_ast lys_utils)
  (preprocess (pps ppx_deriving.show ppx_deriving.ord ppx_sexp_conv ppx_compare)))
