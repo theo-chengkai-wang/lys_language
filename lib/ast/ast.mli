@@ -1,7 +1,9 @@
 module type Identifier_type = sig
+  (*Hide implementation*)
   type t [@@deriving sexp, show, compare, equal]
 
   val of_string : string -> t
+  val of_past : Past.Identifier.t -> t
 end
 
 module type ObjIdentifier_type = sig
@@ -32,14 +34,20 @@ and Typ : sig
     | TProd of t * t
     | TSum of t * t
   [@@deriving sexp, show, compare, equal]
+
+  val of_past : Past.Typ.t -> t
 end
 
 and IdentifierDefn : sig
   type t = ObjIdentifier.t * Typ.t [@@deriving sexp, show, compare, equal]
+
+  val of_past : Past.IdentifierDefn.t -> t
 end
 
 and Context : sig
   type t = IdentifierDefn.t list [@@deriving sexp, show, compare, equal]
+
+  val of_past : Past.Context.t -> t
 end
 
 and BinaryOperator : sig
@@ -58,14 +66,21 @@ and BinaryOperator : sig
     | AND
     | OR
   [@@deriving sexp, show, compare, equal]
+
+  val of_past : Past.BinaryOperator.t -> t
 end
 
 and UnaryOperator : sig
   type t = NEG | NOT [@@deriving sexp, show, compare, equal]
+
+  val of_past : Past.UnaryOperator.t -> t
 end
 
 and Constant : sig
-  type t = Integer of int | Boolean of bool | Unit [@@deriving sexp, show, compare, equal]
+  type t = Integer of int | Boolean of bool | Unit
+  [@@deriving sexp, show, compare, equal]
+
+  val of_past : Past.Constant.t -> t
 end
 
 and Expr : sig
@@ -93,13 +108,34 @@ and Expr : sig
     | LetBox of MetaIdentifier.t * t * t (*let box u = e in e'*)
     | Closure of MetaIdentifier.t * t list (*u with (e1, e2, e3, ...)*)
   [@@deriving sexp, show, compare, equal]
+
+  val of_past : Past.Expr.t -> t
 end
 
 and Directive : sig
   type t = Reset | Env | Quit [@@deriving sexp, show, compare, equal]
+
+  val of_past : Past.Directive.t -> t
 end
 
 and TopLevelDefn : sig
+  type t =
+    | Definition of IdentifierDefn.t * Expr.t
+    | RecursiveDefinition of IdentifierDefn.t * Expr.t
+    | Expression of Expr.t
+    | Directive of Directive.t
+  [@@deriving sexp, show, compare, equal]
+
+  val of_past : Past.TopLevelDefn.t -> t
+end
+
+and Program : sig
+  type t = TopLevelDefn.t list [@@deriving sexp, show, compare, equal]
+
+  val of_past : Past.Program.t -> t
+end
+
+module TypedTopLevelDefn : sig
   type t =
     | Definition of Typ.t * IdentifierDefn.t * Expr.t
     | RecursiveDefinition of Typ.t * IdentifierDefn.t * Expr.t
@@ -108,6 +144,6 @@ and TopLevelDefn : sig
   [@@deriving sexp, show, compare, equal]
 end
 
-and Program : sig
-  type t = TopLevelDefn.t list [@@deriving sexp, show, compare, equal]
+module TypedProgram : sig
+  type t = TypedTopLevelDefn.t list [@@deriving sexp, show, compare, equal]
 end
