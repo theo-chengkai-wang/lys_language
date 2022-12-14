@@ -1,7 +1,7 @@
 open Lys_utils
 open Lys_ast
 
-module ObjTypingContext :
+module ObjTypingContext : (* NOTE: WE MODEL SNOC-LISTS VIA ITS REVERSE: CONS LISTS *)
   Context.Context_S_type with type key = Ast.ObjIdentifier.t =
   Context.NaiveContext.Make (Ast.ObjIdentifier)
 
