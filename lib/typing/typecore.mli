@@ -5,7 +5,7 @@
 open Lys_ast
 open Core
 
-val type_inference_program :
+val type_inference_expression :
   ( Ast.MetaIdentifier.t,
     Ast.Context.t * Ast.Typ.t )
   Typing_context.MetaTypingContext.t ->
@@ -13,7 +13,7 @@ val type_inference_program :
   Ast.Expr.t ->
   Ast.Typ.t Or_error.t
 
-val type_check_program :
+val type_check_expression :
   ( Ast.MetaIdentifier.t,
     Ast.Context.t * Ast.Typ.t )
   Typing_context.MetaTypingContext.t ->

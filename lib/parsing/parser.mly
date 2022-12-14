@@ -75,8 +75,12 @@ let mkapp f xs =
 
 // Functions
 %right "->"
+
+// Bracket
+%nonassoc LEFT_BRACKET RIGHT_BRACKET
+
 // typ arrow
-%right typ_FUNCTION_ARROW
+// %nonassoc typ_FUNCTION_ARROW
 // // Match with
 // metavariable with
 %left WITH
@@ -183,7 +187,7 @@ typ:
     | INT_typ {Typ.TInt}
     | UNIT_typ {Typ.TUnit}
     | i = ID {Typ.TIdentifier (i)}
-    | t1 = typ; "->"; t2 = typ %prec typ_FUNCTION_ARROW {Typ.TFun (t1, t2)}
+    | t1 = typ; "->"; t2 = typ /*%prec typ_FUNCTION_ARROW*/ {Typ.TFun (t1, t2)}
     | t1 = typ; "*"; t2 = typ %prec typ_PRODUCT {Typ.TProd (t1, t2)}
     | t1 = typ; "+"; t2 = typ %prec typ_SUM {Typ.TSum (t1, t2)}
     | LEFT_BRACKET decl_list = separated_list(COMMA, id_typ_declaration) RIGHT_BRACKET t = typ {Typ.TBox (decl_list, t)}

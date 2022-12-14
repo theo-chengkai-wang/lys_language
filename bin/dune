@@ -1,4 +1,4 @@
 (executables
- (public_names lys_language parse_print)
- (names main parse_print)
+ (public_names lys_language parse_print type_check)
+ (names main parse_print type_check)
  (libraries lys_ast lys_parsing lys_typing core core_unix.command_unix))

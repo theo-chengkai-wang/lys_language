@@ -1,4 +1,4 @@
-let m1: ([x:C]A -> [y1: C, y2: D]D) = 
+let m1: (([x:C]A) -> ([y1: C, y2: D]A)) = 
     fun (z: [x:C]A) -> 
         let box u = z in box (y1: C, y2: D |- u with (y1))
 in ()

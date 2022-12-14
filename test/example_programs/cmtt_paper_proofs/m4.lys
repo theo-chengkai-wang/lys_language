@@ -1,4 +1,4 @@
-let m4: [x: A]B -> [y1: A][y2: B]C -> [z: A]C = 
+let m4: ([x: A]B) -> ([y1: A][y2: B]C) -> ([z: A]C) = 
     fun (x1: [x:A]B) -> fun (x2: [y1: A][y2: B]C) ->
         let box u = x1 in 
             let box v = x2 in 
