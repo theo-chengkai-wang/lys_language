@@ -1,1 +1,3 @@
-let x: A->B->B = (fun (x:A) -> fun (y:B )-> y) in ();;
+    fun (z: [x:C]A) -> 
+        let box u = z in box (y1: C, y2: D |- u with (y1))
+;;

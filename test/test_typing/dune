@@ -1,0 +1,4 @@
+(library
+ (name test_typing)
+ (modules test_typing)
+ (libraries ounit2 core lys_typing lys_ast lys_parsing))

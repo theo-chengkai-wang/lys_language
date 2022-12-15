@@ -355,7 +355,7 @@ let test_rec_defn _ =
       Past.TopLevelDefn.RecursiveDefinition
         ( ( "pow",
             Past.Typ.TFun
-              (Past.Typ.TFun (Past.Typ.TInt, Past.Typ.TInt), Past.Typ.TInt) ),
+              (Past.Typ.TInt, Past.Typ.TFun (Past.Typ.TInt, Past.Typ.TInt)) ),
           Past.Expr.Lambda
             ( ("p", Past.Typ.TInt),
               Past.Expr.Lambda
@@ -390,7 +390,7 @@ let test_program_sep _ =
       Past.TopLevelDefn.RecursiveDefinition
         ( ( "pow",
             Past.Typ.TFun
-              (Past.Typ.TFun (Past.Typ.TInt, Past.Typ.TInt), Past.Typ.TInt) ),
+              (Past.Typ.TInt, Past.Typ.TFun (Past.Typ.TInt, Past.Typ.TInt)) ),
           Past.Expr.Lambda
             ( ("p", Past.Typ.TInt),
               Past.Expr.Lambda
@@ -484,5 +484,3 @@ let suite =
          "test_defn" >:: test_defn;
          "test_rec_defn" >:: test_rec_defn;
        ]
-
-let () = run_test_tt_main suite

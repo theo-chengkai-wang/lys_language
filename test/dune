@@ -1,13 +1,5 @@
 (test
  (name lys_language)
- (modules lys_language))
+ (modules lys_language)
+ (libraries ounit2 test_parsing test_typing))
 
-(test
- (name test_parsing)
- (modules test_parsing)
- (libraries ounit2 lys_ast lys_parsing))
-
-(test
- (name test_typing)
- (modules test_typing)
- (libraries lys_typing lys_ast lys_parsing))
