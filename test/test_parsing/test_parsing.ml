@@ -152,7 +152,8 @@ let test_let_rec _ =
     (Some
        (Past.Expr.LetRec
           ( ( "x",
-              Past.Typ.TFun (Past.Typ.TIdentifier "A", Past.Typ.TIdentifier "B") ),
+              Past.Typ.TFun (Past.Typ.TIdentifier "A", Past.Typ.TIdentifier "B")
+            ),
             Past.Expr.Identifier "y",
             Past.Expr.Identifier "b" )))
     (parse_expression (Lexing.from_string "let rec x: A -> B = y in b;;"))
@@ -370,17 +371,19 @@ let test_rec_defn _ =
                         ( Past.BinaryOperator.MUL,
                           Past.Expr.Identifier "x",
                           Past.Expr.Application
-                            ( Past.Expr.Identifier "pow",
-                              Past.Expr.BinaryOp
-                                ( Past.BinaryOperator.SUB,
-                                  Past.Expr.Identifier "p",
-                                  Past.Expr.Constant (Past.Constant.Integer 1) )
-                            ) ) ) ) ) );
+                            ( Past.Expr.Application
+                                ( Past.Expr.Identifier "pow",
+                                  Past.Expr.BinaryOp
+                                    ( Past.BinaryOperator.SUB,
+                                      Past.Expr.Identifier "p",
+                                      Past.Expr.Constant
+                                        (Past.Constant.Integer 1) ) ),
+                              Past.Expr.Identifier "x" ) ) ) ) ) );
     ]
     (parse_program
        (Lexing.from_string
           "let rec (pow: int -> int -> int) = fun (p: int) -> fun (x: int) -> \
-           if p = 0 then 1 else x * (pow (p - 1));;"))
+           if p = 0 then 1 else x * (pow (p - 1) x);;"))
 
 let test_program_sep _ =
   assert_equal
@@ -409,8 +412,8 @@ let test_program_sep _ =
                               Past.Expr.BinaryOp
                                 ( Past.BinaryOperator.SUB,
                                   Past.Expr.Identifier "p",
-                                  Past.Expr.Constant (Past.Constant.Integer 1) )
-                            ) ) ) ) ) );
+                                  Past.Expr.Constant (Past.Constant.Integer 1)
+                                ) ) ) ) ) ) );
       Past.TopLevelDefn.Expression
         (Past.Expr.Application
            ( Past.Expr.Application
@@ -441,7 +444,7 @@ let test_directive_reset _ =
 
 (* Name the test cases and group them together *)
 let suite =
-  "suite"
+  "parsing_suite"
   >::: [
          "test_int" >:: test_int;
          "test_bool_true" >:: test_bool_true;

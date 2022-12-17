@@ -1,3 +1,1 @@
-    fun (z: [x:C]A) -> 
-        let box u = z in box (y1: C, y2: D |- u with (y1))
-;;
+let rec (pow:int->int->int) = fun (n:int) -> fun (x:int) -> if n = 0 then 1 else x * (pow (n-1) x) in ();;

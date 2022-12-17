@@ -75,7 +75,7 @@ and type_inference_expression meta_ctx ctx e =
           let or_error = type_check_expression meta_ctx ctx expr2 typ in
           Or_error.tag or_error
             ~tag:
-              ("TypeInferenceError: Type mismatch: both sides of equality must \
+              ("TypeInferenceError: Type mismatch: both sides of inequality must \
                 have same type: " ^ Ast.Typ.show typ)
           >>= fun _ -> Ok Ast.Typ.TBool
       | Ast.BinaryOperator.GTE -> check_both Ast.Typ.TInt Ast.Typ.TBool

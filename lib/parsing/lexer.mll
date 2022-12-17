@@ -14,7 +14,7 @@ let next_line lexbuf =
 
 }
 
-let int = '-'? ['0'-'9'] ['0'-'9']*
+let nat = ['0'-'9'] ['0'-'9']*
 
 let white = [' ' '\t']+
 let newline = '\r' | '\n' | "\r\n"
@@ -72,7 +72,7 @@ rule read =
     | "RESET" {DIR_RESET}
     | "ENV" {DIR_ENV}
     | "QUIT" {DIR_QUIT}
-    | int   { INT (int_of_string (Lexing.lexeme lexbuf)) }
+    | nat   { INT (int_of_string (Lexing.lexeme lexbuf)) }
     | id    {ID (Lexing.lexeme lexbuf)}
     | eof {EOF}
     | _ {raise (SyntaxError ("Lexer - Illegal character: " ^ Lexing.lexeme lexbuf))}
