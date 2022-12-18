@@ -170,6 +170,16 @@ let standard_suite =
 
 (* CMTT *)
 
+let test_box _ = 
+  assert_equal
+  (Or_error.ok
+     (type_infer_from_str "box (x:int |- x);;"))
+  (Some (TBox ([(Ast.ObjIdentifier.of_string "x", TInt)] , TInt)));
+assert_equal ~msg:"Duplicate variable in box context"
+  (Or_error.ok (type_infer_from_str "box (x: int, x:int |- x);;"))
+  None
+
+
 let test_let_box _ =
   assert_equal
     (Or_error.ok
@@ -203,6 +213,7 @@ let test_closure_unmatched_context_wrt_arguments _ =
 let cmtt_suite =
   "cmtt_suite"
   >::: [
+        "test_box" >:: test_box;
          "test_let_box_correct" >:: test_let_box;
          "test_closure_correct" >:: test_closure_correct;
          "test_closure_unbound_meta" >:: test_closure_unbound_meta;

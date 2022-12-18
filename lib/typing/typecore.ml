@@ -6,6 +6,20 @@ open Lys_ast
 *)
 
 (* meta_ctx->ctx->Aast.Expr.t -> Ast.Typ.t -> unit Or_error.t *)
+
+module BoxContextSet = Set.Make (Ast.ObjIdentifier)
+
+let box_context_contains_duplicates ctx =
+  (*Return true if there are duplicates*)
+  let rec check_duplicates_aux map ctx =
+    match ctx with
+    | [] -> false
+    | (x, _) :: xs ->
+        if BoxContextSet.mem map x then true
+        else check_duplicates_aux (BoxContextSet.add map x) xs
+  in
+  check_duplicates_aux BoxContextSet.empty ctx
+
 let rec type_check_expression meta_ctx ctx expr typ =
   let open Or_error.Monad_infix in
   type_inference_expression meta_ctx ctx expr >>= fun inferred_typ ->
@@ -75,8 +89,8 @@ and type_inference_expression meta_ctx ctx e =
           let or_error = type_check_expression meta_ctx ctx expr2 typ in
           Or_error.tag or_error
             ~tag:
-              ("TypeInferenceError: Type mismatch: both sides of inequality must \
-                have same type: " ^ Ast.Typ.show typ)
+              ("TypeInferenceError: Type mismatch: both sides of inequality \
+                must have same type: " ^ Ast.Typ.show typ)
           >>= fun _ -> Ok Ast.Typ.TBool
       | Ast.BinaryOperator.GTE -> check_both Ast.Typ.TInt Ast.Typ.TBool
       | Ast.BinaryOperator.GT -> check_both Ast.Typ.TInt Ast.Typ.TBool
@@ -205,6 +219,12 @@ and type_inference_expression meta_ctx ctx e =
              (Ast.Typ.show typ))
       >>= fun () -> type_inference_expression meta_ctx new_ctx e2
   | Ast.Expr.Box (context, e) ->
+    (if box_context_contains_duplicates context then
+      error
+        "TypeInferenceError: there are duplicates in the provided box context"
+        context [%sexp_of: Ast.Context.t]
+     else Ok ())
+     >>= fun () ->
       let new_ctx =
         Typing_context.ObjTypingContext.add_all_mappings ctx context
       in
