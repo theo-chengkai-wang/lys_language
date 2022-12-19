@@ -1,9 +1,33 @@
+open Core
+module StringMap : Map.S with type Key.t = String.t
+
+module DeBruijnIndex : sig
+  (*Implementation of De Bruijn Indices -- encapsulated*)
+  type t [@@deriving sexp, show, compare, equal]
+
+  val none : t
+  val create : int -> t
+  val shift : t -> int -> t Or_error.t
+end
+
 module type ObjIdentifier_type = sig
   type t [@@deriving sexp, show, compare, equal]
 
   val of_string : string -> t
   val of_past : Past.Identifier.t -> t
-  val of_string_and_index : string -> int -> t
+  val of_string_and_index : string -> DeBruijnIndex.t -> t
+  val get_name : t -> string
+  val get_debruijn_index : t -> DeBruijnIndex.t
+
+  val populate_index :
+    t ->
+    current_ast_level:int ->
+    current_identifiers:int StringMap.t ->
+    current_meta_ast_level:int ->
+    current_meta_identifiers:int StringMap.t ->
+    t Or_error.t
+
+  val shift : t -> offset:int -> t Or_error.t
 end
 
 module type TypeIdentifier_type = sig
@@ -19,7 +43,19 @@ module type MetaIdentifier_type = sig
 
   val of_string : string -> t
   val of_past : Past.Identifier.t -> t
-  val of_string_and_index : string -> int -> t
+  val of_string_and_index : string -> DeBruijnIndex.t -> t
+  val get_name : t -> string
+  val get_debruijn_index : t -> DeBruijnIndex.t
+
+  val populate_index :
+    t ->
+    current_ast_level:int ->
+    current_identifiers:int StringMap.t ->
+    current_meta_ast_level:int ->
+    current_meta_identifiers:int StringMap.t ->
+    t Or_error.t
+
+  val shift : t -> offset:int -> t Or_error.t
 end
 
 module rec ObjIdentifier : ObjIdentifier_type
@@ -113,6 +149,16 @@ and Expr : sig
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.Expr.t -> t
+
+  val populate_index :
+    t ->
+    current_ast_level:int ->
+    current_identifiers:int StringMap.t ->
+    current_meta_ast_level:int ->
+    current_meta_identifiers:int StringMap.t ->
+    t Or_error.t
+
+  val shift_indices : t -> obj_offset:int -> meta_offset:int -> t Or_error.t
 end
 
 and Directive : sig
