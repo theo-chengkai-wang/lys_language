@@ -1,0 +1,4 @@
+(library
+ (name naive_interpreter)
+ (libraries core lys_ast)
+ (preprocess (pps ppx_jane)))

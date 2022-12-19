@@ -1,22 +1,25 @@
-module type Identifier_type = sig
-  (*Hide implementation*)
+module type ObjIdentifier_type = sig
+  type t [@@deriving sexp, show, compare, equal]
+
+  val of_string : string -> t
+  val of_past : Past.Identifier.t -> t
+  val of_string_and_index : string -> int -> t
+end
+
+module type TypeIdentifier_type = sig
+  (*Unused for now*)
   type t [@@deriving sexp, show, compare, equal]
 
   val of_string : string -> t
   val of_past : Past.Identifier.t -> t
 end
 
-module type ObjIdentifier_type = sig
-  include Identifier_type
-end
-
-module type TypeIdentifier_type = sig
-  (*Unused for now*)
-  include Identifier_type
-end
-
 module type MetaIdentifier_type = sig
-  include Identifier_type
+  type t [@@deriving sexp, show, compare, equal]
+
+  val of_string : string -> t
+  val of_past : Past.Identifier.t -> t
+  val of_string_and_index : string -> int -> t
 end
 
 module rec ObjIdentifier : ObjIdentifier_type

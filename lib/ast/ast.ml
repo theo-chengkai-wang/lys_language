@@ -1,38 +1,118 @@
 open Core
+module PastIdentifierMap = Map.Make (Past.Identifier)
+(*Map from Past.Identifier to anything*)
 
-module type Identifier_type = sig
-  (*Hide implementation*)
+module DeBruijnIndex : sig
+  (*Implementation of De Bruijn Indices -- encapsulated*)
+  type t [@@deriving sexp, show, compare, equal]
+
+  val none : t
+  val create : int -> t
+  val shift : t -> int -> t
+end = struct
+  type t = int option [@@deriving sexp, show, compare, equal]
+
+  let none = None
+
+  let create v =
+    if v >= 0 then Some v else failwith "De Bruijn Index must be >= 0."
+
+  let shift i k = match i with None -> None | Some v -> Some (v + k)
+end
+
+module type ObjIdentifier_type = sig
+  type t [@@deriving sexp, show, compare, equal]
+
+  val of_string : string -> t
+
+  val of_past :
+    ?current_level:int ->
+    ?current_identifiers:int PastIdentifierMap.t ->
+    Past.Identifier.t ->
+    t
+
+  val of_string_and_index : string -> int -> t
+end
+
+module type TypeIdentifier_type = sig
+  (*Unused for now*)
   type t [@@deriving sexp, show, compare, equal]
 
   val of_string : string -> t
   val of_past : Past.Identifier.t -> t
 end
 
-module type ObjIdentifier_type = sig
-  include Identifier_type
-end
-
-module type TypeIdentifier_type = sig
-  (*Unused for now*)
-  include Identifier_type
-end
-
 module type MetaIdentifier_type = sig
-  include Identifier_type
+  type t [@@deriving sexp, show, compare, equal]
+
+  val of_string : string -> t
+
+  val of_past :
+    ?current_level:int ->
+    ?current_identifiers:int PastIdentifierMap.t ->
+    Past.Identifier.t ->
+    t
+
+  val of_string_and_index : string -> int -> t
 end
 
 module rec ObjIdentifier : ObjIdentifier_type = struct
-  type t = string [@@deriving sexp, show, compare, equal]
+  (*Here we identify the binder via the De Bruijn index.*)
+  type t = string * DeBruijnIndex.t [@@deriving sexp, show, compare, equal]
 
-  let of_string x = x
-  let of_past (past_identifier : Past.Identifier.t) = past_identifier
+  let of_string x = (x, DeBruijnIndex.none)
+  (* Dummy init at -1. TODO: Change design *)
+
+  let of_past ?current_level ?current_identifiers:debruijn_map
+      (past_identifier : Past.Identifier.t) =
+    (* The concept of the De Bruijn index thing is to remember the current level. *)
+    (* If current_level or current_identifiers not given, assume that we're talking about an identifier definition, so the index returned should be Index.none *)
+    if Option.is_none current_level || Option.is_none debruijn_map then
+      (past_identifier, DeBruijnIndex.none)
+    else
+      let debruijn_map =
+        Option.value debruijn_map ~default:PastIdentifierMap.empty
+      in
+      let current_level = Option.value current_level ~default:0 in
+      let level_opt = PastIdentifierMap.find debruijn_map past_identifier in
+      match level_opt with
+      | None ->
+          (past_identifier, DeBruijnIndex.none)
+          (* Here we do so because we postpone the error of not really finding the identifier in the context to type checking *)
+      | Some lvl ->
+          (past_identifier, DeBruijnIndex.create (current_level - lvl - 1))
+  (*-1 because we have levels as the number of binders the current construct is under e.g. fun x (level 0) -> fun y (level 1) -> x (level 2) + y (level 2)*)
+
+  let of_string_and_index str index = (str, DeBruijnIndex.create index)
 end
 
 and MetaIdentifier : MetaIdentifier_type = struct
-  type t = string [@@deriving sexp, show, compare, equal]
+  (*Here we shall identifier each variable by BOTH the index AND the variable name.*)
+  type t = string * DeBruijnIndex.t [@@deriving sexp, show, compare, equal]
 
-  let of_string x = x
-  let of_past (past_identifier : Past.Identifier.t) = past_identifier
+  let of_string x = (x, DeBruijnIndex.none)
+
+  let of_past ?current_level ?current_identifiers
+      (past_identifier : Past.Identifier.t) =
+    (* The concept of the De Bruijn index thing is to remember the current level. *)
+    (* If current_level or current_identifiers not given, assume that we're talking about an identifier definition, so the index returned should be Index.none *)
+    if Option.is_none current_level || Option.is_none current_identifiers then
+      (past_identifier, DeBruijnIndex.none)
+    else
+      let debruijn_map =
+        Option.value current_identifiers ~default:PastIdentifierMap.empty
+      in
+      let current_level = Option.value current_level ~default:0 in
+      let level_opt = PastIdentifierMap.find debruijn_map past_identifier in
+      match level_opt with
+      | None ->
+          (past_identifier, DeBruijnIndex.none)
+          (* Here we do so because we postpone the error of not really finding the identifier in the context to type checking *)
+      | Some lvl ->
+          (past_identifier, DeBruijnIndex.create (current_level - lvl - 1))
+  (*-1 because we have levels as the number of binders the current construct is under e.g. fun x (level 0) -> fun y (level 1) -> x (level 2) + y (level 2)*)
+
+  let of_string_and_index str index = (str, DeBruijnIndex.create index)
 end
 
 and TypeIdentifier : TypeIdentifier_type = struct
@@ -203,7 +283,11 @@ and Expr : sig
     | Closure of MetaIdentifier.t * t list (*u with (e1, e2, e3, ...)*)
   [@@deriving sexp, show, compare, equal]
 
-  val of_past : Past.Expr.t -> t
+  val of_past :
+    ?current_level:int ->
+    ?current_identifiers:int PastIdentifierMap.t ->
+    Past.Expr.t ->
+    t
 end = struct
   type t =
     | Identifier of ObjIdentifier.t (*x*)
@@ -230,36 +314,92 @@ end = struct
     | Closure of MetaIdentifier.t * t list (*u with (e1, e2, e3, ...)*)
   [@@deriving sexp, show, compare, equal]
 
-  let rec of_past = function
-    | Past.Expr.Identifier id -> Identifier (ObjIdentifier.of_past id)
+  let rec of_past ?(current_level = 0)
+      ?(current_identifiers = PastIdentifierMap.empty) = function
+    | Past.Expr.Identifier id ->
+        Identifier
+          (ObjIdentifier.of_past ~current_level ~current_identifiers id)
+        (*Addition for De Bruijn*)
     | Past.Expr.Constant c -> Constant (Constant.of_past c)
     | Past.Expr.UnaryOp (op, expr) ->
-        UnaryOp (UnaryOperator.of_past op, of_past expr)
+        UnaryOp
+          ( UnaryOperator.of_past op,
+            of_past ~current_level ~current_identifiers expr )
     | Past.Expr.BinaryOp (op, expr, expr2) ->
-        BinaryOp (BinaryOperator.of_past op, of_past expr, of_past expr2)
-    | Past.Expr.Prod (expr1, expr2) -> Prod (of_past expr1, of_past expr2)
-    | Past.Expr.Fst expr -> Fst (of_past expr)
-    | Past.Expr.Snd expr -> Snd (of_past expr)
+        BinaryOp
+          ( BinaryOperator.of_past op,
+            of_past ~current_level ~current_identifiers expr,
+            of_past ~current_level ~current_identifiers expr2 )
+    | Past.Expr.Prod (expr1, expr2) ->
+        Prod
+          ( of_past ~current_level ~current_identifiers expr1,
+            of_past ~current_level ~current_identifiers expr2 )
+    | Past.Expr.Fst expr ->
+        Fst (of_past ~current_level ~current_identifiers expr)
+    | Past.Expr.Snd expr ->
+        Snd (of_past ~current_level ~current_identifiers expr)
     | Past.Expr.Left (t1, t2, expr) ->
-        Left (Typ.of_past t1, Typ.of_past t2, of_past expr)
+        Left
+          ( Typ.of_past t1,
+            Typ.of_past t2,
+            of_past ~current_level ~current_identifiers expr )
     | Past.Expr.Right (t1, t2, expr) ->
-        Right (Typ.of_past t1, Typ.of_past t2, of_past expr)
+        Right
+          ( Typ.of_past t1,
+            Typ.of_past t2,
+            of_past ~current_level ~current_identifiers expr )
     | Past.Expr.Match (e, iddef1, e1, iddef2, e2) ->
+        (*Addition for De Bruijn*)
+        let id1, _ = iddef1 and id2, _ = iddef2 in
+        let new_current_identifiers_1 =
+          PastIdentifierMap.set current_identifiers ~key:id1 ~data:current_level
+        in
+        let new_current_identifiers_2 =
+          PastIdentifierMap.set current_identifiers ~key:id2 ~data:current_level
+        in
+        let new_level = current_level + 1 in
         Match
-          ( of_past e,
+          ( of_past ~current_level ~current_identifiers e,
             IdentifierDefn.of_past iddef1,
-            of_past e1,
+            of_past ~current_level:new_level
+              ~current_identifiers:new_current_identifiers_1 e1,
             IdentifierDefn.of_past iddef2,
-            of_past e2 )
+            of_past ~current_level:new_level
+              ~current_identifiers:new_current_identifiers_2 e2 )
     | Past.Expr.Lambda (iddef, e) ->
-        Lambda (IdentifierDefn.of_past iddef, of_past e)
+        (*Addition for De Bruijn*)
+        let id, _ = iddef in
+        let new_current_identifiers =
+          PastIdentifierMap.set current_identifiers ~key:id ~data:current_level
+        in
+        let new_level = current_level + 1 in
+        Lambda
+          ( IdentifierDefn.of_past iddef,
+            of_past ~current_level:new_level
+              ~current_identifiers:new_current_identifiers e )
     | Past.Expr.Application (e1, e2) -> Application (of_past e1, of_past e2)
     | Past.Expr.IfThenElse (b, e1, e2) ->
         IfThenElse (of_past b, of_past e1, of_past e2)
     | Past.Expr.LetBinding (iddef, e, e2) ->
-        LetBinding (IdentifierDefn.of_past iddef, of_past e, of_past e2)
-    | Past.Expr.LetRec (iddef, e, e2) ->
-        LetRec (IdentifierDefn.of_past iddef, of_past e, of_past e2)
+        let id, _ = iddef in
+        let new_current_identifiers =
+          PastIdentifierMap.set current_identifiers ~key:id ~data:current_level
+        in
+        let new_level = current_level + 1 in
+        LetBinding
+          ( IdentifierDefn.of_past iddef,
+            of_past ~current_level ~current_identifiers e,
+            of_past ~current_level:new_level
+              ~current_identifiers:new_current_identifiers e2)
+    | Past.Expr.LetRec (iddef, e, e2) -> 
+      (*Addition for De Bruijn indices: 
+       Importantly, we have let rec f (level n) = e (level n+1) in e'(level n+1)*)
+       let id, _ = iddef in
+        let new_level = current_level + 1 in 
+        let new_current_identifiers = PastIdentifierMap.set current_identifiers ~key:id ~data:current_level in
+        LetRec (IdentifierDefn.of_past iddef, of_past ~current_level:(new_level)
+        ~current_identifiers:new_current_identifiers e, of_past ~current_level:(new_level)
+        ~current_identifiers:new_current_identifiers e2)
     | Past.Expr.Box (ctx, e) -> Box (Context.of_past ctx, of_past e)
     | Past.Expr.LetBox (metaid, e, e2) ->
         LetBox (MetaIdentifier.of_past metaid, of_past e, of_past e2)
