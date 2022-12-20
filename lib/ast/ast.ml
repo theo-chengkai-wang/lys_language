@@ -8,26 +8,29 @@ module DeBruijnIndex : sig
   type t [@@deriving sexp, show, compare, equal]
 
   val none : t
+  val top_level : t
   val create : int -> t
   val shift : t -> int -> t Or_error.t
 end = struct
-  type t = int option [@@deriving sexp, show, compare, equal]
+  type t = NotSet | TopLevel | InExpr of int
+  [@@deriving sexp, show, compare, equal]
 
-  let none = None
+  let none = NotSet
+  let top_level = TopLevel
 
   let create v =
-    if v >= 0 then Some v else failwith "De Bruijn Index must be >= 0."
+    if v >= 0 then InExpr v else failwith "De Bruijn Index must be >= 0."
 
   let shift i k =
     match i with
-    | None -> Ok None
-    | Some v ->
-        if v + k >= 0 then Ok (Some (v + k))
+    | InExpr v ->
+        if v + k >= 0 then Ok (InExpr (v + k))
         else
           error
             "DeBruijnIndexError: Shifting failed: the value of the index can't \
              be negative."
             (v, k) [%sexp_of: int * int]
+    | _ -> Ok i
 end
 
 module type ObjIdentifier_type = sig
@@ -99,12 +102,7 @@ module rec ObjIdentifier : ObjIdentifier_type = struct
     let level_opt = StringMap.find current_identifiers id in
     match level_opt with
     | None ->
-        error
-          (Printf.sprintf
-             "DeBruijnPopulationError[OBJECT]: the identifier %s is not found \
-              in the context HENCE not bound."
-             id)
-          (id, current_identifiers) [%sexp_of: string * int StringMap.t]
+        Ok (id, DeBruijnIndex.top_level) (*Assume top level if not in context.*)
     | Some lvl -> Ok (id, DeBruijnIndex.create (current_ast_level - lvl - 1))
 
   (*-1 because we have levels as the number of binders the current construct is under e.g. fun x (level 0) -> fun y (level 1) -> x (level 2) + y (level 2)*)
@@ -709,8 +707,7 @@ module TypedTopLevelDefn : sig
     | Directive of Directive.t
   [@@deriving sexp, show, compare, equal]
 
-  val populate_index_fold_step :
-    t -> current_identifiers:int StringMap.t -> (t * int StringMap.t) Or_error.t
+  val populate_index : t -> t Or_error.t
   (* Top level = fold over each defn and step the current_identifiers with the top level context. The meta identifier context starts always at empty. *)
 end = struct
   (*Note added type for defns (not useful for now but useful for when adding inference) and exprs for the REPL*)
@@ -721,35 +718,28 @@ end = struct
     | Directive of Directive.t
   [@@deriving sexp, show, compare, equal]
 
-  let populate_index_fold_step typed_defn ~current_identifiers =
+  let populate_index typed_defn =
     let open Or_error.Monad_infix in
     match typed_defn with
     | Definition (typ, (id, typ2), expr) ->
-        let new_current_identifiers =
-          StringMap.set current_identifiers
-            ~key:(ObjIdentifier.get_name id)
-            ~data:0
-        in
-        Expr.populate_index expr ~current_ast_level:0 ~current_identifiers
-          ~current_meta_ast_level:0 ~current_meta_identifiers:StringMap.empty
-        >>= fun expr ->
-        Ok (Definition (typ, (id, typ2), expr), new_current_identifiers)
+        Expr.populate_index expr ~current_ast_level:0
+          ~current_identifiers:StringMap.empty ~current_meta_ast_level:0
+          ~current_meta_identifiers:StringMap.empty
+        >>= fun expr -> Ok (Definition (typ, (id, typ2), expr))
     | RecursiveDefinition (typ, (id, typ2), expr) ->
         let new_current_identifiers =
-          StringMap.set current_identifiers
-            ~key:(ObjIdentifier.get_name id)
-            ~data:0
+          StringMap.set StringMap.empty ~key:(ObjIdentifier.get_name id) ~data:0
         in
         Expr.populate_index expr ~current_ast_level:1
           ~current_identifiers:new_current_identifiers ~current_meta_ast_level:0
           ~current_meta_identifiers:StringMap.empty
-        >>= fun expr ->
-        Ok (RecursiveDefinition (typ, (id, typ2), expr), new_current_identifiers)
+        >>= fun expr -> Ok (RecursiveDefinition (typ, (id, typ2), expr))
     | Expression (typ, expr) ->
-        Expr.populate_index expr ~current_ast_level:0 ~current_identifiers
-          ~current_meta_ast_level:0 ~current_meta_identifiers:StringMap.empty
-        >>= fun expr -> Ok (Expression (typ, expr), current_identifiers)
-    | Directive d -> Ok (Directive d, current_identifiers)
+        Expr.populate_index expr ~current_ast_level:0
+          ~current_identifiers:StringMap.empty ~current_meta_ast_level:0
+          ~current_meta_identifiers:StringMap.empty
+        >>= fun expr -> Ok (Expression (typ, expr))
+    | Directive d -> Ok (Directive d)
 end
 
 module TypedProgram : sig
@@ -760,13 +750,6 @@ end = struct
   type t = TypedTopLevelDefn.t list [@@deriving sexp, show, compare, equal]
 
   let populate_index program =
-    let open Or_error.Monad_infix in
-    let fold_step acc_or_error typed_defn =
-      acc_or_error >>= fun (rev_prog_acc, current_identifiers) ->
-      TypedTopLevelDefn.populate_index_fold_step typed_defn ~current_identifiers
-      >>= fun (new_typed_defn, new_current_identifiers) ->
-      Ok (new_typed_defn :: rev_prog_acc, new_current_identifiers)
-    in
-    List.fold program ~init:(Ok ([], StringMap.empty)) ~f:fold_step
-    >>= fun (rev_prog_acc, _) -> Ok (List.rev rev_prog_acc)
+    List.map program ~f:TypedTopLevelDefn.populate_index
+    |> Or_error.combine_errors
 end

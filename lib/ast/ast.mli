@@ -6,6 +6,7 @@ module DeBruijnIndex : sig
   type t [@@deriving sexp, show, compare, equal]
 
   val none : t
+  val top_level : t
   val create : int -> t
   val shift : t -> int -> t Or_error.t
 end
@@ -192,8 +193,8 @@ module TypedTopLevelDefn : sig
     | Directive of Directive.t
   [@@deriving sexp, show, compare, equal]
 
-  val populate_index_fold_step :
-    t -> current_identifiers:int StringMap.t -> (t * int StringMap.t) Or_error.t
+  val populate_index : t -> t Or_error.t
+
 end
 
 module TypedProgram : sig
