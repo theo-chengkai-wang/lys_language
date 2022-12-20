@@ -744,7 +744,7 @@ end = struct
           ~current_identifiers:new_current_identifiers ~current_meta_ast_level:0
           ~current_meta_identifiers:StringMap.empty
         >>= fun expr ->
-        Ok (Definition (typ, (id, typ2), expr), new_current_identifiers)
+        Ok (RecursiveDefinition (typ, (id, typ2), expr), new_current_identifiers)
     | Expression (typ, expr) ->
         Expr.populate_index expr ~current_ast_level:0 ~current_identifiers
           ~current_meta_ast_level:0 ~current_meta_identifiers:StringMap.empty

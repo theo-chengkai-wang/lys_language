@@ -299,7 +299,7 @@ let process_top_level meta_ctx ctx = function
       let open Or_error.Monad_infix in
       type_check_expression meta_ctx new_ctx e typ >>= fun _ ->
       (*Note that here we type check in the new context (self reference)*)
-      Ok (Ast.TypedTopLevelDefn.Definition (typ, iddef, e), meta_ctx, new_ctx)
+      Ok (Ast.TypedTopLevelDefn.RecursiveDefinition (typ, iddef, e), meta_ctx, new_ctx)
   | Ast.TopLevelDefn.Directive d ->
       let new_ctx =
         if Ast.Directive.equal d Ast.Directive.Reset then
