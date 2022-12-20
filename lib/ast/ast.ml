@@ -10,7 +10,7 @@ module DeBruijnIndex : sig
   val none : t
   val top_level : t
   val create : int -> t Or_error.t
-  val shift : t -> int -> t Or_error.t
+  val shift : t -> int -> int -> t Or_error.t
   val value : t -> default:int -> int
 end = struct
   type t = NotSet | TopLevel | InExpr of int
@@ -25,10 +25,17 @@ end = struct
       error "DeBruijnIndexError: De Bruijn Index must be >= 0." v
         [%sexp_of: int]
 
-  let shift i k =
+  let shift i depth k =
+    (* Can't shift down *)
+    (* if k < 0 then
+         error "DeBruijnIndexError: Shifting failed: the offset must be positive."
+           k [%sexp_of: int]
+       else *)
+    (* Only shift IF the index is >= the depth *)
     match i with
     | InExpr v ->
-        if v + k >= 0 then Ok (InExpr (v + k))
+        if v < depth then Ok (InExpr v)
+        else if v + k >= 0 then Ok (InExpr (v + k))
         else
           error
             "DeBruijnIndexError: Shifting failed: the value of the index can't \
@@ -56,7 +63,7 @@ module type ObjIdentifier_type = sig
     current_meta_identifiers:int StringMap.t ->
     t Or_error.t
 
-  val shift : t -> offset:int -> t Or_error.t
+  val shift : t -> depth:int -> offset:int -> t Or_error.t
 end
 
 module type TypeIdentifier_type = sig
@@ -84,7 +91,7 @@ module type MetaIdentifier_type = sig
     current_meta_identifiers:int StringMap.t ->
     t Or_error.t
 
-  val shift : t -> offset:int -> t Or_error.t
+  val shift : t -> depth:int -> offset:int -> t Or_error.t
 end
 
 module rec ObjIdentifier : ObjIdentifier_type = struct
@@ -121,9 +128,10 @@ module rec ObjIdentifier : ObjIdentifier_type = struct
         >>= fun i -> Ok (id, i)
 
   (*-1 because we have levels as the number of binders the current construct is under e.g. fun x (level 0) -> fun y (level 1) -> x (level 2) + y (level 2)*)
-  let shift (id, index) ~offset =
+  let shift (id, index) ~depth ~offset =
     let open Or_error.Monad_infix in
-    DeBruijnIndex.shift index offset >>= fun new_index -> Ok (id, new_index)
+    DeBruijnIndex.shift index depth offset >>= fun new_index ->
+    Ok (id, new_index)
 end
 
 and MetaIdentifier : MetaIdentifier_type = struct
@@ -166,9 +174,10 @@ and MetaIdentifier : MetaIdentifier_type = struct
         >>= fun i -> Ok (id, i)
 
   (*-1 because we have levels as the number of binders the current construct is under e.g. fun x (level 0) -> fun y (level 1) -> x (level 2) + y (level 2)*)
-  let shift (id, index) ~offset =
+  let shift (id, index) ~depth ~offset =
     let open Or_error.Monad_infix in
-    DeBruijnIndex.shift index offset >>= fun new_index -> Ok (id, new_index)
+    DeBruijnIndex.shift index depth offset >>= fun new_index ->
+    Ok (id, new_index)
 end
 
 and TypeIdentifier : TypeIdentifier_type = struct
@@ -349,7 +358,13 @@ and Expr : sig
     current_meta_identifiers:int StringMap.t ->
     t Or_error.t
 
-  val shift_indices : t -> obj_offset:int -> meta_offset:int -> t Or_error.t
+  val shift_indices :
+    t ->
+    obj_depth:int ->
+    meta_depth:int ->
+    obj_offset:int ->
+    meta_offset:int ->
+    t Or_error.t
 end = struct
   type t =
     | Identifier of ObjIdentifier.t (*x*)
@@ -593,72 +608,93 @@ end = struct
           ~current_identifiers ~current_meta_ast_level ~current_meta_identifiers
         >>= fun metaid -> Ok (Closure (metaid, exprs))
 
-  let rec shift_indices expr ~obj_offset ~meta_offset =
+  let rec shift_indices expr ~obj_depth ~meta_depth ~obj_offset ~meta_offset =
     let open Or_error.Monad_infix in
     match expr with
     | Identifier id ->
         Or_error.tag
           ~tag:"DeBruijnShiftingError[OBJECT]: Shifting object index failed."
-          (ObjIdentifier.shift id ~offset:obj_offset)
+          (ObjIdentifier.shift id ~depth:obj_depth ~offset:obj_offset)
         >>= fun id -> Ok (Identifier id)
     | Constant c -> Ok (Constant c)
     | UnaryOp (op, expr) ->
-        shift_indices expr ~obj_offset ~meta_offset >>= fun expr ->
-        Ok (UnaryOp (op, expr))
+        shift_indices expr ~obj_depth ~meta_depth ~obj_offset ~meta_offset
+        >>= fun expr -> Ok (UnaryOp (op, expr))
     | BinaryOp (op, expr, expr2) ->
-        shift_indices expr ~obj_offset ~meta_offset >>= fun expr ->
-        shift_indices expr2 ~obj_offset ~meta_offset >>= fun expr2 ->
-        Ok (BinaryOp (op, expr, expr2))
+        shift_indices expr ~obj_depth ~meta_depth ~obj_offset ~meta_offset
+        >>= fun expr ->
+        shift_indices expr2 ~obj_depth ~meta_depth ~obj_offset ~meta_offset
+        >>= fun expr2 -> Ok (BinaryOp (op, expr, expr2))
     | Prod (expr1, expr2) ->
-        shift_indices expr1 ~obj_offset ~meta_offset >>= fun expr1 ->
-        shift_indices expr2 ~obj_offset ~meta_offset >>= fun expr2 ->
-        Ok (Prod (expr1, expr2))
+        shift_indices expr1 ~obj_depth ~meta_depth ~obj_offset ~meta_offset
+        >>= fun expr1 ->
+        shift_indices expr2 ~obj_depth ~meta_depth ~obj_offset ~meta_offset
+        >>= fun expr2 -> Ok (Prod (expr1, expr2))
     | Fst expr ->
-        shift_indices expr ~obj_offset ~meta_offset >>= fun expr ->
-        Ok (Fst expr)
+        shift_indices expr ~obj_depth ~meta_depth ~obj_offset ~meta_offset
+        >>= fun expr -> Ok (Fst expr)
     | Snd expr ->
-        shift_indices expr ~obj_offset ~meta_offset >>= fun expr ->
-        Ok (Snd expr)
+        shift_indices expr ~obj_depth ~meta_depth ~obj_offset ~meta_offset
+        >>= fun expr -> Ok (Snd expr)
     | Left (t1, t2, expr) ->
-        shift_indices expr ~obj_offset ~meta_offset >>= fun expr ->
-        Ok (Left (t1, t2, expr))
+        shift_indices expr ~obj_depth ~meta_depth ~obj_offset ~meta_offset
+        >>= fun expr -> Ok (Left (t1, t2, expr))
     | Right (t1, t2, expr) ->
-        shift_indices expr ~obj_offset ~meta_offset >>= fun expr ->
-        Ok (Right (t1, t2, expr))
+        shift_indices expr ~obj_depth ~meta_depth ~obj_offset ~meta_offset
+        >>= fun expr -> Ok (Right (t1, t2, expr))
     | Match (e, iddef1, e1, iddef2, e2) ->
-        shift_indices e ~obj_offset ~meta_offset >>= fun e ->
-        shift_indices e1 ~obj_offset ~meta_offset >>= fun e1 ->
-        shift_indices e2 ~obj_offset ~meta_offset >>= fun e2 ->
-        Ok (Match (e, iddef1, e1, iddef2, e2))
+        shift_indices e ~obj_depth ~meta_depth ~obj_offset ~meta_offset
+        >>= fun e ->
+        shift_indices e1 ~obj_depth:(obj_depth + 1) ~meta_depth ~obj_offset
+          ~meta_offset
+        >>= fun e1 ->
+        shift_indices e2 ~obj_depth:(obj_depth + 1) ~meta_depth ~obj_offset
+          ~meta_offset
+        >>= fun e2 -> Ok (Match (e, iddef1, e1, iddef2, e2))
     | Lambda (iddef, e) ->
-        shift_indices e ~obj_offset ~meta_offset >>= fun e ->
-        Ok (Lambda (iddef, e))
+        shift_indices e ~obj_depth:(obj_depth + 1) ~meta_depth ~obj_offset
+          ~meta_offset
+        >>= fun e -> Ok (Lambda (iddef, e))
     | Application (e1, e2) ->
-        shift_indices e1 ~obj_offset ~meta_offset >>= fun e1 ->
-        shift_indices e2 ~obj_offset ~meta_offset >>= fun e2 ->
-        Ok (Application (e1, e2))
+        shift_indices e1 ~obj_depth ~meta_depth ~obj_offset ~meta_offset
+        >>= fun e1 ->
+        shift_indices e2 ~obj_depth ~meta_depth ~obj_offset ~meta_offset
+        >>= fun e2 -> Ok (Application (e1, e2))
     | IfThenElse (b, e1, e2) ->
-        shift_indices b ~obj_offset ~meta_offset >>= fun b ->
-        shift_indices e1 ~obj_offset ~meta_offset >>= fun e1 ->
-        shift_indices e2 ~obj_offset ~meta_offset >>= fun e2 ->
-        Ok (IfThenElse (b, e1, e2))
+        shift_indices b ~obj_depth ~meta_depth ~obj_offset ~meta_offset
+        >>= fun b ->
+        shift_indices e1 ~obj_depth ~meta_depth ~obj_offset ~meta_offset
+        >>= fun e1 ->
+        shift_indices e2 ~obj_depth ~meta_depth ~obj_offset ~meta_offset
+        >>= fun e2 -> Ok (IfThenElse (b, e1, e2))
     | LetBinding (iddef, e, e2) ->
-        shift_indices e ~obj_offset ~meta_offset >>= fun e ->
-        shift_indices e2 ~obj_offset ~meta_offset >>= fun e2 ->
-        Ok (LetBinding (iddef, e, e2))
+        shift_indices e ~obj_depth ~meta_depth ~obj_offset ~meta_offset
+        >>= fun e ->
+        shift_indices e2 ~obj_depth:(obj_depth + 1) ~meta_depth ~obj_offset
+          ~meta_offset
+        >>= fun e2 -> Ok (LetBinding (iddef, e, e2))
     | LetRec (iddef, e, e2) ->
-        shift_indices e ~obj_offset ~meta_offset >>= fun e ->
-        shift_indices e2 ~obj_offset ~meta_offset >>= fun e2 ->
-        Ok (LetRec (iddef, e, e2))
+        shift_indices e ~obj_depth:(obj_depth + 1) ~meta_depth ~obj_offset
+          ~meta_offset
+        >>= fun e ->
+        shift_indices e2 ~obj_depth:(obj_depth + 1) ~meta_depth ~obj_offset
+          ~meta_offset
+        >>= fun e2 -> Ok (LetRec (iddef, e, e2))
     | Box (ctx, e) ->
-        shift_indices e ~obj_offset ~meta_offset >>= fun e -> Ok (Box (ctx, e))
+        (*Can only shift meta indices*)
+        shift_indices e ~obj_depth:(obj_depth + 1) ~meta_depth ~obj_offset
+          ~meta_offset
+        >>= fun e -> Ok (Box (ctx, e))
     | LetBox (metaid, e, e2) ->
-        shift_indices e ~obj_offset ~meta_offset >>= fun e ->
-        shift_indices e2 ~obj_offset ~meta_offset >>= fun e2 ->
-        Ok (LetBox (metaid, e, e2))
+        shift_indices e ~obj_depth ~meta_depth ~obj_offset ~meta_offset
+        >>= fun e ->
+        shift_indices e2 ~obj_depth ~meta_depth:(meta_depth + 1) ~obj_offset
+          ~meta_offset
+        >>= fun e2 -> Ok (LetBox (metaid, e, e2))
     | Closure (metaid, exprs) ->
         let populated_expr_or_error_list =
-          List.map exprs ~f:(fun e -> shift_indices e ~obj_offset ~meta_offset)
+          List.map exprs ~f:(fun e ->
+              shift_indices e ~obj_depth ~meta_depth ~obj_offset ~meta_offset)
         in
         Or_error.tag
           ~tag:
@@ -668,7 +704,7 @@ end = struct
         >>= fun exprs ->
         Or_error.tag
           ~tag:"DeBruijnShiftingError[META]: Shifting meta index failed."
-          (MetaIdentifier.shift metaid ~offset:meta_offset)
+          (MetaIdentifier.shift metaid ~depth:meta_depth ~offset:meta_offset)
         >>= fun metaid -> Ok (Closure (metaid, exprs))
 end
 
@@ -731,7 +767,7 @@ module TypedTopLevelDefn : sig
   [@@deriving sexp, show, compare, equal]
 
   val populate_index : t -> t Or_error.t
-  (* Top level = fold over each defn and step the current_identifiers with the top level context. The meta identifier context starts always at empty. *)
+  val convert_from_untyped_without_typecheck : TopLevelDefn.t -> t
 end = struct
   (*Note added type for defns (not useful for now but useful for when adding inference) and exprs for the REPL*)
   type t =
@@ -763,16 +799,27 @@ end = struct
           ~current_meta_identifiers:StringMap.empty
         >>= fun expr -> Ok (Expression (typ, expr))
     | Directive d -> Ok (Directive d)
+
+  let convert_from_untyped_without_typecheck = function
+    | TopLevelDefn.Definition (iddef, e) -> Definition (Typ.TUnit, iddef, e)
+    | TopLevelDefn.RecursiveDefinition (iddef, e) ->
+        RecursiveDefinition (Typ.TUnit, iddef, e)
+    | TopLevelDefn.Expression e -> Expression (Typ.TUnit, e)
+    | TopLevelDefn.Directive d -> Directive d
 end
 
 module TypedProgram : sig
   type t = TypedTopLevelDefn.t list [@@deriving sexp, show, compare, equal]
 
   val populate_index : t -> t Or_error.t
+  val convert_from_untyped_without_typecheck : Program.t -> t
 end = struct
   type t = TypedTopLevelDefn.t list [@@deriving sexp, show, compare, equal]
 
   let populate_index program =
     List.map program ~f:TypedTopLevelDefn.populate_index
     |> Or_error.combine_errors
+
+  let convert_from_untyped_without_typecheck =
+    List.map ~f:TypedTopLevelDefn.convert_from_untyped_without_typecheck
 end

@@ -7,9 +7,9 @@ module DeBruijnIndex : sig
 
   val none : t
   val top_level : t
-  val create : int -> t
-  val shift : t -> int -> t Or_error.t
-  val value: t -> default:int -> int
+  val create : int -> t Or_error.t
+  val shift : t -> int -> int -> t Or_error.t
+  val value : t -> default:int -> int
 end
 
 module type ObjIdentifier_type = sig
@@ -29,7 +29,7 @@ module type ObjIdentifier_type = sig
     current_meta_identifiers:int StringMap.t ->
     t Or_error.t
 
-  val shift : t -> offset:int -> t Or_error.t
+  val shift : t -> depth:int -> offset:int -> t Or_error.t
 end
 
 module type TypeIdentifier_type = sig
@@ -57,7 +57,7 @@ module type MetaIdentifier_type = sig
     current_meta_identifiers:int StringMap.t ->
     t Or_error.t
 
-  val shift : t -> offset:int -> t Or_error.t
+  val shift : t -> depth:int -> offset:int -> t Or_error.t
 end
 
 module rec ObjIdentifier : ObjIdentifier_type
@@ -160,7 +160,13 @@ and Expr : sig
     current_meta_identifiers:int StringMap.t ->
     t Or_error.t
 
-  val shift_indices : t -> obj_offset:int -> meta_offset:int -> t Or_error.t
+  val shift_indices :
+    t ->
+    obj_depth:int ->
+    meta_depth:int ->
+    obj_offset:int ->
+    meta_offset:int ->
+    t Or_error.t
 end
 
 and Directive : sig
@@ -195,6 +201,7 @@ module TypedTopLevelDefn : sig
   [@@deriving sexp, show, compare, equal]
 
   val populate_index : t -> t Or_error.t
+  val convert_from_untyped_without_typecheck : TopLevelDefn.t -> t
 
 end
 
@@ -202,4 +209,6 @@ module TypedProgram : sig
   type t = TypedTopLevelDefn.t list [@@deriving sexp, show, compare, equal]
 
   val populate_index : t -> t Or_error.t
+  val convert_from_untyped_without_typecheck : Program.t -> t
+
 end
