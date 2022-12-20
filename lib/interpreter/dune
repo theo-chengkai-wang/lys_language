@@ -1,4 +1,4 @@
 (library
- (name naive_interpreter)
+ (name lys_interpreter)
  (libraries core lys_ast)
- (preprocess (pps ppx_jane)))
+ (preprocess (pps ppx_jane ppx_deriving.show)))
