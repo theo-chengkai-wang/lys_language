@@ -15,5 +15,5 @@ let loop str () =
     |> Ast.TypedProgram.show
     |> print_endline
 
-let () = loop "" ()
+let () = loop "fun (y:int) -> fun (x:int) -> y + x;;" ()
 

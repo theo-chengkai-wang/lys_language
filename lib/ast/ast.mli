@@ -191,8 +191,13 @@ module TypedTopLevelDefn : sig
     | Expression of Typ.t * Expr.t
     | Directive of Directive.t
   [@@deriving sexp, show, compare, equal]
+
+  val populate_index_fold_step :
+    t -> current_identifiers:int StringMap.t -> (t * int StringMap.t) Or_error.t
 end
 
 module TypedProgram : sig
   type t = TypedTopLevelDefn.t list [@@deriving sexp, show, compare, equal]
+
+  val populate_index : t -> t Or_error.t
 end

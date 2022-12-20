@@ -323,7 +323,9 @@ let rec type_check_program_aux meta_ctx ctx program =
       Ok (typed_top :: program_rest)
 
 let type_check_program program =
+  let open Or_error.Monad_infix in
   program |> Ast.Program.of_past
   |> type_check_program_aux
        (Typing_context.MetaTypingContext.create_empty_context ())
        (Typing_context.ObjTypingContext.create_empty_context ())
+  >>= fun typed_program -> Ast.TypedProgram.populate_index typed_program
