@@ -4,11 +4,7 @@ open Lys_ast
 (*
    This definition takes an id (string) and a depth (of the tree) with depth 0 at root. We recurse down the tree adding depth
     when going through a binder, and shift the tree BY to the current tree depth when substituting in. In other words,
-    we assume that in [e/z]e', e is closed at depth 0 (so any free variable it contains have De Bruijn indices with depth 0), so when we have
-    gone through x binders (depth x), we just shift
-
-   We start by searching for (z, Some 0), and we add 1 to the current depth every time. For this we use a Ast.ObjIdentifier.t as parameter we
-   recurse on.
+    we assume that in [e/z]e', e is closed at depth 0 (so any free variable it contains have De Bruijn indices with depth 0).
 *)
 
 let equal_id_str_depth obj_id id_str de_bruijn_int =
@@ -99,10 +95,6 @@ let substitute expr_subst_for id expr_subst_in =
   substitute_aux expr_subst_for id_str current_depth expr_subst_in
 
 (*
-
-  let id_str = Ast.ObjIdentifier.get_name id in
-  let current_depth = Ast.DeBruijnIndex.value ~default:0 (Ast.ObjIdentifier.get_debruijn_index id) in
-
   | Ast.Expr.Identifier id -> Ok ()
   | Ast.Expr.Constant c -> Ok ()
   | Ast.Expr.UnaryOp (op, expr) -> Ok ()

@@ -9,7 +9,7 @@ module DeBruijnIndex : sig
 
   val none : t
   val top_level : t
-  val create : int -> t
+  val create : int -> t Or_error.t
   val shift : t -> int -> t Or_error.t
   val value : t -> default:int -> int
 end = struct
@@ -20,7 +20,10 @@ end = struct
   let top_level = TopLevel
 
   let create v =
-    if v >= 0 then InExpr v else failwith "De Bruijn Index must be >= 0."
+    if v >= 0 then Ok (InExpr v)
+    else
+      error "DeBruijnIndexError: De Bruijn Index must be >= 0." v
+        [%sexp_of: int]
 
   let shift i k =
     match i with
@@ -102,11 +105,20 @@ module rec ObjIdentifier : ObjIdentifier_type = struct
       ~current_meta_ast_level:_ ~current_meta_identifiers:_ =
     (* The concept of the De Bruijn index thing is to remember the current level. *)
     (* If ~current_ast_level or ~current_identifiers not given, assume that we're talking about an identifier definition, so the index returned should be Index.none *)
+    let open Or_error.Monad_infix in
     let level_opt = StringMap.find current_identifiers id in
     match level_opt with
     | None ->
         Ok (id, DeBruijnIndex.top_level) (*Assume top level if not in context.*)
-    | Some lvl -> Ok (id, DeBruijnIndex.create (current_ast_level - lvl - 1))
+    | Some lvl ->
+        DeBruijnIndex.create (current_ast_level - lvl - 1)
+        |> Or_error.tag
+             ~tag:
+               (Printf.sprintf
+                  "DeBruijnPopulationError[OBJECT]: failed to create De Bruijn \
+                   index for %s"
+                  id)
+        >>= fun i -> Ok (id, i)
 
   (*-1 because we have levels as the number of binders the current construct is under e.g. fun x (level 0) -> fun y (level 1) -> x (level 2) + y (level 2)*)
   let shift (id, index) ~offset =
@@ -131,6 +143,7 @@ and MetaIdentifier : MetaIdentifier_type = struct
       ~current_meta_ast_level ~current_meta_identifiers =
     (* The concept of the De Bruijn index thing is to remember the current level. *)
     (* If ~current_ast_level or ~current_identifiers not given, assume that we're talking about an identifier definition, so the index returned should be Index.none *)
+    let open Or_error.Monad_infix in
     let level_opt = StringMap.find current_meta_identifiers id in
     match level_opt with
     | None ->
@@ -143,7 +156,14 @@ and MetaIdentifier : MetaIdentifier_type = struct
           [%sexp_of: string * int StringMap.t]
         (* Here we do so because we postpone the error of not really finding the identifier in the context to type checking *)
     | Some lvl ->
-        Ok (id, DeBruijnIndex.create (current_meta_ast_level - lvl - 1))
+        DeBruijnIndex.create (current_meta_ast_level - lvl - 1)
+        |> Or_error.tag
+             ~tag:
+               (Printf.sprintf
+                  "DeBruijnPopulationError[META]: failed to create De Bruijn \
+                   index for %s"
+                  id)
+        >>= fun i -> Ok (id, i)
 
   (*-1 because we have levels as the number of binders the current construct is under e.g. fun x (level 0) -> fun y (level 1) -> x (level 2) + y (level 2)*)
   let shift (id, index) ~offset =
