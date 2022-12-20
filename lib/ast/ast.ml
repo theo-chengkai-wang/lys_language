@@ -11,6 +11,7 @@ module DeBruijnIndex : sig
   val top_level : t
   val create : int -> t
   val shift : t -> int -> t Or_error.t
+  val value : t -> default:int -> int
 end = struct
   type t = NotSet | TopLevel | InExpr of int
   [@@deriving sexp, show, compare, equal]
@@ -31,6 +32,8 @@ end = struct
              be negative."
             (v, k) [%sexp_of: int * int]
     | _ -> Ok i
+
+  let value x ~default = match x with InExpr v -> v | _ -> default
 end
 
 module type ObjIdentifier_type = sig

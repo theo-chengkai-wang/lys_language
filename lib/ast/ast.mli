@@ -9,6 +9,7 @@ module DeBruijnIndex : sig
   val top_level : t
   val create : int -> t
   val shift : t -> int -> t Or_error.t
+  val value: t -> default:int -> int
 end
 
 module type ObjIdentifier_type = sig
