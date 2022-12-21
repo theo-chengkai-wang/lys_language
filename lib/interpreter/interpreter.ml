@@ -1,6 +1,7 @@
 open Lys_ast
 open Core
 open Lys_utils
+open Lys_typing
 
 module EvaluationContext : sig
   type single_record = { typ : Ast.Typ.t; is_rec : bool; value : Ast.Value.t }
@@ -12,6 +13,9 @@ module EvaluationContext : sig
   val find_or_error : t -> string -> single_record Or_error.t
   val empty : t
   val show : t -> string
+
+  val to_typing_obj_context :
+    t -> (Ast.ObjIdentifier.t, Ast.Typ.t) Typing_context.ObjTypingContext.t
 end = struct
   type single_record = { typ : Ast.Typ.t; is_rec : bool; value : Ast.Value.t }
   [@@deriving show, sexp, compare, equal]
@@ -33,6 +37,13 @@ end = struct
     |> List.fold ~init:"" ~f:(fun acc (id, record) ->
            acc ^ Printf.sprintf "(%s, %s)" id (show_single_record record))
     |> fun str -> Printf.sprintf "[%s]" str
+
+  let to_typing_obj_context v =
+    v |> String_map.to_alist
+    |> List.map ~f:(fun (id, record) ->
+           (Ast.ObjIdentifier.of_string id, record.typ))
+    |> Typing_context.ObjTypingContext.add_all_mappings
+         (Typing_context.ObjTypingContext.create_empty_context ())
 end
 (*
    let reduce ~top_level_context ~expr = ()
@@ -357,17 +368,23 @@ let evaluate_top_level_defn ?(top_level_context = EvaluationContext.empty)
           let new_env = EvaluationContext.empty in
           Ok (TopLevelEvaluationResult.Directive (d, message), new_env))
 
-let rec evaluate_program ?(top_level_context = EvaluationContext.empty) program
-    =
+let rec evaluate_top_level_defns ?(top_level_context = EvaluationContext.empty)
+    program =
   let open Or_error.Monad_infix in
   match program with
-  | [] -> Ok []
+  | [] -> Ok ([], top_level_context)
   | top :: tops -> (
       evaluate_top_level_defn ~top_level_context top
       >>= fun (top_level_result, new_context) ->
       match top_level_result with
       | TopLevelEvaluationResult.Directive (Ast.Directive.Quit, _) ->
-          Ok [ top_level_result ]
+          Ok ([ top_level_result ], new_context)
       | _ ->
-          evaluate_program ~top_level_context:new_context tops
-          >>= fun evaluation_res -> Ok (top_level_result :: evaluation_res))
+          evaluate_top_level_defns ~top_level_context:new_context tops
+          >>= fun (evaluation_res, new_context) ->
+          Ok (top_level_result :: evaluation_res, new_context))
+
+let evaluate_program ?(top_level_context = EvaluationContext.empty) program =
+  let open Or_error.Monad_infix in
+  evaluate_top_level_defns ~top_level_context program
+  >>= fun (evaluation_res, _) -> Ok evaluation_res

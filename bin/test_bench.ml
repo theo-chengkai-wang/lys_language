@@ -43,8 +43,8 @@ let loop str () =
 
 let loop2 str () =
   print_endline "";
-  ( str |> Lexing.from_string
-    |> Lex_and_parse.parse_program
+  ( str |> Lexing.from_string |> Lex_and_parse.parse_program
+    |> Ast.Program.of_past
        (* |> Ast.Program.of_past
           |> Ast.TypedProgram.convert_from_untyped_without_typecheck *)
     |> Typecore.type_check_program |> ok_exn
@@ -63,14 +63,19 @@ let loop2 str () =
 
 let loop3 str () =
   print_endline "";
-  str |> Lexing.from_string
-    |> Lex_and_parse.parse_program
-       (* |> Ast.Program.of_past
-          |> Ast.TypedProgram.convert_from_untyped_without_typecheck *)
-    |> Typecore.type_check_program |> ok_exn
-  |> Interpreter.evaluate_program
-  |> ok_exn 
-  |> fun l -> let _ = (List.map l ~f:(fun res -> print_endline (Interpreter.TopLevelEvaluationResult.get_str_output res); print_endline "")) in ()
+  str |> Lexing.from_string |> Lex_and_parse.parse_program
+  (* |> Ast.Program.of_past
+     |> Ast.TypedProgram.convert_from_untyped_without_typecheck *)
+  |> Ast.Program.of_past
+  |> Typecore.type_check_program |> ok_exn |> Interpreter.evaluate_program
+  |> ok_exn
+  |> fun l ->
+  let _ =
+    List.map l ~f:(fun res ->
+        print_endline (Interpreter.TopLevelEvaluationResult.get_str_output res);
+        print_endline "")
+  in
+  ()
 
 let program =
   "\n\
@@ -88,21 +93,16 @@ let program3 =
    |- 1) else let box u = pow (n-1) in box (b:int |- b * (u with (b)))\n\
   \  in pow 2;;"
 
-let program4 = 
+let program4 =
   "let rec (pow: int -> int -> int) = fun (n:int) -> if n = 0 then (fun \
-    (x:int) -> 1) else (fun (x:int) -> x * (pow (n-1) x));;
+   (x:int) -> 1) else (fun (x:int) -> x * (pow (n-1) x));;\n\n\
+  \  pow 2 3;;\n\n\
+  \  ENV;;\n\n\
+  \  RESET;;\n\n\
+  \  let rec (pow: int -> [b:int]int) = fun (n:int) -> if n = 0 then box \
+   (b:int |- 1) else let box u = pow (n-1) in box (b:int |- b * (u with (b)));;\n\
+  \  pow 2;;\n\
+  \  "
 
-  pow 2 3;;
-
-  ENV;;
-
-  RESET;;
-
-  let rec (pow: int -> [b:int]int) = fun (n:int) -> if n = 0 then box (b:int |- 1) else let box u = pow (n-1) in box (b:int |- b * (u with (b)));;
-  pow 2;;
-  "
-
-let program5 = 
-  "let rec "
-
+let program5 = "let rec "
 let () = loop3 program4 ()

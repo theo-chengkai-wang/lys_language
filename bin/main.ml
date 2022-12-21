@@ -1,21 +1,18 @@
-(* let () = print_endline "Hello, World!" *)
-(* My test bench *)
-
 open Core
 open Lys_parsing
 open Lys_typing
-open Lys_utils
-open Lys_ast
 open Lys_interpreter
+open Lys_ast
 
 let loop filename () =
   In_channel.with_file filename ~f:(fun file_ic ->
       file_ic |> Lexing.from_channel |> Lex_and_parse.parse_program
+      |> Ast.Program.of_past
       |> Typecore.type_check_program |> ok_exn 
       |> Interpreter.evaluate_program |> ok_exn
       |> fun l ->
       let _ =
-        List.map l ~f:(fun res ->
+        List.iter l ~f:(fun res ->
             print_endline
               (Interpreter.TopLevelEvaluationResult.get_str_output res);
             print_endline "")

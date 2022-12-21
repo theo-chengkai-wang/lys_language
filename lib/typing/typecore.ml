@@ -219,12 +219,12 @@ and type_inference_expression meta_ctx ctx e =
              (Ast.Typ.show typ))
       >>= fun () -> type_inference_expression meta_ctx new_ctx e2
   | Ast.Expr.Box (context, e) ->
-    (if box_context_contains_duplicates context then
-      error
-        "TypeInferenceError: there are duplicates in the provided box context"
-        context [%sexp_of: Ast.Context.t]
-     else Ok ())
-     >>= fun () ->
+      (if box_context_contains_duplicates context then
+       error
+         "TypeInferenceError: there are duplicates in the provided box context"
+         context [%sexp_of: Ast.Context.t]
+      else Ok ())
+      >>= fun () ->
       let new_ctx =
         Typing_context.ObjTypingContext.add_all_mappings ctx context
       in
@@ -299,7 +299,10 @@ let process_top_level meta_ctx ctx = function
       let open Or_error.Monad_infix in
       type_check_expression meta_ctx new_ctx e typ >>= fun _ ->
       (*Note that here we type check in the new context (self reference)*)
-      Ok (Ast.TypedTopLevelDefn.RecursiveDefinition (typ, iddef, e), meta_ctx, new_ctx)
+      Ok
+        ( Ast.TypedTopLevelDefn.RecursiveDefinition (typ, iddef, e),
+          meta_ctx,
+          new_ctx )
   | Ast.TopLevelDefn.Directive d ->
       let new_ctx =
         if Ast.Directive.equal d Ast.Directive.Reset then
@@ -322,10 +325,10 @@ let rec type_check_program_aux meta_ctx ctx program =
       type_check_program_aux new_meta new_ctx tops >>= fun program_rest ->
       Ok (typed_top :: program_rest)
 
-let type_check_program program =
+let type_check_program
+    ?(meta_ctx = Typing_context.MetaTypingContext.create_empty_context ())
+    ?(obj_ctx = Typing_context.ObjTypingContext.create_empty_context ()) program
+    =
   let open Or_error.Monad_infix in
-  program |> Ast.Program.of_past
-  |> type_check_program_aux
-       (Typing_context.MetaTypingContext.create_empty_context ())
-       (Typing_context.ObjTypingContext.create_empty_context ())
+  program |> type_check_program_aux meta_ctx obj_ctx
   >>= fun typed_program -> Ast.TypedProgram.populate_index typed_program

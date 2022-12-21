@@ -33,7 +33,7 @@ let type_infer_from_str
 (* m1-m8 *)
 
 let test_read_prog filename _ =
-  let parsed_program = read_parse_file_as_program filename in
+  let parsed_program = read_parse_file_as_program filename |> Ast.Program.of_past in
   match Typecore.type_check_program parsed_program with
   | Ok _ -> ()
   | Error _ -> assert_failure "Type checking failed."

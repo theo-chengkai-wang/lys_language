@@ -22,4 +22,11 @@ val type_check_expression :
   Ast.Typ.t ->
   unit Or_error.t
 
-val type_check_program : Past.Program.t -> Ast.TypedProgram.t Or_error.t
+val type_check_program :
+  ?meta_ctx:
+    ( Ast.MetaIdentifier.t,
+      Ast.Context.t * Ast.Typ.t )
+    Typing_context.MetaTypingContext.t ->
+  ?obj_ctx:(Ast.ObjIdentifier.t, Ast.Typ.t) Typing_context.ObjTypingContext.t ->
+  Ast.Program.t ->
+  Ast.TypedProgram.t Or_error.t
