@@ -1,5 +1,5 @@
 open Core
-module StringMap = Map.Make (String)
+open Lys_utils
 
 (*Map from Past.Identifier to anything*)
 
@@ -58,9 +58,9 @@ module type ObjIdentifier_type = sig
   val populate_index :
     t ->
     current_ast_level:int ->
-    current_identifiers:int StringMap.t ->
+    current_identifiers:int String_map.t ->
     current_meta_ast_level:int ->
-    current_meta_identifiers:int StringMap.t ->
+    current_meta_identifiers:int String_map.t ->
     t Or_error.t
 
   val shift : t -> depth:int -> offset:int -> t Or_error.t
@@ -86,9 +86,9 @@ module type MetaIdentifier_type = sig
   val populate_index :
     t ->
     current_ast_level:int ->
-    current_identifiers:int StringMap.t ->
+    current_identifiers:int String_map.t ->
     current_meta_ast_level:int ->
-    current_meta_identifiers:int StringMap.t ->
+    current_meta_identifiers:int String_map.t ->
     t Or_error.t
 
   val shift : t -> depth:int -> offset:int -> t Or_error.t
@@ -113,7 +113,7 @@ module rec ObjIdentifier : ObjIdentifier_type = struct
     (* The concept of the De Bruijn index thing is to remember the current level. *)
     (* If ~current_ast_level or ~current_identifiers not given, assume that we're talking about an identifier definition, so the index returned should be Index.none *)
     let open Or_error.Monad_infix in
-    let level_opt = StringMap.find current_identifiers id in
+    let level_opt = String_map.find current_identifiers id in
     match level_opt with
     | None ->
         Ok (id, DeBruijnIndex.top_level) (*Assume top level if not in context.*)
@@ -152,7 +152,7 @@ and MetaIdentifier : MetaIdentifier_type = struct
     (* The concept of the De Bruijn index thing is to remember the current level. *)
     (* If ~current_ast_level or ~current_identifiers not given, assume that we're talking about an identifier definition, so the index returned should be Index.none *)
     let open Or_error.Monad_infix in
-    let level_opt = StringMap.find current_meta_identifiers id in
+    let level_opt = String_map.find current_meta_identifiers id in
     match level_opt with
     | None ->
         error
@@ -161,7 +161,7 @@ and MetaIdentifier : MetaIdentifier_type = struct
               the context HENCE not bound."
              id)
           (id, current_meta_identifiers)
-          [%sexp_of: string * int StringMap.t]
+          [%sexp_of: string * int String_map.t]
         (* Here we do so because we postpone the error of not really finding the identifier in the context to type checking *)
     | Some lvl ->
         DeBruijnIndex.create (current_meta_ast_level - lvl - 1)
@@ -353,9 +353,9 @@ and Expr : sig
   val populate_index :
     t ->
     current_ast_level:int ->
-    current_identifiers:int StringMap.t ->
+    current_identifiers:int String_map.t ->
     current_meta_ast_level:int ->
-    current_meta_identifiers:int StringMap.t ->
+    current_meta_identifiers:int String_map.t ->
     t Or_error.t
 
   val shift_indices :
@@ -365,6 +365,7 @@ and Expr : sig
     obj_offset:int ->
     meta_offset:int ->
     t Or_error.t
+  
 end = struct
   type t =
     | Identifier of ObjIdentifier.t (*x*)
@@ -475,12 +476,12 @@ end = struct
         (*Addition for De Bruijn*)
         let id1, _ = iddef1 and id2, _ = iddef2 in
         let new_current_identifiers_1 =
-          StringMap.set current_identifiers
+          String_map.set current_identifiers
             ~key:(ObjIdentifier.get_name id1)
             ~data:current_ast_level
         in
         let new_current_identifiers_2 =
-          StringMap.set current_identifiers
+          String_map.set current_identifiers
             ~key:(ObjIdentifier.get_name id2)
             ~data:current_ast_level
         in
@@ -502,7 +503,7 @@ end = struct
         (*Addition for De Bruijn*)
         let id, _ = iddef in
         let new_current_identifiers =
-          StringMap.set current_identifiers
+          String_map.set current_identifiers
             ~key:(ObjIdentifier.get_name id)
             ~data:current_ast_level
         in
@@ -531,7 +532,7 @@ end = struct
     | LetBinding (iddef, e, e2) ->
         let id, _ = iddef in
         let new_current_identifiers =
-          StringMap.set current_identifiers
+          String_map.set current_identifiers
             ~key:(ObjIdentifier.get_name id)
             ~data:current_ast_level
         in
@@ -549,7 +550,7 @@ end = struct
         let id, _ = iddef in
         let new_level = current_ast_level + 1 in
         let new_current_identifiers =
-          StringMap.set current_identifiers
+          String_map.set current_identifiers
             ~key:(ObjIdentifier.get_name id)
             ~data:current_ast_level
         in
@@ -571,7 +572,7 @@ end = struct
           ~tag:
             "DeBruijnPopulationError[OBJECT]: There are duplicated identifier \
              definitions in the box context."
-          (StringMap.of_alist_or_error
+          (String_map.of_alist_or_error
              (List.map ctx ~f:(fun (id, _) -> (ObjIdentifier.get_name id, 0))))
         >>= fun new_current_identifiers ->
         populate_index e ~current_ast_level:1
@@ -580,7 +581,7 @@ end = struct
         >>= fun e -> Ok (Box (ctx, e))
     | LetBox (metaid, e, e2) ->
         let new_current_meta_identifiers =
-          StringMap.set current_meta_identifiers
+          String_map.set current_meta_identifiers
             ~key:(MetaIdentifier.get_name metaid)
             ~data:current_meta_ast_level
         in
@@ -782,21 +783,21 @@ end = struct
     match typed_defn with
     | Definition (typ, (id, typ2), expr) ->
         Expr.populate_index expr ~current_ast_level:0
-          ~current_identifiers:StringMap.empty ~current_meta_ast_level:0
-          ~current_meta_identifiers:StringMap.empty
+          ~current_identifiers:String_map.empty ~current_meta_ast_level:0
+          ~current_meta_identifiers:String_map.empty
         >>= fun expr -> Ok (Definition (typ, (id, typ2), expr))
     | RecursiveDefinition (typ, (id, typ2), expr) ->
         let new_current_identifiers =
-          StringMap.set StringMap.empty ~key:(ObjIdentifier.get_name id) ~data:0
+          String_map.set String_map.empty ~key:(ObjIdentifier.get_name id) ~data:0
         in
         Expr.populate_index expr ~current_ast_level:1
           ~current_identifiers:new_current_identifiers ~current_meta_ast_level:0
-          ~current_meta_identifiers:StringMap.empty
+          ~current_meta_identifiers:String_map.empty
         >>= fun expr -> Ok (RecursiveDefinition (typ, (id, typ2), expr))
     | Expression (typ, expr) ->
         Expr.populate_index expr ~current_ast_level:0
-          ~current_identifiers:StringMap.empty ~current_meta_ast_level:0
-          ~current_meta_identifiers:StringMap.empty
+          ~current_identifiers:String_map.empty ~current_meta_ast_level:0
+          ~current_meta_identifiers:String_map.empty
         >>= fun expr -> Ok (Expression (typ, expr))
     | Directive d -> Ok (Directive d)
 

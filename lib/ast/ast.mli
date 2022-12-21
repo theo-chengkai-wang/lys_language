@@ -1,5 +1,5 @@
 open Core
-module StringMap : Map.S with type Key.t = String.t
+open Lys_utils
 
 module DeBruijnIndex : sig
   (*Implementation of De Bruijn Indices -- encapsulated*)
@@ -24,9 +24,9 @@ module type ObjIdentifier_type = sig
   val populate_index :
     t ->
     current_ast_level:int ->
-    current_identifiers:int StringMap.t ->
+    current_identifiers:int String_map.t ->
     current_meta_ast_level:int ->
-    current_meta_identifiers:int StringMap.t ->
+    current_meta_identifiers:int String_map.t ->
     t Or_error.t
 
   val shift : t -> depth:int -> offset:int -> t Or_error.t
@@ -52,9 +52,9 @@ module type MetaIdentifier_type = sig
   val populate_index :
     t ->
     current_ast_level:int ->
-    current_identifiers:int StringMap.t ->
+    current_identifiers:int String_map.t ->
     current_meta_ast_level:int ->
-    current_meta_identifiers:int StringMap.t ->
+    current_meta_identifiers:int String_map.t ->
     t Or_error.t
 
   val shift : t -> depth:int -> offset:int -> t Or_error.t
@@ -155,9 +155,9 @@ and Expr : sig
   val populate_index :
     t ->
     current_ast_level:int ->
-    current_identifiers:int StringMap.t ->
+    current_identifiers:int String_map.t ->
     current_meta_ast_level:int ->
-    current_meta_identifiers:int StringMap.t ->
+    current_meta_identifiers:int String_map.t ->
     t Or_error.t
 
   val shift_indices :
