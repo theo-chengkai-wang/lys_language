@@ -365,7 +365,6 @@ and Expr : sig
     obj_offset:int ->
     meta_offset:int ->
     t Or_error.t
-  
 end = struct
   type t =
     | Identifier of ObjIdentifier.t (*x*)
@@ -709,6 +708,36 @@ end = struct
         >>= fun metaid -> Ok (Closure (metaid, exprs))
 end
 
+and Value : sig
+  type t =
+    | Constant of Constant.t (*c*)
+    | Prod of t * t (*(e, e')*)
+    | Left of Typ.t * Typ.t * t (*L[A,B] e*)
+    | Right of Typ.t * Typ.t * t (*R[A,B] e*)
+    | Lambda of IdentifierDefn.t * Expr.t (*fun (x : A) -> e*)
+    | Box of Context.t * Expr.t (*box (x:A, y:B |- e)*)
+  [@@deriving sexp, show, compare, equal]
+
+  val to_expr : Value.t -> Expr.t
+end = struct
+  type t =
+    | Constant of Constant.t (*c*)
+    | Prod of t * t (*(e, e')*)
+    | Left of Typ.t * Typ.t * t (*L[A,B] e*)
+    | Right of Typ.t * Typ.t * t (*R[A,B] e*)
+    | Lambda of IdentifierDefn.t * Expr.t (*fun (x : A) -> e*)
+    | Box of Context.t * Expr.t (*box (x:A, y:B |- e)*)
+  [@@deriving sexp, show, compare, equal]
+
+  let rec to_expr = function
+    | Constant c -> Expr.Constant c
+    | Prod (a, b) -> Expr.Prod (to_expr a, to_expr b)
+    | Left (t1, t2, v) -> Expr.Left (t1, t2, to_expr v)
+    | Right (t1, t2, v) -> Expr.Right (t1, t2, to_expr v)
+    | Lambda (iddef, expr) -> Expr.Lambda (iddef, expr)
+    | Box (ctx, expr) -> Expr.Box (ctx, expr)
+end
+
 and Directive : sig
   type t = Reset | Env | Quit [@@deriving sexp, show, compare, equal]
 
@@ -788,7 +817,9 @@ end = struct
         >>= fun expr -> Ok (Definition (typ, (id, typ2), expr))
     | RecursiveDefinition (typ, (id, typ2), expr) ->
         let new_current_identifiers =
-          String_map.set String_map.empty ~key:(ObjIdentifier.get_name id) ~data:0
+          String_map.set String_map.empty
+            ~key:(ObjIdentifier.get_name id)
+            ~data:0
         in
         Expr.populate_index expr ~current_ast_level:1
           ~current_identifiers:new_current_identifiers ~current_meta_ast_level:0

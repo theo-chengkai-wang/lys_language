@@ -169,6 +169,20 @@ and Expr : sig
     t Or_error.t
 end
 
+and Value : sig
+  type t =
+  | Constant of Constant.t (*c*)
+  | Prod of t * t (*(e, e')*)
+  | Left of Typ.t * Typ.t * t (*L[A,B] e*)
+  | Right of Typ.t * Typ.t * t (*R[A,B] e*)
+  | Lambda of IdentifierDefn.t * Expr.t (*fun (x : A) -> e*)
+  | Box of Context.t * Expr.t (*box (x:A, y:B |- e)*)
+[@@deriving sexp, show, compare, equal]
+
+val to_expr : Value.t -> Expr.t
+
+end
+
 and Directive : sig
   type t = Reset | Env | Quit [@@deriving sexp, show, compare, equal]
 
@@ -202,7 +216,6 @@ module TypedTopLevelDefn : sig
 
   val populate_index : t -> t Or_error.t
   val convert_from_untyped_without_typecheck : TopLevelDefn.t -> t
-
 end
 
 module TypedProgram : sig
@@ -210,5 +223,4 @@ module TypedProgram : sig
 
   val populate_index : t -> t Or_error.t
   val convert_from_untyped_without_typecheck : Program.t -> t
-
 end
