@@ -3,6 +3,7 @@ open Core
 open Lys_utils
 open Lys_typing
 
+(* Top level evaluation context *)
 module EvaluationContext : sig
   type single_record = { typ : Ast.Typ.t; is_rec : bool; value : Ast.Value.t }
   [@@deriving show, sexp, compare, equal]

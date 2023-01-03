@@ -94,15 +94,14 @@ let program3 =
   \  in pow 2;;"
 
 let program4 =
-  "let rec (pow: int -> int -> int) = fun (n:int) -> if n = 0 then (fun \
-   (x:int) -> 1) else (fun (x:int) -> x * (pow (n-1) x));;\n\n\
-  \  pow 2 3;;\n\n\
-  \  ENV;;\n\n\
-  \  RESET;;\n\n\
-  \  let rec (pow: int -> [b:int]int) = fun (n:int) -> if n = 0 then box \
-   (b:int |- 1) else let box u = pow (n-1) in box (b:int |- b * (u with (b)));;\n\
-  \  pow 2;;\n\
-  \  "
+  "let rec (pow: int -> int -> int) = fun (n:int) -> if n = 0 then (fun 
+   (x:int) -> 1) else (fun (x:int) -> x * (pow (n-1) x));;
+  pow 2 3;;
+  ENV;;
+  RESET;;
+  let rec (pow: int -> [b:int]int) = fun (n:int) -> if n = 0 then box 
+   (b:int |- 1) else let box u = pow (n-1) in box (b:int |- b * (u with (b)));;
+  pow 2;;"
 
-let program5 = "let rec "
+(* let program5 = "let rec " *)
 let () = loop3 program4 ()
