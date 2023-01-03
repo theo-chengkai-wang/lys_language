@@ -1,0 +1,4 @@
+(library
+ (name lys_interpreter)
+ (libraries core lys_ast lys_typing)
+ (preprocess (pps ppx_jane ppx_deriving.show)))

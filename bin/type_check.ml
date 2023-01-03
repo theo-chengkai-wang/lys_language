@@ -8,6 +8,7 @@ let loop filename () =
     file_ic |>
     Lexing.from_channel
     |> Lex_and_parse.parse_program
+    |> Ast.Program.of_past
     |> Typecore.type_check_program 
     |> ok_exn
     |> Ast.TypedProgram.show

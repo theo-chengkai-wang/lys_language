@@ -1,22 +1,63 @@
-module type Identifier_type = sig
-  (*Hide implementation*)
+open Core
+open Lys_utils
+
+module DeBruijnIndex : sig
+  (*Implementation of De Bruijn Indices -- encapsulated*)
+  type t [@@deriving sexp, show, compare, equal]
+
+  val none : t
+  val top_level : t
+  val create : int -> t Or_error.t
+  val shift : t -> int -> int -> t Or_error.t
+  val value : t -> default:int -> int
+end
+
+module type ObjIdentifier_type = sig
+  type t [@@deriving sexp, show, compare, equal]
+
+  val of_string : string -> t
+  val of_past : Past.Identifier.t -> t
+  val of_string_and_index : string -> DeBruijnIndex.t -> t
+  val get_name : t -> string
+  val get_debruijn_index : t -> DeBruijnIndex.t
+
+  val populate_index :
+    t ->
+    current_ast_level:int ->
+    current_identifiers:int String_map.t ->
+    current_meta_ast_level:int ->
+    current_meta_identifiers:int String_map.t ->
+    t Or_error.t
+
+  val shift : t -> depth:int -> offset:int -> t Or_error.t
+end
+
+module type TypeIdentifier_type = sig
+  (*Unused for now*)
   type t [@@deriving sexp, show, compare, equal]
 
   val of_string : string -> t
   val of_past : Past.Identifier.t -> t
 end
 
-module type ObjIdentifier_type = sig
-  include Identifier_type
-end
-
-module type TypeIdentifier_type = sig
-  (*Unused for now*)
-  include Identifier_type
-end
-
 module type MetaIdentifier_type = sig
-  include Identifier_type
+  type t [@@deriving sexp, show, compare, equal]
+
+  val of_string : string -> t
+  val of_past : Past.Identifier.t -> t
+  val of_string_and_index : string -> DeBruijnIndex.t -> t
+  val get_name : t -> string
+  val get_debruijn_index : t -> DeBruijnIndex.t
+
+  val populate_index :
+    t ->
+    current_ast_level:int ->
+    current_identifiers:int String_map.t ->
+    current_meta_ast_level:int ->
+    current_meta_identifiers:int String_map.t ->
+    t Or_error.t
+
+  val shift : t -> depth:int -> offset:int -> t Or_error.t
 end
 
 module rec ObjIdentifier : ObjIdentifier_type
@@ -110,6 +151,36 @@ and Expr : sig
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.Expr.t -> t
+
+  val populate_index :
+    t ->
+    current_ast_level:int ->
+    current_identifiers:int String_map.t ->
+    current_meta_ast_level:int ->
+    current_meta_identifiers:int String_map.t ->
+    t Or_error.t
+
+  val shift_indices :
+    t ->
+    obj_depth:int ->
+    meta_depth:int ->
+    obj_offset:int ->
+    meta_offset:int ->
+    t Or_error.t
+end
+
+and Value : sig
+  type t =
+  | Constant of Constant.t (*c*)
+  | Prod of t * t (*(e, e')*)
+  | Left of Typ.t * Typ.t * t (*L[A,B] e*)
+  | Right of Typ.t * Typ.t * t (*R[A,B] e*)
+  | Lambda of IdentifierDefn.t * Expr.t (*fun (x : A) -> e*)
+  | Box of Context.t * Expr.t (*box (x:A, y:B |- e)*)
+[@@deriving sexp, show, compare, equal]
+
+val to_expr : Value.t -> Expr.t
+
 end
 
 and Directive : sig
@@ -142,8 +213,14 @@ module TypedTopLevelDefn : sig
     | Expression of Typ.t * Expr.t
     | Directive of Directive.t
   [@@deriving sexp, show, compare, equal]
+
+  val populate_index : t -> t Or_error.t
+  val convert_from_untyped_without_typecheck : TopLevelDefn.t -> t
 end
 
 module TypedProgram : sig
   type t = TypedTopLevelDefn.t list [@@deriving sexp, show, compare, equal]
+
+  val populate_index : t -> t Or_error.t
+  val convert_from_untyped_without_typecheck : Program.t -> t
 end

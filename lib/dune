@@ -4,3 +4,6 @@
  lys_ast
  lys_parsing
  lys_typing))
+(env
+  (dev
+    (flags (:standard -warn-error -A))))
