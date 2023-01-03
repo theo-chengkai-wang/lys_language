@@ -1,5 +1,6 @@
 %{
 open Lys_ast.Past
+open Core
 
 (*TODO: ATTEMPT Constructs an Application AST node from an expression with the function and a list of expressions f is applied to
 exception EmptyListError
@@ -13,6 +14,14 @@ let mkapp f xs =
         | [] -> raise EmptyListError
     in 
     mkapp_aux f rev_xs*)
+
+let list_to_tuple_aux xs init = List.fold xs ~init:init ~f:(fun acc -> fun x -> Expr.Prod (acc, x))
+
+let list_to_tuple l = 
+    match l with
+    | [] -> Expr.Constant (Constant.Unit)
+    | [x] -> x
+    | x::xs -> list_to_tuple_aux xs x
 %}
 
 %token <int> INT
@@ -142,7 +151,7 @@ simple_expr:
     | LEFT_PAREN; e = expr; RIGHT_PAREN {e}
     | c = constant {Expr.Constant c}
     | i = identifier {Expr.Identifier i}
-    | LEFT_PAREN e1 = expr COMMA e2 = expr RIGHT_PAREN {Expr.Prod (e1, e2)}
+    | LEFT_PAREN e1=expr COMMA l = separated_nonempty_list(COMMA, expr) RIGHT_PAREN {list_to_tuple (e1::l)} (*Hack to ensure at least 2 things*)
 
 application_expr:
     | s1 = application_expr; s2 = simple_expr  {Expr.Application (s1, s2)}
