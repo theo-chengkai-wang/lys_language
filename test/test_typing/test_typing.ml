@@ -91,21 +91,21 @@ let test_sum_type_inr _ =
     (Some (Ast.Typ.TSum (Ast.Typ.TInt, Ast.Typ.TBool)));
   assert_equal (Or_error.ok (type_infer_from_str "R[int, bool] 1;;")) None
 
-let test_match _ =
+let test_case _ =
   assert_equal
     (Or_error.ok
        (type_infer_from_str
-          "match (L[int, int] 1) with L (y:int) -> y | R (z:int) -> z;;"))
+          "case (L[int, int] 1) of L (y:int) -> y | R (z:int) -> z;;"))
     (Some Ast.Typ.TInt);
   assert_equal
     (Or_error.ok
        (type_infer_from_str
-          "match (L[int, int] true) with L (y:int) -> y | R (z:int) -> z;;"))
+          "case (L[int, int] true) of L (y:int) -> y | R (z:int) -> z;;"))
     None;
   assert_equal
     (Or_error.ok
        (type_infer_from_str
-          "match (L[int, int] 1) with L (y:int) -> true | R (z:int) -> z;;"))
+          "case (L[int, int] 1) of L (y:int) -> true | R (z:int) -> z;;"))
     None
 
 let test_application_only_functions _ =
@@ -160,7 +160,7 @@ let standard_suite =
          "test_product_type_snd" >:: test_product_type_snd;
          "test_sum_type_inl" >:: test_sum_type_inl;
          "test_sum_type_inr" >:: test_sum_type_inr;
-         "test_match" >:: test_match;
+         "test_case" >:: test_case;
          "test_application_only_functions" >:: test_application_only_functions;
          "test_if_then_else" >:: test_if_then_else;
          "test_let_rec" >:: test_let_rec;

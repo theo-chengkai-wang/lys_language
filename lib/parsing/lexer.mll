@@ -65,6 +65,8 @@ rule read =
     | "R" {INR}
     | "match" {MATCH}
     |  "with" {WITH}
+    | "case" {CASE}
+    | "of" {OF}
     | "let" {LET}
     | "in" {IN}
     | "rec" {REC}

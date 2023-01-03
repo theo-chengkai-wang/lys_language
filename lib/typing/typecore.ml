@@ -132,7 +132,7 @@ and type_inference_expression meta_ctx ctx e =
           ("TypeInferenceError: the given expression must be of of the right \
             type of the given sum type: " ^ Ast.Typ.show t2)
       >>= fun () -> Ok (Ast.Typ.TSum (t1, t2))
-  | Ast.Expr.Match (e, iddef1, e1, iddef2, e2) ->
+  | Ast.Expr.Case (e, iddef1, e1, iddef2, e2) ->
       type_inference_expression meta_ctx ctx e >>= fun e_typ ->
       (match e_typ with
       | Ast.Typ.TSum (_, _) -> Ok ()

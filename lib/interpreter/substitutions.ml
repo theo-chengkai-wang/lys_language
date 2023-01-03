@@ -75,11 +75,11 @@ let rec substitute_aux expr_subst_for id_str current_depth expr_subst_in =
   | Ast.Expr.Right (t1, t2, expr) ->
       substitute_aux expr_subst_for id_str current_depth expr >>= fun expr ->
       Ok (Ast.Expr.Right (t1, t2, expr))
-  | Ast.Expr.Match (e, iddef1, e1, iddef2, e2) ->
+  | Ast.Expr.Case (e, iddef1, e1, iddef2, e2) ->
       substitute_aux expr_subst_for id_str current_depth e >>= fun e ->
       substitute_aux expr_subst_for id_str (current_depth + 1) e1 >>= fun e1 ->
       substitute_aux expr_subst_for id_str (current_depth + 1) e2 >>= fun e2 ->
-      Ok (Ast.Expr.Match (e, iddef1, e1, iddef2, e2))
+      Ok (Ast.Expr.Case (e, iddef1, e1, iddef2, e2))
   | Ast.Expr.Lambda (iddef, e) ->
       substitute_aux expr_subst_for id_str (current_depth + 1) e >>= fun e ->
       Ok (Ast.Expr.Lambda (iddef, e))
@@ -171,11 +171,11 @@ let rec sim_substitute_aux zipped_exprs_ids current_depth expr_subst_in =
   | Ast.Expr.Right (t1, t2, expr) ->
       sim_substitute_aux zipped_exprs_ids current_depth expr >>= fun expr ->
       Ok (Ast.Expr.Right (t1, t2, expr))
-  | Ast.Expr.Match (e, iddef1, e1, iddef2, e2) ->
+  | Ast.Expr.Case (e, iddef1, e1, iddef2, e2) ->
       sim_substitute_aux zipped_exprs_ids current_depth e >>= fun e ->
       sim_substitute_aux zipped_exprs_ids (current_depth + 1) e1 >>= fun e1 ->
       sim_substitute_aux zipped_exprs_ids (current_depth + 1) e2 >>= fun e2 ->
-      Ok (Ast.Expr.Match (e, iddef1, e1, iddef2, e2))
+      Ok (Ast.Expr.Case (e, iddef1, e1, iddef2, e2))
   | Ast.Expr.Lambda (iddef, e) ->
       sim_substitute_aux zipped_exprs_ids (current_depth + 1) e >>= fun e ->
       Ok (Ast.Expr.Lambda (iddef, e))
@@ -272,13 +272,13 @@ let rec meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth
   | Ast.Expr.Right (t1, t2, expr) ->
       meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth expr
       >>= fun expr -> Ok (Ast.Expr.Right (t1, t2, expr))
-  | Ast.Expr.Match (e, iddef1, e1, iddef2, e2) ->
+  | Ast.Expr.Case (e, iddef1, e1, iddef2, e2) ->
       meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth e
       >>= fun e ->
       meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth e1
       >>= fun e1 ->
       meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth e2
-      >>= fun e2 -> Ok (Ast.Expr.Match (e, iddef1, e1, iddef2, e2))
+      >>= fun e2 -> Ok (Ast.Expr.Case (e, iddef1, e1, iddef2, e2))
   | Ast.Expr.Lambda (iddef, e) ->
       meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth e
       >>= fun e -> Ok (Ast.Expr.Lambda (iddef, e))

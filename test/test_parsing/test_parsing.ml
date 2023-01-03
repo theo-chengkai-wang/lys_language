@@ -96,17 +96,17 @@ let test_with _ =
             ] )))
     (parse_expression (Lexing.from_string "u with (1, 2);;"))
 
-let test_match _ =
+let test_case _ =
   assert_equal
     (Some
-       (Past.Expr.Match
+       (Past.Expr.Case
           ( Past.Expr.Identifier "x",
             ("y", Past.Typ.TInt),
             Past.Expr.Identifier "a",
             ("z", Past.Typ.TInt),
             Past.Expr.Identifier "b" )))
     (parse_expression
-       (Lexing.from_string "match x with L (y:int) -> a | R (z:int) -> b;;"))
+       (Lexing.from_string "case x of L (y:int) -> a | R (z:int) -> b;;"))
 
 let test_inl _ =
   assert_equal
@@ -458,7 +458,7 @@ let suite =
          "test_box" >:: test_box;
          "test_unbox" >:: test_unbox;
          "test_with" >:: test_with;
-         "test_match" >:: test_match;
+         "test_case" >:: test_case;
          "test_inl" >:: test_inl;
          "test_inr" >:: test_inr;
          "test_reg_parse_unit_and_not_unit" >:: test_reg_parse_unit_and_not_unit;

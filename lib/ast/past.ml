@@ -102,8 +102,8 @@ and Expr : sig
     | Snd of t (*snd e*)
     | Left of Typ.t * Typ.t * t (*L[A,B] e*)
     | Right of Typ.t * Typ.t * t (*R[A,B] e*)
-    | Match of t * IdentifierDefn.t * t * IdentifierDefn.t * t
-      (*match e with
+    | Case of t * IdentifierDefn.t * t * IdentifierDefn.t * t
+      (*case e with
         L (x: A) -> e' | R (y: B) -> e'' translates to 1 expr and 2 lambdas*)
     | Lambda of IdentifierDefn.t * t (*fun (x : A) -> e*)
     | Application of t * t (*e e'*)
@@ -127,8 +127,8 @@ end = struct
     | Snd of t (*snd e*)
     | Left of Typ.t * Typ.t * t (*L[A,B] e*)
     | Right of Typ.t * Typ.t * t (*R[A,B] e*)
-    | Match of t * IdentifierDefn.t * t * IdentifierDefn.t * t
-      (*match e with
+    | Case of t * IdentifierDefn.t * t * IdentifierDefn.t * t
+      (*case e with
         L (x: A) -> e' | R (y: B) -> e'' translates to 1 expr and 2 lambdas*)
     | Lambda of IdentifierDefn.t * t (*fun (x : A) -> e*)
     | Application of t * t (*e e'*)

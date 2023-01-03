@@ -333,8 +333,8 @@ and Expr : sig
     | Snd of t (*snd e*)
     | Left of Typ.t * Typ.t * t (*L[A,B] e*)
     | Right of Typ.t * Typ.t * t (*R[A,B] e*)
-    | Match of t * IdentifierDefn.t * t * IdentifierDefn.t * t
-      (*match e with
+    | Case of t * IdentifierDefn.t * t * IdentifierDefn.t * t
+      (*case e of
         L (x: A) -> e' | R (y: B) -> e'' translates to 1 expr and 2 lambdas*)
     | Lambda of IdentifierDefn.t * t (*fun (x : A) -> e*)
     | Application of t * t (*e e'*)
@@ -376,7 +376,7 @@ end = struct
     | Snd of t (*snd e*)
     | Left of Typ.t * Typ.t * t (*L[A,B] e*)
     | Right of Typ.t * Typ.t * t (*R[A,B] e*)
-    | Match of t * IdentifierDefn.t * t * IdentifierDefn.t * t
+    | Case of t * IdentifierDefn.t * t * IdentifierDefn.t * t
       (*match e with
         L (x: A) -> e' | R (y: B) -> e'' translates to 1 expr and 2 lambdas*)
     | Lambda of IdentifierDefn.t * t (*fun (x : A) -> e*)
@@ -405,8 +405,8 @@ end = struct
         Left (Typ.of_past t1, Typ.of_past t2, of_past expr)
     | Past.Expr.Right (t1, t2, expr) ->
         Right (Typ.of_past t1, Typ.of_past t2, of_past expr)
-    | Past.Expr.Match (e, iddef1, e1, iddef2, e2) ->
-        Match
+    | Past.Expr.Case (e, iddef1, e1, iddef2, e2) ->
+        Case
           ( of_past e,
             IdentifierDefn.of_past iddef1,
             of_past e1,
@@ -471,7 +471,7 @@ end = struct
         populate_index expr ~current_ast_level ~current_identifiers
           ~current_meta_ast_level ~current_meta_identifiers
         >>= fun expr -> Ok (Right (t1, t2, expr))
-    | Match (e, iddef1, e1, iddef2, e2) ->
+    | Case (e, iddef1, e1, iddef2, e2) ->
         (*Addition for De Bruijn*)
         let id1, _ = iddef1 and id2, _ = iddef2 in
         let new_current_identifiers_1 =
@@ -497,7 +497,7 @@ end = struct
           ~current_meta_identifiers
         >>= fun e2 ->
         (*We don't need to modify iddefs because the identifiers inside are already having the right index, i.e. None*)
-        Ok (Match (e, iddef1, e1, iddef2, e2))
+        Ok (Case (e, iddef1, e1, iddef2, e2))
     | Lambda (iddef, e) ->
         (*Addition for De Bruijn*)
         let id, _ = iddef in
@@ -642,7 +642,7 @@ end = struct
     | Right (t1, t2, expr) ->
         shift_indices expr ~obj_depth ~meta_depth ~obj_offset ~meta_offset
         >>= fun expr -> Ok (Right (t1, t2, expr))
-    | Match (e, iddef1, e1, iddef2, e2) ->
+    | Case (e, iddef1, e1, iddef2, e2) ->
         shift_indices e ~obj_depth ~meta_depth ~obj_offset ~meta_offset
         >>= fun e ->
         shift_indices e1 ~obj_depth:(obj_depth + 1) ~meta_depth ~obj_offset
@@ -650,7 +650,7 @@ end = struct
         >>= fun e1 ->
         shift_indices e2 ~obj_depth:(obj_depth + 1) ~meta_depth ~obj_offset
           ~meta_offset
-        >>= fun e2 -> Ok (Match (e, iddef1, e1, iddef2, e2))
+        >>= fun e2 -> Ok (Case (e, iddef1, e1, iddef2, e2))
     | Lambda (iddef, e) ->
         shift_indices e ~obj_depth:(obj_depth + 1) ~meta_depth ~obj_offset
           ~meta_offset

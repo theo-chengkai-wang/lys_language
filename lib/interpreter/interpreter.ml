@@ -188,7 +188,7 @@ let rec multi_step_reduce ~top_level_context ~expr =
       multi_step_reduce ~top_level_context ~expr >>= fun v ->
       Ok (Ast.Value.Right (t1, t2, v))
       (* We don't run RT type check here. *)
-  | Ast.Expr.Match (e, (id1, _), e1, (id2, _), e2) ->
+  | Ast.Expr.Case (e, (id1, _), e1, (id2, _), e2) ->
       multi_step_reduce ~top_level_context ~expr:e >>= fun v ->
       let new_expr_or_error =
         match v with

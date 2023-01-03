@@ -54,6 +54,8 @@ let mkapp f xs =
 %token RIGHT_BRACKET "]"
 %token MATCH
 %token WITH
+%token CASE
+%token OF
 %token LET
 %token IN
 %token REC
@@ -160,7 +162,7 @@ expr:
     | SND e = expr {Expr.Snd e}
     | INL LEFT_BRACKET t1=typ COMMA t2=typ RIGHT_BRACKET e = expr {Expr.Left (t1, t2, e)}
     | INR LEFT_BRACKET t1=typ COMMA t2=typ RIGHT_BRACKET e = expr {Expr.Right (t1, t2, e)}
-    | MATCH e1 = simple_expr WITH INL id_decl1 = id_typ_declaration "->" e2 = expr "|" INR id_decl2 = id_typ_declaration "->" e3 = expr {Expr.Match (e1, id_decl1, e2, id_decl2, e3)}
+    | CASE e1 = simple_expr OF INL id_decl1 = id_typ_declaration "->" e2 = expr "|" INR id_decl2 = id_typ_declaration "->" e3 = expr {Expr.Case (e1, id_decl1, e2, id_decl2, e3)}
     | LET decl = id_typ_declaration EQ e1 = expr IN e2 = expr %prec DEFN_EQ {Expr.LetBinding (decl, e1, e2)}
     | LET REC decl = id_typ_declaration EQ e1 = expr IN e2 = expr %prec DEFN_EQ {Expr.LetRec (decl, e1, e2)}
     | BOX LEFT_PAREN decl_list = separated_list(COMMA, id_typ_declaration) TURNSTILE e = expr RIGHT_PAREN {Expr.Box (decl_list, e)}
