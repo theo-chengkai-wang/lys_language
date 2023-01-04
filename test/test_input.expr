@@ -1,11 +1,9 @@
-(*datatype sometype = Con1 of int | Con3 of unit | Con4 of (int * sometype);;
+datatype sometype = Con1 of int | Con3 of unit | Con4 of (int * sometype);;
 
 let x:sometype = Con1 1;;
 
-let y:sometype = Con4 (1, Con2 1);;
+let y:sometype = Con4 (1, Con1 1);;
 
 match y with
     | Con1 (x) -> x
-    | _ -> 1;;*)
-
-let x:(int * unit) = ((1,2,(3,4))[0], ());;
+    | _ -> 1;;

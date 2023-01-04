@@ -139,7 +139,7 @@ and type_inference_expression meta_ctx ctx type_ctx e =
             (Printf.sprintf
                "TypeInferenceError: can't project outside of the range of the \
                 tuple length [0; %s]"
-                (Int.to_string (List.length typs)))
+               (Int.to_string (List.length typs)))
             (expr, i) [%sexp_of: Ast.Expr.t * int]
       | Some typ -> Ok typ)
   | Ast.Expr.Left (t1, t2, expr) ->
@@ -309,7 +309,7 @@ and type_inference_expression meta_ctx ctx type_ctx e =
           "TypeInferenceError: Type mismatch between context and expressions \
            provided to substitute in."
       >>= fun () -> (*3- now context match*) Ok box_typ
-  | Ast.Expr.Match (e, pattn_expr_list) ->
+  | Ast.Expr.Match (e, pattn_expr_list) -> (
       (*
       1- infer type of e
       2- Cases: 
@@ -319,22 +319,166 @@ and type_inference_expression meta_ctx ctx type_ctx e =
       and give the zipped list of binder-type
       3- check that if we put all the binders in the types required we get what we want
     *)
-      (* type_inference_expression meta_ctx ctx type_ctx e >>= fun inferred_typ ->
-         (match inferred_typ with
-         | Ast.Typ.TProd (t1, t2) ->
-           List.iter pattn_expr_list ~f:(fun (pattn, expr) ->
-             (*1- Check the pattern is a correct one*)
-             Ok () >>= fun () ->
-             (*2- Now match the binders*)
-             let binders = Ast.Pattern.get_binders pattn in
-             Utils.try_zip_list_or_error binders [t1;t2] (error "TypeInferenceError: pattern argument # doesn't correspond to the expected #" (pattn, inferred_typ) [%sexp_of: Ast.Pattern.t * Ast.Typ.t])
-           ) >>= fun () -> Ok ()
-         | Ast.Typ.TSum (t1, t2) -> Ok ()
-         | Ast.Typ.TIdentifier (tid) -> Ok ()
-         | _ -> Or_error.error "TypeInferenceError: Match clause only supports product types, sum types and identifier types") *)
-      Or_error.unimplemented "Unimplemented Match case"
-  | Ast.Expr.Constr (constr, e) ->
-      Or_error.unimplemented "Unimplemented Constr case"
+      type_inference_expression meta_ctx ctx type_ctx e
+      >>= fun inferred_typ ->
+      (match inferred_typ with
+      | Ast.Typ.TProd typs ->
+          List.map pattn_expr_list ~f:(fun (pattn, expr) ->
+              (*1- Check the pattern is a correct one*)
+              match pattn with
+              | Ast.Pattern.Prod ids ->
+                  (*2- Now match the binders*)
+                  Utils.try_zip_list_or_error ids typs
+                    (error
+                       "TypeInferenceError: pattern argument # doesn't \
+                        correspond to the expected #"
+                       (pattn, inferred_typ)
+                       [%sexp_of: Ast.Pattern.t * Ast.Typ.t])
+                  >>= fun zipped_list ->
+                  (*3- Infer type*)
+                  let new_ctx =
+                    Typing_context.ObjTypingContext.add_all_mappings ctx
+                      zipped_list
+                  in
+                  type_inference_expression meta_ctx new_ctx type_ctx expr
+              | Ast.Pattern.Id id ->
+                  let new_ctx =
+                    Typing_context.ObjTypingContext.add_mapping ctx id
+                      inferred_typ
+                  in
+                  type_inference_expression meta_ctx new_ctx type_ctx expr
+              | Ast.Pattern.Wildcard ->
+                  type_inference_expression meta_ctx ctx type_ctx expr
+              | _ ->
+                  Or_error.error
+                    "TypeInferenceError: Mismatch between type and pattern."
+                    (pattn, inferred_typ) [%sexp_of: Ast.Pattern.t * Ast.Typ.t])
+          |> Or_error.combine_errors
+          |> Or_error.tag ~tag:"TypeInferenceError: on `match` clause."
+      | Ast.Typ.TSum (t1, t2) ->
+          List.map pattn_expr_list ~f:(fun (pattn, expr) ->
+              match pattn with
+              | Ast.Pattern.Inl id ->
+                  let new_ctx =
+                    Typing_context.ObjTypingContext.add_mapping ctx id t1
+                  in
+                  type_inference_expression meta_ctx new_ctx type_ctx expr
+              | Ast.Pattern.Inr id ->
+                  let new_ctx =
+                    Typing_context.ObjTypingContext.add_mapping ctx id t2
+                  in
+                  type_inference_expression meta_ctx new_ctx type_ctx expr
+              | Ast.Pattern.Id id ->
+                  let new_ctx =
+                    Typing_context.ObjTypingContext.add_mapping ctx id
+                      inferred_typ
+                  in
+                  type_inference_expression meta_ctx new_ctx type_ctx expr
+              | Ast.Pattern.Wildcard ->
+                  type_inference_expression meta_ctx ctx type_ctx expr
+              | _ ->
+                  Or_error.error
+                    "TypeInferenceError: Mismatch between type and pattern."
+                    (pattn, inferred_typ) [%sexp_of: Ast.Pattern.t * Ast.Typ.t])
+          |> Or_error.combine_errors
+      | Ast.Typ.TIdentifier tid ->
+          (* Check that each thing is a constructor of the right type. *)
+          List.map pattn_expr_list ~f:(fun (pattn, expr) ->
+              match pattn with
+              | Ast.Pattern.Id id ->
+                  let new_ctx =
+                    Typing_context.ObjTypingContext.add_mapping ctx id
+                      inferred_typ
+                  in
+                  type_inference_expression meta_ctx new_ctx type_ctx expr
+              | Ast.Pattern.Wildcard ->
+                  type_inference_expression meta_ctx ctx type_ctx expr
+              | Ast.Pattern.Datatype (constr, id_list) ->
+                  (*1- check that constructor is of the type needed*)
+                  let constr_record_opt =
+                    Typing_context.TypeConstrTypingContext.get_typ_from_constr
+                      type_ctx constr
+                  in
+                  (match constr_record_opt with
+                  | None ->
+                      Or_error.error
+                        "TypeInferenceError: Constructor doesn't exist" constr
+                        [%sexp_of: Ast.Constructor.t]
+                  | Some constr_record ->
+                      if
+                        Ast.TypeIdentifier.equal tid
+                          constr_record.belongs_to_typ
+                      then Ok constr_record
+                      else
+                        Or_error.error
+                          "TypeInferenceError: Constructor doesn't match type"
+                          (constr, tid)
+                          [%sexp_of: Ast.Constructor.t * Ast.TypeIdentifier.t])
+                  >>= fun constr_record ->
+                  (*2- get list*)
+                  let typs =
+                    match constr_record.arg_type with
+                    | Ast.Typ.TProd typs -> typs
+                    | typ -> [ typ ]
+                  in
+                  (*3- Match id list*)
+                  Utils.try_zip_list_or_error id_list typs
+                    (Or_error.error
+                       (Printf.sprintf
+                          "TypeInferenceError: Expected # of arguments: %d, \
+                           actual number of arguments: %d"
+                          (List.length typs) (List.length id_list))
+                       (id_list, typs)
+                       [%sexp_of: Ast.ObjIdentifier.t list * Ast.Typ.t list])
+                  >>= fun zipped_list ->
+                  let new_ctx =
+                    Typing_context.ObjTypingContext.add_all_mappings ctx
+                      zipped_list
+                  in
+                  type_inference_expression meta_ctx new_ctx type_ctx expr
+              | _ ->
+                  Or_error.error
+                    "TypeInferenceError: Mismatch between type and pattern."
+                    (pattn, inferred_typ) [%sexp_of: Ast.Pattern.t * Ast.Typ.t])
+          |> Or_error.combine_errors
+      | _ ->
+          Or_error.error
+            "TypeInferenceError: Match clause only supports product types, sum \
+             types and identifier types"
+            inferred_typ [%sexp_of: Ast.Typ.t])
+      >>= fun inferred_types_for_each_outcome ->
+      (* Finally, check that all branches have the same type *)
+      match
+        List.all_equal inferred_types_for_each_outcome ~equal:Ast.Typ.equal
+      with
+      | None ->
+          error
+            "TypeInferenceError: all outcomes of a Match expr must have the \
+             same type"
+            (List.dedup_and_sort inferred_types_for_each_outcome
+               ~compare:Ast.Typ.compare)
+            [%sexp_of: Ast.Typ.t list]
+      | Some typ -> Ok typ)
+  | Ast.Expr.Constr (constr, e) -> (
+      (* Check if constructor is defined *)
+      match
+        Typing_context.TypeConstrTypingContext.get_typ_from_constr type_ctx
+          constr
+      with
+      | None ->
+          Or_error.error "TypeInferenceError: Constructor is undefined" constr
+            [%sexp_of: Ast.Constructor.t]
+      | Some constr_record ->
+        (* Defined, so check arguments *)
+          type_check_expression meta_ctx ctx type_ctx e constr_record.arg_type
+          |> Or_error.tag
+               ~tag:
+                 (Printf.sprintf
+                    "TypeInferenceError: On Constructor %s: argument type \
+                     mismatch. Expected type %s"
+                    (Ast.Constructor.get_name constr)
+                    (Ast.Typ.show constr_record.arg_type))
+          >>= fun _ -> Ok (Ast.Typ.TIdentifier constr_record.belongs_to_typ))
 
 let process_top_level meta_ctx ctx type_ctx = function
   | Ast.TopLevelDefn.Definition (iddef, e) ->
@@ -396,4 +540,3 @@ let type_check_program
     ?(type_ctx = Typing_context.TypeConstrTypingContext.empty) program =
   let open Or_error.Monad_infix in
   program |> type_check_program_aux meta_ctx obj_ctx type_ctx
-  >>= fun typed_program -> Ast.TypedProgram.populate_index typed_program

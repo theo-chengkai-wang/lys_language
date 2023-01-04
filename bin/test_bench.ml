@@ -1,6 +1,10 @@
 (* let () = print_endline "Hello, World!" *)
 (* My test bench *)
 
+(*
+  TODO: not going to work: moved populate_index out of type-checking   
+*)
+
 open Core
 open Lys_parsing
 open Lys_typing

@@ -8,6 +8,7 @@ open Core
 let exec_program str =
   str |> Lexing.from_string |> Lex_and_parse.parse_program
   |> Ast.Program.of_past |> Typecore.type_check_program |> ok_exn
+  |> Ast.TypedProgram.populate_index |> ok_exn
   |> Interpreter.evaluate_program |> Or_error.ok
 
 let print_res res =

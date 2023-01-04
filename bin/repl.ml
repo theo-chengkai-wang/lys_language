@@ -8,6 +8,7 @@ let loop program context () =
   program |> Lexing.from_string |> Lex_and_parse.parse_program
   |> Ast.Program.of_past
   |> Typecore.type_check_program ~obj_ctx:(Interpreter.EvaluationContext.to_typing_obj_context context) |> ok_exn
+  |> Ast.TypedProgram.populate_index |> ok_exn
   |> Interpreter.evaluate_top_level_defns ~top_level_context:context
   |> ok_exn
 
