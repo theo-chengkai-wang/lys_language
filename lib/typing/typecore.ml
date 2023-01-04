@@ -1,6 +1,6 @@
 open Core
 open Lys_ast
-
+open Lys_utils
 (*
   TODO: Maybe instead of doing 1 pass, do 2 passes to distinguish Past->Ast and Type checking AST.   
 *)
@@ -290,6 +290,32 @@ and type_inference_expression meta_ctx ctx type_ctx e =
           "TypeInferenceError: Type mismatch between context and expressions \
            provided to substitute in."
       >>= fun () -> (*3- now context match*) Ok box_typ
+  | Ast.Expr.Match (e, pattn_expr_list) -> 
+    (*
+      1- infer type of e
+      2- Cases: 
+      - e is a product: check if all patterns are of the correct type
+      - e is a sum: check if all the patterns are of the correct type
+      - e is a datatype:  check if all the patterns are of the correct type
+      and give the zipped list of binder-type
+      3- check that if we put all the binders in the types required we get what we want
+    *)
+    (* type_inference_expression meta_ctx ctx type_ctx e >>= fun inferred_typ -> 
+      (match inferred_typ with
+      | Ast.Typ.TProd (t1, t2) -> 
+        List.iter pattn_expr_list ~f:(fun (pattn, expr) -> 
+          (*1- Check the pattern is a correct one*)
+          Ok () >>= fun () ->
+          (*2- Now match the binders*)
+          let binders = Ast.Pattern.get_binders pattn in
+          Utils.try_zip_list_or_error binders [t1;t2] (error "TypeInferenceError: pattern argument # doesn't correspond to the expected #" (pattn, inferred_typ) [%sexp_of: Ast.Pattern.t * Ast.Typ.t])
+        ) >>= fun () -> Ok ()
+      | Ast.Typ.TSum (t1, t2) -> Ok ()
+      | Ast.Typ.TIdentifier (tid) -> Ok ()
+      | _ -> Or_error.error "TypeInferenceError: Match clause only supports product types, sum types and identifier types") *)
+    
+    Or_error.unimplemented "Unimplemented Match case"
+  | Ast.Expr.Constr (constr, e) -> Or_error.unimplemented "Unimplemented Constr case" 
 
 let process_top_level meta_ctx ctx type_ctx = function
   | Ast.TopLevelDefn.Definition (iddef, e) ->
@@ -324,6 +350,12 @@ let process_top_level meta_ctx ctx type_ctx = function
       let open Or_error.Monad_infix in
       type_inference_expression meta_ctx ctx type_ctx e >>= fun typ ->
       Ok (Ast.TypedTopLevelDefn.Expression (typ, e), meta_ctx, ctx, type_ctx)
+  | Ast.TopLevelDefn.DatatypeDecl (tid, constr_typ_list) ->
+      let open Or_error.Monad_infix in
+      Typing_context.TypeConstrTypingContext.add_typ_from_decl type_ctx
+        (tid, constr_typ_list)
+      >>= fun new_type_ctx ->
+      Ok (Ast.TypedTopLevelDefn.DatatypeDecl (tid, constr_typ_list), meta_ctx, ctx, new_type_ctx)
 
 let rec type_check_program_aux meta_ctx ctx type_ctx program =
   match program with
