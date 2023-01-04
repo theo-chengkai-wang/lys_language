@@ -60,8 +60,8 @@ rule read =
     | "then" {THEN}
     | "else" {ELSE}
     | "fun" {FUN}
-    | "fst" {FST}
-    | "snd" {SND}
+    (* | "fst" {FST}
+    | "snd" {SND} *)
     | "L" {INL}
     | "R" {INR}
     | "match" {MATCH}

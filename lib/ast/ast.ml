@@ -213,7 +213,7 @@ and Typ : sig
     | TIdentifier of TypeIdentifier.t
     | TFun of t * t
     | TBox of Context.t * t
-    | TProd of t * t
+    | TProd of t list
     | TSum of t * t
   [@@deriving sexp, show, compare, equal]
 
@@ -226,7 +226,7 @@ end = struct
     | TIdentifier of TypeIdentifier.t
     | TFun of t * t
     | TBox of Context.t * t
-    | TProd of t * t
+    | TProd of t list
     | TSum of t * t
   [@@deriving sexp, show, compare, equal]
 
@@ -237,8 +237,9 @@ end = struct
     | Past.Typ.TIdentifier id -> TIdentifier (TypeIdentifier.of_past id)
     | Past.Typ.TFun (t1, t2) -> TFun (of_past t1, of_past t2)
     | Past.Typ.TBox (ctx, t1) -> TBox (Context.of_past ctx, of_past t1)
-    | Past.Typ.TProd (t1, t2) -> TProd (of_past t1, of_past t2)
+    | Past.Typ.TProd (ts) -> TProd (List.map ts ~f:(of_past))
     | Past.Typ.TSum (t1, t2) -> TSum (of_past t1, of_past t2)
+
 end
 
 and IdentifierDefn : sig
@@ -352,6 +353,7 @@ and Pattern : sig
   [@@deriving sexp, show, equal, compare]
 
   val of_past : Past.Pattern.t -> t
+  val get_binders : t -> ObjIdentifier.t list
 end = struct
   type t =
     | Datatype of (Constructor.t * ObjIdentifier.t list)
@@ -374,6 +376,14 @@ end = struct
         Prod (List.map id_list ~f:ObjIdentifier.of_past)
     | Past.Pattern.Id id -> Id (ObjIdentifier.of_past id)
     | Past.Pattern.Wildcard -> Wildcard
+
+  let get_binders = function
+    | Datatype (_, objid_list) -> objid_list
+    | Inl id -> [ id ]
+    | Inr id -> [ id ]
+    | Prod id_list -> id_list
+    | Id id -> [ id ]
+    | Wildcard -> []
 end
 
 and Expr : sig
@@ -382,9 +392,10 @@ and Expr : sig
     | Constant of Constant.t (*c*)
     | UnaryOp of UnaryOperator.t * t (*unop e*)
     | BinaryOp of BinaryOperator.t * t * t (*e op e'*)
-    | Prod of t * t (*(e, e')*)
-    | Fst of t (*fst e*)
-    | Snd of t (*snd e*)
+    | Prod of t list (*(e, e')*)
+    (* | Fst of t (*fst e*)
+    | Snd of t snd e *)
+    | Nth of (t * int)
     | Left of Typ.t * Typ.t * t (*L[A,B] e*)
     | Right of Typ.t * Typ.t * t (*R[A,B] e*)
     | Case of t * IdentifierDefn.t * t * IdentifierDefn.t * t
@@ -427,9 +438,10 @@ end = struct
     | Constant of Constant.t (*c*)
     | UnaryOp of UnaryOperator.t * t (*unop e*)
     | BinaryOp of BinaryOperator.t * t * t (*e op e'*)
-    | Prod of t * t (*(e, e')*)
-    | Fst of t (*fst e*)
-    | Snd of t (*snd e*)
+    | Prod of t list (*(e, e')*)
+    (* | Fst of t (*fst e*)
+    | Snd of t snd e *)
+    | Nth of (t * int)
     | Left of Typ.t * Typ.t * t (*L[A,B] e*)
     | Right of Typ.t * Typ.t * t (*R[A,B] e*)
     | Case of t * IdentifierDefn.t * t * IdentifierDefn.t * t
@@ -456,9 +468,10 @@ end = struct
         UnaryOp (UnaryOperator.of_past op, of_past expr)
     | Past.Expr.BinaryOp (op, expr, expr2) ->
         BinaryOp (BinaryOperator.of_past op, of_past expr, of_past expr2)
-    | Past.Expr.Prod (expr1, expr2) -> Prod (of_past expr1, of_past expr2)
-    | Past.Expr.Fst expr -> Fst (of_past expr)
-    | Past.Expr.Snd expr -> Snd (of_past expr)
+    | Past.Expr.Prod (expr_list) -> Prod (List.map expr_list ~f:(of_past))
+    (* | Past.Expr.Fst expr -> Fst (of_past expr)
+    | Past.Expr.Snd expr -> Snd (of_past expr) *)
+    | Past.Expr.Nth (expr, i) -> Nth (of_past expr, i)
     | Past.Expr.Left (t1, t2, expr) ->
         Left (Typ.of_past t1, Typ.of_past t2, of_past expr)
     | Past.Expr.Right (t1, t2, expr) ->
@@ -513,21 +526,20 @@ end = struct
         populate_index expr2 ~current_ast_level ~current_identifiers
           ~current_meta_ast_level ~current_meta_identifiers
         >>= fun expr2 -> Ok (BinaryOp (op, expr, expr2))
-    | Prod (expr1, expr2) ->
-        populate_index expr1 ~current_ast_level ~current_identifiers
-          ~current_meta_ast_level ~current_meta_identifiers
-        >>= fun expr1 ->
-        populate_index expr2 ~current_ast_level ~current_identifiers
-          ~current_meta_ast_level ~current_meta_identifiers
-        >>= fun expr2 -> Ok (Prod (expr1, expr2))
-    | Fst expr ->
+    | Prod (exprs) ->
+        List.map exprs ~f:(populate_index ~current_ast_level ~current_identifiers ~current_meta_ast_level ~current_meta_identifiers)
+        |> Or_error.combine_errors >>= fun new_exprs -> Ok (Prod (new_exprs))
+    (* | Fst expr ->
         populate_index expr ~current_ast_level ~current_identifiers
           ~current_meta_ast_level ~current_meta_identifiers
         >>= fun expr -> Ok (Fst expr)
     | Snd expr ->
         populate_index expr ~current_ast_level ~current_identifiers
           ~current_meta_ast_level ~current_meta_identifiers
-        >>= fun expr -> Ok (Snd expr)
+        >>= fun expr -> Ok (Snd expr) *)
+    | Nth (expr, i) -> populate_index expr ~current_ast_level ~current_identifiers
+    ~current_meta_ast_level ~current_meta_identifiers
+  >>= fun expr -> Ok (Nth (expr, i))
     | Left (t1, t2, expr) ->
         populate_index expr ~current_ast_level ~current_identifiers
           ~current_meta_ast_level ~current_meta_identifiers
@@ -690,17 +702,17 @@ end = struct
         >>= fun expr ->
         shift_indices expr2 ~obj_depth ~meta_depth ~obj_offset ~meta_offset
         >>= fun expr2 -> Ok (BinaryOp (op, expr, expr2))
-    | Prod (expr1, expr2) ->
-        shift_indices expr1 ~obj_depth ~meta_depth ~obj_offset ~meta_offset
-        >>= fun expr1 ->
-        shift_indices expr2 ~obj_depth ~meta_depth ~obj_offset ~meta_offset
-        >>= fun expr2 -> Ok (Prod (expr1, expr2))
-    | Fst expr ->
+    | Prod (exprs) ->
+        List.map exprs ~f:(shift_indices ~obj_depth ~meta_depth ~obj_offset ~meta_offset)
+        |> Or_error.combine_errors >>= fun exprs -> Ok (Prod (exprs))
+    (* | Fst expr ->
         shift_indices expr ~obj_depth ~meta_depth ~obj_offset ~meta_offset
         >>= fun expr -> Ok (Fst expr)
     | Snd expr ->
         shift_indices expr ~obj_depth ~meta_depth ~obj_offset ~meta_offset
-        >>= fun expr -> Ok (Snd expr)
+        >>= fun expr -> Ok (Snd expr) *)
+    | Nth (expr, i) -> shift_indices expr ~obj_depth ~meta_depth ~obj_offset ~meta_offset
+    >>= fun expr -> Ok (Nth (expr, i))
     | Left (t1, t2, expr) ->
         shift_indices expr ~obj_depth ~meta_depth ~obj_offset ~meta_offset
         >>= fun expr -> Ok (Left (t1, t2, expr))
@@ -776,7 +788,7 @@ end
 and Value : sig
   type t =
     | Constant of Constant.t (*c*)
-    | Prod of t * t (*(e, e')*)
+    | Prod of t list (*(e, e')*)
     | Left of Typ.t * Typ.t * t (*L[A,B] e*)
     | Right of Typ.t * Typ.t * t (*R[A,B] e*)
     | Lambda of IdentifierDefn.t * Expr.t (*fun (x : A) -> e*)
@@ -788,7 +800,7 @@ and Value : sig
 end = struct
   type t =
     | Constant of Constant.t (*c*)
-    | Prod of t * t (*(e, e')*)
+    | Prod of t list (*(e, e')*)
     | Left of Typ.t * Typ.t * t (*L[A,B] e*)
     | Right of Typ.t * Typ.t * t (*R[A,B] e*)
     | Lambda of IdentifierDefn.t * Expr.t (*fun (x : A) -> e*)
@@ -798,7 +810,7 @@ end = struct
 
   let rec to_expr = function
     | Constant c -> Expr.Constant c
-    | Prod (a, b) -> Expr.Prod (to_expr a, to_expr b)
+    | Prod (xs) -> Expr.Prod (List.map xs ~f:(to_expr))
     | Left (t1, t2, v) -> Expr.Left (t1, t2, to_expr v)
     | Right (t1, t2, v) -> Expr.Right (t1, t2, to_expr v)
     | Lambda (iddef, expr) -> Expr.Lambda (iddef, expr)

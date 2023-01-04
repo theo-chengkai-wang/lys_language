@@ -59,16 +59,19 @@ let rec substitute_aux expr_subst_for id_str current_depth expr_subst_in =
       substitute_aux expr_subst_for id_str current_depth expr >>= fun expr ->
       substitute_aux expr_subst_for id_str current_depth expr2 >>= fun expr2 ->
       Ok (Ast.Expr.BinaryOp (op, expr, expr2))
-  | Ast.Expr.Prod (expr1, expr2) ->
-      substitute_aux expr_subst_for id_str current_depth expr1 >>= fun expr1 ->
-      substitute_aux expr_subst_for id_str current_depth expr2 >>= fun expr2 ->
-      Ok (Ast.Expr.Prod (expr1, expr2))
-  | Ast.Expr.Fst expr ->
+  | Ast.Expr.Prod exprs ->
+      List.map exprs ~f:(substitute_aux expr_subst_for id_str current_depth)
+      |> Or_error.combine_errors
+      >>= fun exprs -> Ok (Ast.Expr.Prod exprs)
+  (* | Ast.Expr.Fst expr ->
+         substitute_aux expr_subst_for id_str current_depth expr >>= fun expr ->
+         Ok (Ast.Expr.Fst expr)
+     | Ast.Expr.Snd expr ->
+         substitute_aux expr_subst_for id_str current_depth expr >>= fun expr ->
+         Ok (Ast.Expr.Snd expr) *)
+  | Ast.Expr.Nth (expr, i) ->
       substitute_aux expr_subst_for id_str current_depth expr >>= fun expr ->
-      Ok (Ast.Expr.Fst expr)
-  | Ast.Expr.Snd expr ->
-      substitute_aux expr_subst_for id_str current_depth expr >>= fun expr ->
-      Ok (Ast.Expr.Snd expr)
+      Ok (Ast.Expr.Nth (expr, i))
   | Ast.Expr.Left (t1, t2, expr) ->
       substitute_aux expr_subst_for id_str current_depth expr >>= fun expr ->
       Ok (Ast.Expr.Left (t1, t2, expr))
@@ -136,7 +139,9 @@ let rec sim_substitute_aux zipped_exprs_ids current_depth expr_subst_in =
               String.equal id id_to_check)
         in
         match expr_id_opt with
-        | None -> Ast.ObjIdentifier.shift oid ~depth:current_depth ~offset:(-1) >>= fun oid -> Ok (Ast.Expr.Identifier oid)
+        | None ->
+            Ast.ObjIdentifier.shift oid ~depth:current_depth ~offset:(-1)
+            >>= fun oid -> Ok (Ast.Expr.Identifier oid)
         | Some (expr, id) ->
             (* In the expr to sub in, shift obj DB indices by the current_depth to preserve consistency of the DB indices. *)
             Ast.Expr.shift_indices expr ~obj_depth:0 ~meta_depth:0
@@ -155,16 +160,19 @@ let rec sim_substitute_aux zipped_exprs_ids current_depth expr_subst_in =
       sim_substitute_aux zipped_exprs_ids current_depth expr >>= fun expr ->
       sim_substitute_aux zipped_exprs_ids current_depth expr2 >>= fun expr2 ->
       Ok (Ast.Expr.BinaryOp (op, expr, expr2))
-  | Ast.Expr.Prod (expr1, expr2) ->
-      sim_substitute_aux zipped_exprs_ids current_depth expr1 >>= fun expr1 ->
-      sim_substitute_aux zipped_exprs_ids current_depth expr2 >>= fun expr2 ->
-      Ok (Ast.Expr.Prod (expr1, expr2))
-  | Ast.Expr.Fst expr ->
+  | Ast.Expr.Prod exprs ->
+      List.map exprs ~f:(sim_substitute_aux zipped_exprs_ids current_depth)
+      |> Or_error.combine_errors
+      >>= fun exprs -> Ok (Ast.Expr.Prod exprs)
+  (* | Ast.Expr.Fst expr ->
+         sim_substitute_aux zipped_exprs_ids current_depth expr >>= fun expr ->
+         Ok (Ast.Expr.Fst expr)
+     | Ast.Expr.Snd expr ->
+         sim_substitute_aux zipped_exprs_ids current_depth expr >>= fun expr ->
+         Ok (Ast.Expr.Snd expr) *)
+  | Ast.Expr.Nth (expr, i) ->
       sim_substitute_aux zipped_exprs_ids current_depth expr >>= fun expr ->
-      Ok (Ast.Expr.Fst expr)
-  | Ast.Expr.Snd expr ->
-      sim_substitute_aux zipped_exprs_ids current_depth expr >>= fun expr ->
-      Ok (Ast.Expr.Snd expr)
+      Ok (Ast.Expr.Nth (expr, i))
   | Ast.Expr.Left (t1, t2, expr) ->
       sim_substitute_aux zipped_exprs_ids current_depth expr >>= fun expr ->
       Ok (Ast.Expr.Left (t1, t2, expr))
@@ -253,19 +261,21 @@ let rec meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth
       meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth
         expr2
       >>= fun expr2 -> Ok (Ast.Expr.BinaryOp (op, expr, expr2))
-  | Ast.Expr.Prod (expr1, expr2) ->
-      meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth
-        expr1
-      >>= fun expr1 ->
-      meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth
-        expr2
-      >>= fun expr2 -> Ok (Ast.Expr.Prod (expr1, expr2))
-  | Ast.Expr.Fst expr ->
+  | Ast.Expr.Prod exprs ->
+      List.map exprs
+        ~f:
+          (meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth)
+      |> Or_error.combine_errors
+      >>= fun exprs -> Ok (Ast.Expr.Prod exprs)
+  (* | Ast.Expr.Fst expr ->
+         meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth expr
+         >>= fun expr -> Ok (Ast.Expr.Fst expr)
+     | Ast.Expr.Snd expr ->
+         meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth expr
+         >>= fun expr -> Ok (Ast.Expr.Snd expr) *)
+  | Ast.Expr.Nth (expr, i) ->
       meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth expr
-      >>= fun expr -> Ok (Ast.Expr.Fst expr)
-  | Ast.Expr.Snd expr ->
-      meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth expr
-      >>= fun expr -> Ok (Ast.Expr.Snd expr)
+      >>= fun expr -> Ok (Ast.Expr.Nth (expr, i))
   | Ast.Expr.Left (t1, t2, expr) ->
       meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth expr
       >>= fun expr -> Ok (Ast.Expr.Left (t1, t2, expr))
@@ -328,12 +338,15 @@ let rec meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth
       >>= fun exprs_in_subs ->
       (*Check for equality of u and u'*)
       if not (equal_meta_id_str_depth metaid meta_id_str current_meta_depth)
-      then 
-        Ast.MetaIdentifier.shift ~depth: current_meta_depth ~offset: (-1) metaid >>= fun metaid ->
-        Ok (Ast.Expr.Closure (metaid, exprs_in_subs))
+      then
+        Ast.MetaIdentifier.shift ~depth:current_meta_depth ~offset:(-1) metaid
+        >>= fun metaid -> Ok (Ast.Expr.Closure (metaid, exprs_in_subs))
       else
-        expr_subst_for |> Ast.Expr.shift_indices ~obj_depth:0 ~meta_depth:0 ~obj_offset:0 ~meta_offset:current_meta_depth 
-        >>= fun expr_subst_for -> sim_substitute exprs_in_subs ctx expr_subst_for
+        expr_subst_for
+        |> Ast.Expr.shift_indices ~obj_depth:0 ~meta_depth:0 ~obj_offset:0
+             ~meta_offset:current_meta_depth
+        >>= fun expr_subst_for ->
+        sim_substitute exprs_in_subs ctx expr_subst_for
         |> Or_error.tag
              ~tag:"MetaSubstitutionError: Problem in simulatenous substitution."
 

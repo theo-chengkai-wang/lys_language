@@ -15,13 +15,13 @@ let mkapp f xs =
     in 
     mkapp_aux f rev_xs*)
 
-let list_to_tuple_aux xs init = List.fold xs ~init:init ~f:(fun acc -> fun x -> Expr.Prod (acc, x))
+(*let list_to_tuple_aux xs init = List.fold xs ~init:init ~f:(fun acc -> fun x -> Expr.Prod (acc, x))
 
 let list_to_tuple l = 
     match l with
     | [] -> Expr.Constant (Constant.Unit)
     | [x] -> x
-    | x::xs -> list_to_tuple_aux xs x
+    | x::xs -> list_to_tuple_aux xs x*)
 %}
 
 %token <int> INT
@@ -57,8 +57,8 @@ let list_to_tuple l =
 %token SEMICOLON ";"
 %token LEFT_PAREN "("
 %token RIGHT_PAREN ")"
-%token FST
-%token SND
+// %token FST
+// %token SND
 %token INL
 %token INR
 %token LEFT_BRACKET "["
@@ -112,7 +112,6 @@ let list_to_tuple l =
 %left "*" "/"
 
 %nonassoc UMINUS
-
 // Want simple expressions to be at the highest priority
 %nonassoc SIMPLE_EXPR
 %nonassoc TRUE FALSE INT ID LEFT_PAREN
@@ -158,7 +157,8 @@ simple_expr:
     | LEFT_PAREN; e = expr; RIGHT_PAREN {e}
     | c = constant {Expr.Constant c}
     | i = identifier {Expr.Identifier i}
-    | LEFT_PAREN e1=expr COMMA l = separated_nonempty_list(COMMA, expr) RIGHT_PAREN {list_to_tuple (e1::l)} (*Hack to ensure at least 2 things*)
+    | LEFT_PAREN e1=expr COMMA l = separated_nonempty_list(COMMA, expr) RIGHT_PAREN {Expr.Prod (e1::l)} (*Hack to ensure at least 2 things*)
+    | e = simple_expr; LEFT_BRACKET i = INT RIGHT_BRACKET {Expr.Nth(e, i)}
 
 application_expr:
     | s1 = application_expr; s2 = simple_expr  {Expr.Application (s1, s2)}
@@ -171,7 +171,10 @@ pattern:
     | c = CONSTR {Pattern.Datatype (c, [])}
     | INL i=identifier {Pattern.Inl (i)}
     | INR i = identifier {Pattern.Inr (i)}
-    | LEFT_PAREN i = identifier COMMA is = separated_nonempty_list(COMMA, identifier) RIGHT_PAREN {Pattern.Prod (i::is)}
+    | LEFT_PAREN i = identifier COMMA is = separated_nonempty_list(COMMA, identifier) RIGHT_PAREN {Pattern.Prod (i::is)} 
+    // SCRAPED Decision is only to support 2-ary products   
+    // | LEFT_PAREN i = identifier COMMA i2 = identifier RIGHT_PAREN {Pattern.Prod ([i; i2])}    
+
 ;
 
 pattern_expr: p = pattern "->" e = expr {(p, e)};
@@ -188,8 +191,8 @@ expr:
     (* bigger constructs *)
     | IF e1 = expr THEN e2 = expr ELSE e3=expr {Expr.IfThenElse (e1, e2, e3)}
     | FUN arg = id_typ_declaration "->" e = expr {Expr.Lambda (arg, e)}
-    | FST e = expr {Expr.Fst e}
-    | SND e = expr {Expr.Snd e}
+    // | FST e = expr {Expr.Fst e}
+    // | SND e = expr {Expr.Snd e}
     | INL LEFT_BRACKET t1=typ COMMA t2=typ RIGHT_BRACKET e = expr {Expr.Left (t1, t2, e)}
     | INR LEFT_BRACKET t1=typ COMMA t2=typ RIGHT_BRACKET e = expr {Expr.Right (t1, t2, e)}
     | CASE e1 = simple_expr OF INL id_decl1 = id_typ_declaration "->" e2 = expr "|" INR id_decl2 = id_typ_declaration "->" e3 = expr {Expr.Case (e1, id_decl1, e2, id_decl2, e3)}
@@ -221,7 +224,7 @@ typ:
     | UNIT_typ {Typ.TUnit}
     | i = ID {Typ.TIdentifier (i)}
     | t1 = typ; "->"; t2 = typ /*%prec typ_FUNCTION_ARROW*/ {Typ.TFun (t1, t2)}
-    | t1 = typ; "*"; t2 = typ %prec typ_PRODUCT {Typ.TProd (t1, t2)}
+    | LEFT_PAREN t = typ "*" ts = separated_nonempty_list("*", typ) RIGHT_PAREN %prec typ_PRODUCT {Typ.TProd (t::ts)}
     | t1 = typ; "+"; t2 = typ %prec typ_SUM {Typ.TSum (t1, t2)}
     | LEFT_BRACKET decl_list = separated_list(COMMA, id_typ_declaration) RIGHT_BRACKET t = typ {Typ.TBox (decl_list, t)}
     | LEFT_PAREN t = typ RIGHT_PAREN {t};

@@ -16,7 +16,7 @@ and Typ : sig
     | TIdentifier of Identifier.t
     | TFun of t * t
     | TBox of Context.t * t
-    | TProd of t * t
+    | TProd of t list
     | TSum of t * t
   [@@deriving sexp, show, equal, compare]
 end
@@ -73,9 +73,10 @@ and Expr : sig
     | Constant of Constant.t (*c*)
     | UnaryOp of UnaryOperator.t * t (*unop e*)
     | BinaryOp of BinaryOperator.t * t * t (*e op e'*)
-    | Prod of t * t (*(e, e')*)
-    | Fst of t (*fst e*)
-    | Snd of t (*snd e*)
+    | Prod of t list (*(e, e')*)
+    (*| Fst of t (*fst e*)
+    | Snd of t (*snd e*)*)
+    | Nth of (t * int)
     | Left of Typ.t * Typ.t * t (*L[A,B] e*)
     | Right of Typ.t * Typ.t * t (*R[A,B] e*)
     | Case of t * IdentifierDefn.t * t * IdentifierDefn.t * t

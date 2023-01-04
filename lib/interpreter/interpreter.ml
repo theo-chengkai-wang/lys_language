@@ -14,9 +14,7 @@ module EvaluationContext : sig
   val find_or_error : t -> string -> single_record Or_error.t
   val empty : t
   val show : t -> string
-
-  val to_typing_obj_context :
-    t -> (Ast.Typ.t) Typing_context.ObjTypingContext.t
+  val to_typing_obj_context : t -> Ast.Typ.t Typing_context.ObjTypingContext.t
 end = struct
   type single_record = { typ : Ast.Typ.t; is_rec : bool; value : Ast.Value.t }
   [@@deriving show, sexp, compare, equal]
@@ -158,28 +156,47 @@ let rec multi_step_reduce ~top_level_context ~expr =
              not happen! Type check should have prevented this."
             (Ast.Expr.BinaryOp (op, expr1, expr2))
             [%sexp_of: Ast.Expr.t])
-  | Ast.Expr.Prod (expr1, expr2) ->
-      multi_step_reduce ~top_level_context ~expr:expr1 >>= fun v1 ->
-      multi_step_reduce ~top_level_context ~expr:expr2 >>= fun v2 ->
-      Ok (Ast.Value.Prod (v1, v2))
-  | Ast.Expr.Fst expr -> (
+  | Ast.Expr.Prod exprs ->
+      List.map exprs ~f:(fun expr -> multi_step_reduce ~top_level_context ~expr)
+      |> Or_error.combine_errors
+      >>= fun values -> Ok (Ast.Value.Prod values)
+  (* | Ast.Expr.Fst expr -> (
+         multi_step_reduce ~top_level_context ~expr >>= fun v ->
+         match v with
+         | Ast.Value.Prod (v1, _) -> Ok v1
+         | _ ->
+             error
+               "EvaluationError: type mismatch at Fst. [FATAL] should not happen! \
+                Type check should have prevented this."
+               (Ast.Expr.Fst expr) [%sexp_of: Ast.Expr.t])
+     | Ast.Expr.Snd expr -> (
+         multi_step_reduce ~top_level_context ~expr >>= fun v ->
+         match v with
+         | Ast.Value.Prod (_, v2) -> Ok v2
+         | _ ->
+             error
+               "EvaluationError: type mismatch at Snd. [FATAL] should not happen! \
+                Type check should have prevented this."
+               (Ast.Expr.Snd expr) [%sexp_of: Ast.Expr.t]) *)
+  | Ast.Expr.Nth (expr, i) -> (
       multi_step_reduce ~top_level_context ~expr >>= fun v ->
       match v with
-      | Ast.Value.Prod (v1, _) -> Ok v1
+      | Ast.Value.Prod values -> (
+          match List.nth values i with
+          | None ->
+              error
+                "EvaluationError: type mismatch at Nth: access out of bounds. \
+                 [FATAL] should not happen! Type check should have prevented \
+                 this."
+                (Ast.Expr.Nth (expr, i))
+                [%sexp_of: Ast.Expr.t]
+          | Some v -> Ok v)
       | _ ->
           error
-            "EvaluationError: type mismatch at Fst. [FATAL] should not happen! \
+            "EvaluationError: type mismatch at Nth. [FATAL] should not happen! \
              Type check should have prevented this."
-            (Ast.Expr.Fst expr) [%sexp_of: Ast.Expr.t])
-  | Ast.Expr.Snd expr -> (
-      multi_step_reduce ~top_level_context ~expr >>= fun v ->
-      match v with
-      | Ast.Value.Prod (_, v2) -> Ok v2
-      | _ ->
-          error
-            "EvaluationError: type mismatch at Snd. [FATAL] should not happen! \
-             Type check should have prevented this."
-            (Ast.Expr.Snd expr) [%sexp_of: Ast.Expr.t])
+            (Ast.Expr.Nth (expr, i))
+            [%sexp_of: Ast.Expr.t])
   | Ast.Expr.Left (t1, t2, expr) ->
       multi_step_reduce ~top_level_context ~expr >>= fun v ->
       Ok (Ast.Value.Left (t1, t2, v))

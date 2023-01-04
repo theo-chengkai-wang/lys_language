@@ -103,26 +103,45 @@ and type_inference_expression meta_ctx ctx type_ctx e =
       | Ast.BinaryOperator.LT -> check_both Ast.Typ.TInt Ast.Typ.TBool
       | Ast.BinaryOperator.AND -> check_both Ast.Typ.TBool Ast.Typ.TBool
       | Ast.BinaryOperator.OR -> check_both Ast.Typ.TBool Ast.Typ.TBool)
-  | Ast.Expr.Prod (expr1, expr2) ->
-      type_inference_expression meta_ctx ctx type_ctx expr1 >>= fun typ ->
-      type_inference_expression meta_ctx ctx type_ctx expr2 >>= fun typ2 ->
-      Ok (Ast.Typ.TProd (typ, typ2))
-  | Ast.Expr.Fst expr -> (
+  | Ast.Expr.Prod exprs ->
+      List.map exprs ~f:(type_inference_expression meta_ctx ctx type_ctx)
+      |> Or_error.combine_errors
+      >>= fun typs -> Ok (Ast.Typ.TProd typs)
+  (* | Ast.Expr.Fst expr -> (
+         type_inference_expression meta_ctx ctx type_ctx expr >>= fun typ ->
+         match typ with
+         | Ast.Typ.TProd (typ1, _) -> Ok typ1
+         | _ ->
+             (*ERROR*)
+             error "TypeInferenceError: Argument of fst must be of product type."
+               expr [%sexp_of: Ast.Expr.t])
+     | Ast.Expr.Snd expr -> (
+         type_inference_expression meta_ctx ctx type_ctx expr >>= fun typ ->
+         match typ with
+         | Ast.Typ.TProd (_, typ2) -> Ok typ2
+         | _ ->
+             (*ERROR*)
+             error "TypeInferenceError: Argument of snd must be of product type."
+               expr [%sexp_of: Ast.Expr.t]) *)
+  | Ast.Expr.Nth (expr, i) -> (
       type_inference_expression meta_ctx ctx type_ctx expr >>= fun typ ->
-      match typ with
-      | Ast.Typ.TProd (typ1, _) -> Ok typ1
+      (match typ with
+      | Ast.Typ.TProd typs -> Ok typs
       | _ ->
           (*ERROR*)
-          error "TypeInferenceError: Argument of fst must be of product type."
+          error "TypeInferenceError: Argument of  _[i] must be of product type."
             expr [%sexp_of: Ast.Expr.t])
-  | Ast.Expr.Snd expr -> (
-      type_inference_expression meta_ctx ctx type_ctx expr >>= fun typ ->
-      match typ with
-      | Ast.Typ.TProd (_, typ2) -> Ok typ2
-      | _ ->
-          (*ERROR*)
-          error "TypeInferenceError: Argument of snd must be of product type."
-            expr [%sexp_of: Ast.Expr.t])
+      >>= fun typs ->
+      (*Check length*)
+      match List.nth typs i with
+      | None ->
+          error
+            (Printf.sprintf
+               "TypeInferenceError: can't project outside of the range of the \
+                tuple length [0; %s]"
+                (Int.to_string (List.length typs)))
+            (expr, i) [%sexp_of: Ast.Expr.t * int]
+      | Some typ -> Ok typ)
   | Ast.Expr.Left (t1, t2, expr) ->
       Or_error.tag
         (type_check_expression meta_ctx ctx type_ctx expr t1)
@@ -290,8 +309,8 @@ and type_inference_expression meta_ctx ctx type_ctx e =
           "TypeInferenceError: Type mismatch between context and expressions \
            provided to substitute in."
       >>= fun () -> (*3- now context match*) Ok box_typ
-  | Ast.Expr.Match (e, pattn_expr_list) -> 
-    (*
+  | Ast.Expr.Match (e, pattn_expr_list) ->
+      (*
       1- infer type of e
       2- Cases: 
       - e is a product: check if all patterns are of the correct type
@@ -300,22 +319,22 @@ and type_inference_expression meta_ctx ctx type_ctx e =
       and give the zipped list of binder-type
       3- check that if we put all the binders in the types required we get what we want
     *)
-    (* type_inference_expression meta_ctx ctx type_ctx e >>= fun inferred_typ -> 
-      (match inferred_typ with
-      | Ast.Typ.TProd (t1, t2) -> 
-        List.iter pattn_expr_list ~f:(fun (pattn, expr) -> 
-          (*1- Check the pattern is a correct one*)
-          Ok () >>= fun () ->
-          (*2- Now match the binders*)
-          let binders = Ast.Pattern.get_binders pattn in
-          Utils.try_zip_list_or_error binders [t1;t2] (error "TypeInferenceError: pattern argument # doesn't correspond to the expected #" (pattn, inferred_typ) [%sexp_of: Ast.Pattern.t * Ast.Typ.t])
-        ) >>= fun () -> Ok ()
-      | Ast.Typ.TSum (t1, t2) -> Ok ()
-      | Ast.Typ.TIdentifier (tid) -> Ok ()
-      | _ -> Or_error.error "TypeInferenceError: Match clause only supports product types, sum types and identifier types") *)
-    
-    Or_error.unimplemented "Unimplemented Match case"
-  | Ast.Expr.Constr (constr, e) -> Or_error.unimplemented "Unimplemented Constr case" 
+      (* type_inference_expression meta_ctx ctx type_ctx e >>= fun inferred_typ ->
+         (match inferred_typ with
+         | Ast.Typ.TProd (t1, t2) ->
+           List.iter pattn_expr_list ~f:(fun (pattn, expr) ->
+             (*1- Check the pattern is a correct one*)
+             Ok () >>= fun () ->
+             (*2- Now match the binders*)
+             let binders = Ast.Pattern.get_binders pattn in
+             Utils.try_zip_list_or_error binders [t1;t2] (error "TypeInferenceError: pattern argument # doesn't correspond to the expected #" (pattn, inferred_typ) [%sexp_of: Ast.Pattern.t * Ast.Typ.t])
+           ) >>= fun () -> Ok ()
+         | Ast.Typ.TSum (t1, t2) -> Ok ()
+         | Ast.Typ.TIdentifier (tid) -> Ok ()
+         | _ -> Or_error.error "TypeInferenceError: Match clause only supports product types, sum types and identifier types") *)
+      Or_error.unimplemented "Unimplemented Match case"
+  | Ast.Expr.Constr (constr, e) ->
+      Or_error.unimplemented "Unimplemented Constr case"
 
 let process_top_level meta_ctx ctx type_ctx = function
   | Ast.TopLevelDefn.Definition (iddef, e) ->
@@ -355,7 +374,11 @@ let process_top_level meta_ctx ctx type_ctx = function
       Typing_context.TypeConstrTypingContext.add_typ_from_decl type_ctx
         (tid, constr_typ_list)
       >>= fun new_type_ctx ->
-      Ok (Ast.TypedTopLevelDefn.DatatypeDecl (tid, constr_typ_list), meta_ctx, ctx, new_type_ctx)
+      Ok
+        ( Ast.TypedTopLevelDefn.DatatypeDecl (tid, constr_typ_list),
+          meta_ctx,
+          ctx,
+          new_type_ctx )
 
 let rec type_check_program_aux meta_ctx ctx type_ctx program =
   match program with

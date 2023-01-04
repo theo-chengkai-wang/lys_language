@@ -34,16 +34,17 @@ end
 
 module type Constructor_type = sig
   type t [@@deriving sexp, show, compare, equal]
-  val of_string: string -> t
-  val of_past: Past.Constructor.t -> t
-  val get_name: t -> string
+
+  val of_string : string -> t
+  val of_past : Past.Constructor.t -> t
+  val get_name : t -> string
 end
 
 module type TypeIdentifier_type = sig
   (*Unused for now*)
   type t [@@deriving sexp, show, compare, equal]
 
-  val get_name: t -> string
+  val get_name : t -> string
   val of_string : string -> t
   val of_past : Past.Identifier.t -> t
 end
@@ -71,7 +72,7 @@ end
 module rec ObjIdentifier : ObjIdentifier_type
 and MetaIdentifier : MetaIdentifier_type
 and TypeIdentifier : TypeIdentifier_type
-and Constructor: Constructor_type
+and Constructor : Constructor_type
 
 and Typ : sig
   type t =
@@ -81,7 +82,7 @@ and Typ : sig
     | TIdentifier of TypeIdentifier.t
     | TFun of t * t
     | TBox of Context.t * t
-    | TProd of t * t
+    | TProd of t list
     | TSum of t * t
   [@@deriving sexp, show, compare, equal]
 
@@ -144,7 +145,8 @@ and Pattern : sig
     | Wildcard
   [@@deriving sexp, show, equal, compare]
 
-  val of_past: Past.Pattern.t -> t
+  val of_past : Past.Pattern.t -> t
+  val get_binders : t -> ObjIdentifier.t list
 end
 
 and Expr : sig
@@ -153,9 +155,10 @@ and Expr : sig
     | Constant of Constant.t (*c*)
     | UnaryOp of UnaryOperator.t * t (*unop e*)
     | BinaryOp of BinaryOperator.t * t * t (*e op e'*)
-    | Prod of t * t (*(e, e')*)
-    | Fst of t (*fst e*)
-    | Snd of t (*snd e*)
+    | Prod of t list (*(e, e')*)
+    (* | Fst of t (*fst e*)
+    | Snd of t snd e *)
+    | Nth of (t * int)
     | Left of Typ.t * Typ.t * t (*L[A,B] e*)
     | Right of Typ.t * Typ.t * t (*R[A,B] e*)
     | Case of t * IdentifierDefn.t * t * IdentifierDefn.t * t
@@ -196,17 +199,16 @@ end
 
 and Value : sig
   type t =
-  | Constant of Constant.t (*c*)
-  | Prod of t * t (*(e, e')*)
-  | Left of Typ.t * Typ.t * t (*L[A,B] e*)
-  | Right of Typ.t * Typ.t * t (*R[A,B] e*)
-  | Lambda of IdentifierDefn.t * Expr.t (*fun (x : A) -> e*)
-  | Box of Context.t * Expr.t (*box (x:A, y:B |- e)*)
-  | Constr of Constructor.t * t
-[@@deriving sexp, show, compare, equal]
+    | Constant of Constant.t (*c*)
+    | Prod of t list (*(e, e')*)
+    | Left of Typ.t * Typ.t * t (*L[A,B] e*)
+    | Right of Typ.t * Typ.t * t (*R[A,B] e*)
+    | Lambda of IdentifierDefn.t * Expr.t (*fun (x : A) -> e*)
+    | Box of Context.t * Expr.t (*box (x:A, y:B |- e)*)
+    | Constr of Constructor.t * t
+  [@@deriving sexp, show, compare, equal]
 
-val to_expr : Value.t -> Expr.t
-
+  val to_expr : Value.t -> Expr.t
 end
 
 and Directive : sig

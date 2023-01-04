@@ -20,22 +20,31 @@ let test_unit _ =
 
 let test_prod _ =
   assert_equal
-    (Some (Past.Expr.Prod (Past.Expr.Identifier "x", Past.Expr.Identifier "y")))
+    (Some
+       (Past.Expr.Prod [ Past.Expr.Identifier "x"; Past.Expr.Identifier "y" ]))
     (parse_expression (Lexing.from_string "(x, y);;"))
 
-let test_fst _ =
-  assert_equal
-    (Some
-       (Past.Expr.Fst
-          (Past.Expr.Prod (Past.Expr.Identifier "x", Past.Expr.Identifier "y"))))
-    (parse_expression (Lexing.from_string "fst (x, y);;"))
+(* let test_fst _ =
+     assert_equal
+       (Some
+          (Past.Expr.Fst
+             (Past.Expr.Prod (Past.Expr.Identifier "x", Past.Expr.Identifier "y"))))
+       (parse_expression (Lexing.from_string "fst (x, y);;"))
 
-let test_snd _ =
+   let test_snd _ =
+     assert_equal
+       (Some
+          (Past.Expr.Snd
+             (Past.Expr.Prod (Past.Expr.Identifier "x", Past.Expr.Identifier "y"))))
+       (parse_expression (Lexing.from_string "snd (x, y);;")) *)
+
+let test_nth _ =
   assert_equal
     (Some
-       (Past.Expr.Snd
-          (Past.Expr.Prod (Past.Expr.Identifier "x", Past.Expr.Identifier "y"))))
-    (parse_expression (Lexing.from_string "snd (x, y);;"))
+       (Past.Expr.Nth
+          ( Past.Expr.Prod [ Past.Expr.Identifier "x"; Past.Expr.Identifier "y" ],
+            0 )))
+    (parse_expression (Lexing.from_string "(x, y)[0];;"))
 
 let test_fun _ =
   assert_equal
@@ -56,8 +65,8 @@ let test_app _ =
                         Past.Expr.Identifier "g" ),
                     Past.Expr.Identifier "h" ),
                 Past.Expr.Prod
-                  ( Past.Expr.Constant (Past.Constant.Integer 1),
-                    Past.Expr.Constant (Past.Constant.Integer 2) ) ),
+                  ( [Past.Expr.Constant (Past.Constant.Integer 1);
+                    Past.Expr.Constant (Past.Constant.Integer 2)] ) ),
             Past.Expr.Left
               ( Past.Typ.TInt,
                 Past.Typ.TInt,
@@ -152,8 +161,8 @@ let test_let_rec _ =
     (Some
        (Past.Expr.LetRec
           ( ( "x",
-              Past.Typ.TFun (Past.Typ.TIdentifier "_A", Past.Typ.TIdentifier "_B")
-            ),
+              Past.Typ.TFun
+                (Past.Typ.TIdentifier "_A", Past.Typ.TIdentifier "_B") ),
             Past.Expr.Identifier "y",
             Past.Expr.Identifier "b" )))
     (parse_expression (Lexing.from_string "let rec x: _A -> _B = y in b;;"))
@@ -451,7 +460,7 @@ let test_datatype_def _ =
             ("Con1", Past.Typ.TInt);
             ("Con3", Past.Typ.TUnit);
             ( "Con4",
-              Past.Typ.TProd (Past.Typ.TInt, Past.Typ.TIdentifier "sometype") );
+              Past.Typ.TProd ([Past.Typ.TInt; Past.Typ.TIdentifier "sometype"]) );
           ] );
     ]
     (parse_program
@@ -475,9 +484,9 @@ let test_datatype_definition _ =
           Past.Expr.Constr
             ( "Con4",
               Past.Expr.Prod
-                ( Past.Expr.Constant (Past.Constant.Integer 1),
+                ( [Past.Expr.Constant (Past.Constant.Integer 1);
                   Past.Expr.Constr
-                    ("Con2", Past.Expr.Constant (Past.Constant.Integer 1)) ) )
+                    ("Con2", Past.Expr.Constant (Past.Constant.Integer 1))] ) )
         );
     ]
     (parse_program (Lexing.from_string "let y:sometype = Con4 (1, Con2 1);;"))
@@ -507,8 +516,9 @@ let suite =
          "test_bool_true" >:: test_bool_true;
          "test_bool_false" >:: test_bool_false;
          "test_prod" >:: test_prod;
-         "test_fst" >:: test_fst;
-         "test_snd" >:: test_snd;
+         (* "test_fst" >:: test_fst;
+         "test_snd" >:: test_snd; *)
+         "test_nth" >:: test_nth;
          "test_fun" >:: test_fun;
          "test_app" >:: test_app;
          "test_unit" >:: test_unit;

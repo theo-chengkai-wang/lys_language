@@ -71,17 +71,11 @@ let test_infer_integer _ =
 let test_both_sides_of_equality_must_have_same_type _ =
   assert_equal (Or_error.ok (type_infer_from_str "1=true;;")) None
 
-let test_product_type_fst _ =
-  assert_equal (Or_error.ok (type_infer_from_str "fst 1;;")) None;
+let test_product_type_nth _ =
+  assert_equal (Or_error.ok (type_infer_from_str "1[1];;")) None;
   assert_equal
-    (Or_error.ok (type_infer_from_str "fst (1,1);;"))
+    (Or_error.ok (type_infer_from_str "(1,1,1)[1];;"))
     (Some Ast.Typ.TInt)
-
-let test_product_type_snd _ =
-  assert_equal (Or_error.ok (type_infer_from_str "snd 1;;")) None;
-  assert_equal
-    (Or_error.ok (type_infer_from_str "snd (1,true);;"))
-    (Some Ast.Typ.TBool)
 
 let test_sum_type_inl _ =
   assert_equal
@@ -160,8 +154,7 @@ let standard_suite =
          "test_infer_integer" >:: test_infer_integer;
          "test_both_sides_of_equality_must_have_same_type"
          >:: test_both_sides_of_equality_must_have_same_type;
-         "test_product_type_fst" >:: test_product_type_fst;
-         "test_product_type_snd" >:: test_product_type_snd;
+         "test_product_type_nth" >:: test_product_type_nth;
          "test_sum_type_inl" >:: test_sum_type_inl;
          "test_sum_type_inr" >:: test_sum_type_inr;
          "test_case" >:: test_case;
