@@ -8,12 +8,14 @@ open Core
 val type_inference_expression :
   (Ast.Context.t * Ast.Typ.t) Typing_context.MetaTypingContext.t ->
   Ast.Typ.t Typing_context.ObjTypingContext.t ->
+  Typing_context.TypeConstrTypingContext.t ->
   Ast.Expr.t ->
   Ast.Typ.t Or_error.t
 
 val type_check_expression :
   (Ast.Context.t * Ast.Typ.t) Typing_context.MetaTypingContext.t ->
   Ast.Typ.t Typing_context.ObjTypingContext.t ->
+  Typing_context.TypeConstrTypingContext.t ->
   Ast.Expr.t ->
   Ast.Typ.t ->
   unit Or_error.t
@@ -21,5 +23,6 @@ val type_check_expression :
 val type_check_program :
   ?meta_ctx:(Ast.Context.t * Ast.Typ.t) Typing_context.MetaTypingContext.t ->
   ?obj_ctx:Ast.Typ.t Typing_context.ObjTypingContext.t ->
+  ?type_ctx: Typing_context.TypeConstrTypingContext.t ->
   Ast.Program.t ->
   Ast.TypedProgram.t Or_error.t

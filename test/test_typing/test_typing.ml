@@ -18,9 +18,11 @@ let type_infer
     ?meta_context:(meta_ctx =
         Typing_context.MetaTypingContext.create_empty_context ())
     ?obj_context:(obj_ctx =
-        Typing_context.ObjTypingContext.create_empty_context ()) lexbuf =
+        Typing_context.ObjTypingContext.create_empty_context ())
+    ?type_context:(typ_ctx = Typing_context.TypeConstrTypingContext.empty)
+    lexbuf =
   lexbuf |> parse_expr_exn |> Ast.Expr.of_past
-  |> Lys_typing.Typecore.type_inference_expression meta_ctx obj_ctx
+  |> Lys_typing.Typecore.type_inference_expression meta_ctx obj_ctx typ_ctx
 
 let type_infer_from_str
     ?meta_context:(meta_ctx =
@@ -33,7 +35,9 @@ let type_infer_from_str
 (* m1-m8 *)
 
 let test_read_prog filename _ =
-  let parsed_program = read_parse_file_as_program filename |> Ast.Program.of_past in
+  let parsed_program =
+    read_parse_file_as_program filename |> Ast.Program.of_past
+  in
   match Typecore.type_check_program parsed_program with
   | Ok _ -> ()
   | Error _ -> assert_failure "Type checking failed."
@@ -170,15 +174,13 @@ let standard_suite =
 
 (* CMTT *)
 
-let test_box _ = 
+let test_box _ =
   assert_equal
-  (Or_error.ok
-     (type_infer_from_str "box (x:int |- x);;"))
-  (Some (TBox ([(Ast.ObjIdentifier.of_string "x", TInt)] , TInt)));
-assert_equal ~msg:"Duplicate variable in box context"
-  (Or_error.ok (type_infer_from_str "box (x: int, x:int |- x);;"))
-  None
-
+    (Or_error.ok (type_infer_from_str "box (x:int |- x);;"))
+    (Some (TBox ([ (Ast.ObjIdentifier.of_string "x", TInt) ], TInt)));
+  assert_equal ~msg:"Duplicate variable in box context"
+    (Or_error.ok (type_infer_from_str "box (x: int, x:int |- x);;"))
+    None
 
 let test_let_box _ =
   assert_equal
@@ -213,7 +215,7 @@ let test_closure_unmatched_context_wrt_arguments _ =
 let cmtt_suite =
   "cmtt_suite"
   >::: [
-        "test_box" >:: test_box;
+         "test_box" >:: test_box;
          "test_let_box_correct" >:: test_let_box;
          "test_closure_correct" >:: test_closure_correct;
          "test_closure_unbound_meta" >:: test_closure_unbound_meta;

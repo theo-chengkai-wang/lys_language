@@ -32,6 +32,7 @@ module type TypeConstrTypingContext_type = sig
   (*None means type doesn't exist, Some [] means type exists but is empty*)
 
   val get_typ_from_constr : t -> Ast.Constructor.t -> constr_record option
+  val empty : t
 end
 
 module ConstructorsMap = Map.Make (Ast.Constructor)
@@ -62,7 +63,11 @@ module TypeConstrTypingContext : TypeConstrTypingContext_type = struct
           (Printf.sprintf
              "TypeConstrTypingContextError: Constructor %s already defined"
              (Ast.Constructor.get_name c))
-          (c, tid, constructor_type_list) [%sexp_of: Ast.Constructor.t * Ast.TypeIdentifier.t * ((Ast.Constructor.t * Ast.Typ.t) list)]
+          (c, tid, constructor_type_list)
+          [%sexp_of:
+            Ast.Constructor.t
+            * Ast.TypeIdentifier.t
+            * (Ast.Constructor.t * Ast.Typ.t) list]
     | None ->
         let new_records =
           List.map constructor_type_list ~f:(fun (constr, typ) ->
@@ -75,12 +80,18 @@ module TypeConstrTypingContext : TypeConstrTypingContext_type = struct
           List.fold new_records ~init:constr_typ_map ~f:(fun acc n_record ->
               ConstructorsMap.set acc ~key:n_record.constr ~data:n_record)
         in
-        Ok {
-          typ_constr_map = new_typ_constr_map;
-          constr_typ_map = new_constr_typ_map;
-        }
-    
-  let get_constr_from_typ {typ_constr_map; _} typ = TypMap.find typ_constr_map typ
+        Ok
+          {
+            typ_constr_map = new_typ_constr_map;
+            constr_typ_map = new_constr_typ_map;
+          }
 
-  let get_typ_from_constr {constr_typ_map; _} constr = ConstructorsMap.find constr_typ_map constr
+  let get_constr_from_typ { typ_constr_map; _ } typ =
+    TypMap.find typ_constr_map typ
+
+  let get_typ_from_constr { constr_typ_map; _ } constr =
+    ConstructorsMap.find constr_typ_map constr
+
+  let empty =
+    { typ_constr_map = TypMap.empty; constr_typ_map = ConstructorsMap.empty }
 end

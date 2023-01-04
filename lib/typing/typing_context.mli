@@ -28,6 +28,7 @@ module type TypeConstrTypingContext_type = sig
   (*None means type doesn't exist, Some [] means type exists but is empty*)
 
   val get_typ_from_constr : t -> Ast.Constructor.t -> constr_record option
+  val empty: t
 end
 
 module TypeConstrTypingContext: TypeConstrTypingContext_type
