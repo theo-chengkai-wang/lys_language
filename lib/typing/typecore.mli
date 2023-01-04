@@ -6,27 +6,20 @@ open Lys_ast
 open Core
 
 val type_inference_expression :
-  ( Ast.MetaIdentifier.t,
-    Ast.Context.t * Ast.Typ.t )
-  Typing_context.MetaTypingContext.t ->
-  (Ast.ObjIdentifier.t, Ast.Typ.t) Typing_context.ObjTypingContext.t ->
+  (Ast.Context.t * Ast.Typ.t) Typing_context.MetaTypingContext.t ->
+  Ast.Typ.t Typing_context.ObjTypingContext.t ->
   Ast.Expr.t ->
   Ast.Typ.t Or_error.t
 
 val type_check_expression :
-  ( Ast.MetaIdentifier.t,
-    Ast.Context.t * Ast.Typ.t )
-  Typing_context.MetaTypingContext.t ->
-  (Ast.ObjIdentifier.t, Ast.Typ.t) Typing_context.ObjTypingContext.t ->
+  (Ast.Context.t * Ast.Typ.t) Typing_context.MetaTypingContext.t ->
+  Ast.Typ.t Typing_context.ObjTypingContext.t ->
   Ast.Expr.t ->
   Ast.Typ.t ->
   unit Or_error.t
 
 val type_check_program :
-  ?meta_ctx:
-    ( Ast.MetaIdentifier.t,
-      Ast.Context.t * Ast.Typ.t )
-    Typing_context.MetaTypingContext.t ->
-  ?obj_ctx:(Ast.ObjIdentifier.t, Ast.Typ.t) Typing_context.ObjTypingContext.t ->
+  ?meta_ctx:(Ast.Context.t * Ast.Typ.t) Typing_context.MetaTypingContext.t ->
+  ?obj_ctx:Ast.Typ.t Typing_context.ObjTypingContext.t ->
   Ast.Program.t ->
   Ast.TypedProgram.t Or_error.t

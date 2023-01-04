@@ -32,10 +32,18 @@ module type ObjIdentifier_type = sig
   val shift : t -> depth:int -> offset:int -> t Or_error.t
 end
 
+module type Constructor_type = sig
+  type t [@@deriving sexp, show, compare, equal]
+  val of_string: string -> t
+  val of_past: Past.Constructor.t -> t
+  val get_name: t -> string
+end
+
 module type TypeIdentifier_type = sig
   (*Unused for now*)
   type t [@@deriving sexp, show, compare, equal]
 
+  val get_name: t -> string
   val of_string : string -> t
   val of_past : Past.Identifier.t -> t
 end
@@ -63,6 +71,7 @@ end
 module rec ObjIdentifier : ObjIdentifier_type
 and MetaIdentifier : MetaIdentifier_type
 and TypeIdentifier : TypeIdentifier_type
+and Constructor: Constructor_type
 
 and Typ : sig
   type t =
@@ -124,6 +133,20 @@ and Constant : sig
   val of_past : Past.Constant.t -> t
 end
 
+and Pattern : sig
+  type t =
+    | Datatype of (Constructor.t * ObjIdentifier.t list)
+      (*Empty list means that data type doesn't have arguments.*)
+    | Inl of ObjIdentifier.t
+    | Inr of ObjIdentifier.t
+    | Prod of ObjIdentifier.t list
+    | Id of ObjIdentifier.t
+    | Wildcard
+  [@@deriving sexp, show, equal, compare]
+
+  val of_past: Past.Pattern.t -> t
+end
+
 and Expr : sig
   type t =
     | Identifier of ObjIdentifier.t (*x*)
@@ -148,6 +171,8 @@ and Expr : sig
     | Box of Context.t * t (*box (x:A, y:B |- e)*)
     | LetBox of MetaIdentifier.t * t * t (*let box u = e in e'*)
     | Closure of MetaIdentifier.t * t list (*u with (e1, e2, e3, ...)*)
+    | Constr of Constructor.t * t (* Constr e*)
+    | Match of t * (Pattern.t * t) list
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.Expr.t -> t
@@ -177,6 +202,7 @@ and Value : sig
   | Right of Typ.t * Typ.t * t (*R[A,B] e*)
   | Lambda of IdentifierDefn.t * Expr.t (*fun (x : A) -> e*)
   | Box of Context.t * Expr.t (*box (x:A, y:B |- e)*)
+  | Constr of Constructor.t * t
 [@@deriving sexp, show, compare, equal]
 
 val to_expr : Value.t -> Expr.t
@@ -195,6 +221,7 @@ and TopLevelDefn : sig
     | RecursiveDefinition of IdentifierDefn.t * Expr.t
     | Expression of Expr.t
     | Directive of Directive.t
+    | DatatypeDecl of TypeIdentifier.t * (Constructor.t * Typ.t) list
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.TopLevelDefn.t -> t
@@ -212,6 +239,7 @@ module TypedTopLevelDefn : sig
     | RecursiveDefinition of Typ.t * IdentifierDefn.t * Expr.t
     | Expression of Typ.t * Expr.t
     | Directive of Directive.t
+    | DatatypeDecl of TypeIdentifier.t * (Constructor.t * Typ.t) list
   [@@deriving sexp, show, compare, equal]
 
   val populate_index : t -> t Or_error.t

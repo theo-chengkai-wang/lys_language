@@ -66,10 +66,19 @@ module type ObjIdentifier_type = sig
   val shift : t -> depth:int -> offset:int -> t Or_error.t
 end
 
+module type Constructor_type = sig
+  type t [@@deriving sexp, show, compare, equal]
+
+  val of_string : string -> t
+  val of_past : Past.Constructor.t -> t
+  val get_name : t -> string
+end
+
 module type TypeIdentifier_type = sig
   (*Unused for now*)
   type t [@@deriving sexp, show, compare, equal]
 
+  val get_name : t -> string
   val of_string : string -> t
   val of_past : Past.Identifier.t -> t
 end
@@ -183,8 +192,17 @@ end
 and TypeIdentifier : TypeIdentifier_type = struct
   type t = string [@@deriving sexp, show, compare, equal]
 
+  let get_name v = v
   let of_string x = x
   let of_past (past_identifier : Past.Identifier.t) = past_identifier
+end
+
+and Constructor : Constructor_type = struct
+  type t = string [@@deriving sexp, show, compare, equal]
+
+  let get_name v = v
+  let of_string v = v
+  let of_past (past_constructor : Past.Constructor.t) = past_constructor
 end
 
 and Typ : sig
@@ -322,6 +340,42 @@ end = struct
     | Past.Constant.Unit -> Unit
 end
 
+and Pattern : sig
+  type t =
+    | Datatype of (Constructor.t * ObjIdentifier.t list)
+      (*Empty list means that data type doesn't have arguments.*)
+    | Inl of ObjIdentifier.t
+    | Inr of ObjIdentifier.t
+    | Prod of ObjIdentifier.t list
+    | Id of ObjIdentifier.t
+    | Wildcard
+  [@@deriving sexp, show, equal, compare]
+
+  val of_past : Past.Pattern.t -> t
+end = struct
+  type t =
+    | Datatype of (Constructor.t * ObjIdentifier.t list)
+      (*Empty list means that data type doesn't have arguments.*)
+    | Inl of ObjIdentifier.t
+    | Inr of ObjIdentifier.t
+    | Prod of ObjIdentifier.t list
+    | Id of ObjIdentifier.t
+    | Wildcard
+  [@@deriving sexp, show, equal, compare]
+
+  let of_past = function
+    | Past.Pattern.Datatype (cons, objid_list) ->
+        Datatype
+          ( Constructor.of_past cons,
+            List.map objid_list ~f:ObjIdentifier.of_past )
+    | Past.Pattern.Inl id -> Inl (ObjIdentifier.of_past id)
+    | Past.Pattern.Inr id -> Inr (ObjIdentifier.of_past id)
+    | Past.Pattern.Prod id_list ->
+        Prod (List.map id_list ~f:ObjIdentifier.of_past)
+    | Past.Pattern.Id id -> Id (ObjIdentifier.of_past id)
+    | Past.Pattern.Wildcard -> Wildcard
+end
+
 and Expr : sig
   type t =
     | Identifier of ObjIdentifier.t (*x*)
@@ -346,6 +400,8 @@ and Expr : sig
     | Box of Context.t * t (*box (x:A, y:B |- e)*)
     | LetBox of MetaIdentifier.t * t * t (*let box u = e in e'*)
     | Closure of MetaIdentifier.t * t list (*u with (e1, e2, e3, ...)*)
+    | Constr of Constructor.t * t (* Constr e*)
+    | Match of t * (Pattern.t * t) list
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.Expr.t -> t
@@ -389,6 +445,8 @@ end = struct
     | Box of Context.t * t (*box (x:A, y:B |- e)*)
     | LetBox of MetaIdentifier.t * t * t (*let box u = e in e'*)
     | Closure of MetaIdentifier.t * t list (*u with (e1, e2, e3, ...)*)
+    | Constr of Constructor.t * t (* Constr e*)
+    | Match of t * (Pattern.t * t) list
   [@@deriving sexp, show, compare, equal]
 
   let rec of_past = function
@@ -426,6 +484,13 @@ end = struct
         LetBox (MetaIdentifier.of_past metaid, of_past e, of_past e2)
     | Past.Expr.Closure (metaid, exprs) ->
         Closure (MetaIdentifier.of_past metaid, List.map exprs ~f:of_past)
+    | Past.Expr.Constr (constructor, value) ->
+        Constr (Constructor.of_past constructor, Expr.of_past value)
+    | Past.Expr.Match (e, pattns) ->
+        Match
+          ( of_past e,
+            List.map pattns ~f:(fun (pattn, expr) ->
+                (Pattern.of_past pattn, of_past expr)) )
 
   let rec populate_index expr ~current_ast_level ~current_identifiers
       ~current_meta_ast_level ~current_meta_identifiers =
@@ -716,6 +781,7 @@ and Value : sig
     | Right of Typ.t * Typ.t * t (*R[A,B] e*)
     | Lambda of IdentifierDefn.t * Expr.t (*fun (x : A) -> e*)
     | Box of Context.t * Expr.t (*box (x:A, y:B |- e)*)
+    | Constr of Constructor.t * t
   [@@deriving sexp, show, compare, equal]
 
   val to_expr : Value.t -> Expr.t
@@ -727,6 +793,7 @@ end = struct
     | Right of Typ.t * Typ.t * t (*R[A,B] e*)
     | Lambda of IdentifierDefn.t * Expr.t (*fun (x : A) -> e*)
     | Box of Context.t * Expr.t (*box (x:A, y:B |- e)*)
+    | Constr of Constructor.t * t
   [@@deriving sexp, show, compare, equal]
 
   let rec to_expr = function
@@ -736,6 +803,7 @@ end = struct
     | Right (t1, t2, v) -> Expr.Right (t1, t2, to_expr v)
     | Lambda (iddef, expr) -> Expr.Lambda (iddef, expr)
     | Box (ctx, expr) -> Expr.Box (ctx, expr)
+    | Constr (constr, v) -> Expr.Constr (constr, to_expr v)
 end
 
 and Directive : sig
@@ -757,6 +825,7 @@ and TopLevelDefn : sig
     | RecursiveDefinition of IdentifierDefn.t * Expr.t
     | Expression of Expr.t
     | Directive of Directive.t
+    | DatatypeDecl of TypeIdentifier.t * (Constructor.t * Typ.t) list
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.TopLevelDefn.t -> t
@@ -767,6 +836,7 @@ end = struct
     | RecursiveDefinition of IdentifierDefn.t * Expr.t
     | Expression of Expr.t
     | Directive of Directive.t
+    | DatatypeDecl of TypeIdentifier.t * (Constructor.t * Typ.t) list
   [@@deriving sexp, show, compare, equal]
 
   let of_past = function
@@ -776,6 +846,11 @@ end = struct
         RecursiveDefinition (IdentifierDefn.of_past iddef, Expr.of_past e)
     | Past.TopLevelDefn.Expression e -> Expression (Expr.of_past e)
     | Past.TopLevelDefn.Directive d -> Directive (Directive.of_past d)
+    | Past.TopLevelDefn.DatatypeDecl (id, constr_typ_list) ->
+        DatatypeDecl
+          ( TypeIdentifier.of_past id,
+            List.map constr_typ_list ~f:(fun (constr, typ) ->
+                (Constructor.of_past constr, Typ.of_past typ)) )
 end
 
 and Program : sig
@@ -794,6 +869,7 @@ module TypedTopLevelDefn : sig
     | RecursiveDefinition of Typ.t * IdentifierDefn.t * Expr.t
     | Expression of Typ.t * Expr.t
     | Directive of Directive.t
+    | DatatypeDecl of TypeIdentifier.t * (Constructor.t * Typ.t) list
   [@@deriving sexp, show, compare, equal]
 
   val populate_index : t -> t Or_error.t
@@ -805,6 +881,7 @@ end = struct
     | RecursiveDefinition of Typ.t * IdentifierDefn.t * Expr.t
     | Expression of Typ.t * Expr.t
     | Directive of Directive.t
+    | DatatypeDecl of TypeIdentifier.t * (Constructor.t * Typ.t) list
   [@@deriving sexp, show, compare, equal]
 
   let populate_index typed_defn =
@@ -838,6 +915,8 @@ end = struct
         RecursiveDefinition (Typ.TUnit, iddef, e)
     | TopLevelDefn.Expression e -> Expression (Typ.TUnit, e)
     | TopLevelDefn.Directive d -> Directive d
+    | TopLevelDefn.DatatypeDecl (id, constr_typ_list) ->
+        DatatypeDecl (id, constr_typ_list)
 end
 
 module TypedProgram : sig

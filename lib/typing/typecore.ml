@@ -44,8 +44,7 @@ and type_inference_expression meta_ctx ctx e =
            ^ Ast.ObjIdentifier.show id)
             (ctx, id)
             [%sexp_of:
-              (Ast.ObjIdentifier.t, Ast.Typ.t) Typing_context.ObjTypingContext.t
-              * Ast.ObjIdentifier.t]
+              Ast.Typ.t Typing_context.ObjTypingContext.t * Ast.ObjIdentifier.t]
       | Some typ -> Ok typ)
   | Ast.Expr.Constant c -> (
       match c with
@@ -259,9 +258,7 @@ and type_inference_expression meta_ctx ctx e =
             ^ Ast.MetaIdentifier.show meta_id)
             (meta_ctx, meta_id)
             [%sexp_of:
-              ( Ast.MetaIdentifier.t,
-                Ast.Context.t * Ast.Typ.t )
-              Typing_context.MetaTypingContext.t
+              (Ast.Context.t * Ast.Typ.t) Typing_context.MetaTypingContext.t
               * Ast.MetaIdentifier.t]
       | Some (box_context, box_typ) -> Ok (box_context, box_typ))
       >>= fun (box_context, box_typ) ->
@@ -330,5 +327,5 @@ let type_check_program
     ?(obj_ctx = Typing_context.ObjTypingContext.create_empty_context ()) program
     =
   let open Or_error.Monad_infix in
-  program |> type_check_program_aux meta_ctx obj_ctx
-  >>= fun typed_program -> Ast.TypedProgram.populate_index typed_program
+  program |> type_check_program_aux meta_ctx obj_ctx >>= fun typed_program ->
+  Ast.TypedProgram.populate_index typed_program

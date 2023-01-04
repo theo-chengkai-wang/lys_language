@@ -16,7 +16,7 @@ module EvaluationContext : sig
   val show : t -> string
 
   val to_typing_obj_context :
-    t -> (Ast.ObjIdentifier.t, Ast.Typ.t) Typing_context.ObjTypingContext.t
+    t -> (Ast.Typ.t) Typing_context.ObjTypingContext.t
 end
 
 (* val reduce : (* Single step *)
