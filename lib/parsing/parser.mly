@@ -41,6 +41,7 @@ let list_to_tuple l =
 %token TIMES "*"
 %token DIV "/"
 %token MOD "%"
+%token UNDERSCORE
 %token GT ">"
 %token GTE ">="
 %token LT "<"
@@ -164,6 +165,7 @@ application_expr:
     | s1 = simple_expr; s2 = simple_expr {Expr.Application (s1, s2)};
 
 pattern: 
+    | UNDERSCORE {Pattern.Wildcard}
     | i = identifier {Pattern.Id i}
     | c = CONSTR LEFT_PAREN l = separated_nonempty_list(COMMA, identifier) RIGHT_PAREN {Pattern.Datatype (c, l)}
     | c = CONSTR {Pattern.Datatype (c, [])}

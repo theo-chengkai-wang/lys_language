@@ -107,6 +107,7 @@ and Pattern : sig
     | Inr of Identifier.t
     | Prod of Identifier.t list
     | Id of Identifier.t
+    | Wildcard
   [@@deriving sexp, show, equal, compare]
 end = struct
   type t =
@@ -115,6 +116,7 @@ end = struct
     | Inr of Identifier.t
     | Prod of Identifier.t list
     | Id of Identifier.t
+    | Wildcard
   [@@deriving sexp, show, equal, compare]
   (*Prior to support for polymorphism we have a separate Inl and Inr thing
     TODO: Make support multi-level patterns

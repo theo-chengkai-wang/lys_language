@@ -130,33 +130,33 @@ let test_reg_parse_unit_and_not_unit _ =
   assert_equal
     (Some
        (Past.Expr.LetBinding
-          ( ("x", Past.Typ.TBox ([], Past.Typ.TIdentifier "A")),
-            Past.Expr.Box ([], Past.Expr.Identifier "A"),
+          ( ("x", Past.Typ.TBox ([], Past.Typ.TIdentifier "_A")),
+            Past.Expr.Box ([], Past.Expr.Identifier "_A"),
             Past.Expr.LetBox
               ("u", Past.Expr.Identifier "x", Past.Expr.Closure ("u", [])) )))
     (parse_expression
        (Lexing.from_string
-          "let x: []A = box (|- A) in\nlet box u = x in\n    u with ();;\n"))
+          "let x: []_A = box (|- _A) in\nlet box u = x in\n    u with ();;\n"))
 
 let test_let _ =
   assert_equal
     (Some
        (Past.Expr.LetBinding
-          ( ("x", Past.Typ.TIdentifier "A"),
+          ( ("x", Past.Typ.TIdentifier "_A"),
             Past.Expr.Identifier "y",
             Past.Expr.Identifier "b" )))
-    (parse_expression (Lexing.from_string "let x: A = y in b;;"))
+    (parse_expression (Lexing.from_string "let x: _A = y in b;;"))
 
 let test_let_rec _ =
   assert_equal
     (Some
        (Past.Expr.LetRec
           ( ( "x",
-              Past.Typ.TFun (Past.Typ.TIdentifier "A", Past.Typ.TIdentifier "B")
+              Past.Typ.TFun (Past.Typ.TIdentifier "_A", Past.Typ.TIdentifier "_B")
             ),
             Past.Expr.Identifier "y",
             Past.Expr.Identifier "b" )))
-    (parse_expression (Lexing.from_string "let rec x: A -> B = y in b;;"))
+    (parse_expression (Lexing.from_string "let rec x: _A -> _B = y in b;;"))
 
 let test_if_else _ =
   assert_equal
@@ -442,6 +442,63 @@ let test_directive_reset _ =
     [ Past.TopLevelDefn.Directive Past.Directive.Reset ]
     (parse_program (Lexing.from_string "RESET;;"))
 
+let test_datatype_def _ =
+  assert_equal
+    [
+      Past.TopLevelDefn.DatatypeDecl
+        ( "sometype",
+          [
+            ("Con1", Past.Typ.TInt);
+            ("Con3", Past.Typ.TUnit);
+            ( "Con4",
+              Past.Typ.TProd (Past.Typ.TInt, Past.Typ.TIdentifier "sometype") );
+          ] );
+    ]
+    (parse_program
+       (Lexing.from_string
+          "datatype sometype = Con1 of int | Con3 of unit | Con4 of (int * \
+           sometype);;"))
+
+let test_datatype_definition _ =
+  assert_equal
+    [
+      Past.TopLevelDefn.Definition
+        ( ("x", Past.Typ.TIdentifier "sometype"),
+          Past.Expr.Constr ("Con1", Past.Expr.Constant (Past.Constant.Integer 1))
+        );
+    ]
+    (parse_program (Lexing.from_string "let x:sometype = Con1 1;;"));
+  assert_equal
+    [
+      Past.TopLevelDefn.Definition
+        ( ("y", Past.Typ.TIdentifier "sometype"),
+          Past.Expr.Constr
+            ( "Con4",
+              Past.Expr.Prod
+                ( Past.Expr.Constant (Past.Constant.Integer 1),
+                  Past.Expr.Constr
+                    ("Con2", Past.Expr.Constant (Past.Constant.Integer 1)) ) )
+        );
+    ]
+    (parse_program (Lexing.from_string "let y:sometype = Con4 (1, Con2 1);;"))
+
+let test_match_clause _ =
+  assert_equal
+    [
+      Past.TopLevelDefn.Expression
+        (Past.Expr.Match
+           ( Past.Expr.Identifier "y",
+             [
+               ( Past.Pattern.Datatype ("Con1", [ "x" ]),
+                 Past.Expr.Identifier "x" );
+               ( Past.Pattern.Wildcard,
+                 Past.Expr.Constant (Past.Constant.Integer 1) );
+             ] ));
+    ]
+    (parse_program
+       (Lexing.from_string
+          "match y with\n         | Con1 (x) -> x\n         | _ -> 1;;\n     "))
+
 (* Name the test cases and group them together *)
 let suite =
   "parsing_suite"
@@ -486,4 +543,7 @@ let suite =
          "test_directive_reset" >:: test_directive_reset;
          "test_defn" >:: test_defn;
          "test_rec_defn" >:: test_rec_defn;
+         "test_datatype_def" >:: test_datatype_def;
+         "test_datatype_definition" >:: test_datatype_definition;
+         "test_match_clause" >:: test_match_clause;
        ]

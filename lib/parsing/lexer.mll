@@ -76,6 +76,7 @@ rule read =
     | "ENV" {DIR_ENV}
     | "QUIT" {DIR_QUIT}
     | "datatype" {DATATYPE}
+    | "_" {UNDERSCORE}
     | nat   { INT (int_of_string (Lexing.lexeme lexbuf)) }
     | id    {ID (Lexing.lexeme lexbuf)}
     | constr_id {CONSTR (Lexing.lexeme lexbuf)}

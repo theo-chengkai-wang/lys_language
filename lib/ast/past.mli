@@ -63,6 +63,7 @@ and Pattern : sig
     | Inr of Identifier.t
     | Prod of Identifier.t list
     | Id of Identifier.t
+    | Wildcard
   [@@deriving sexp, show, equal, compare]
 end
 
