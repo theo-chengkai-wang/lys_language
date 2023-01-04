@@ -26,6 +26,7 @@ let list_to_tuple l =
 
 %token <int> INT
 %token <string> ID
+%token <string> CONSTR
 %token BOOL_typ
 %token INT_typ
 %token UNIT_typ
@@ -66,6 +67,7 @@ let list_to_tuple l =
 %token CASE
 %token OF
 %token LET
+%token DATATYPE
 %token IN
 %token REC
 %token TURNSTILE "|-"
@@ -136,11 +138,15 @@ prog:
     | EOF {[]}
     | t = top_level SEMICOLON SEMICOLON p = prog {t::p}
 
+datatype_decl_clause: c = CONSTR OF t = typ {(c, t)}
+
 top_level:
     | d = directive {TopLevelDefn.Directive d}
     | LET decl = id_typ_declaration EQ e1 = expr {TopLevelDefn.Definition (decl, e1)}
     | LET REC decl = id_typ_declaration EQ e1 = expr {TopLevelDefn.RecursiveDefinition (decl, e1)}
     | e = expr {TopLevelDefn.Expression e}
+    | DATATYPE i = identifier EQ l = separated_nonempty_list ("|", datatype_decl_clause) {TopLevelDefn.DatatypeDecl (i, l)}
+    | DATATYPE i = identifier {TopLevelDefn.DatatypeDecl (i,[])}
 
 directive:
     | DIR_ENV {Directive.Env}
@@ -155,7 +161,19 @@ simple_expr:
 
 application_expr:
     | s1 = application_expr; s2 = simple_expr  {Expr.Application (s1, s2)}
-    | s1 = simple_expr; s2 = simple_expr {Expr.Application (s1, s2)}
+    | s1 = simple_expr; s2 = simple_expr {Expr.Application (s1, s2)};
+
+pattern: 
+    | i = identifier {Pattern.Id i}
+    | c = CONSTR LEFT_PAREN l = separated_nonempty_list(COMMA, identifier) RIGHT_PAREN {Pattern.Datatype (c, l)}
+    | c = CONSTR {Pattern.Datatype (c, [])}
+    | INL i=identifier {Pattern.Inl (i)}
+    | INR i = identifier {Pattern.Inr (i)}
+    | LEFT_PAREN i = identifier COMMA is = separated_nonempty_list(COMMA, identifier) RIGHT_PAREN {Pattern.Prod (i::is)}
+;
+
+pattern_expr: p = pattern "->" e = expr {(p, e)};
+
 
 expr:
     | s = simple_expr {s}
@@ -163,6 +181,7 @@ expr:
     | a = arith { a }
     | c = comp { c }
     | b = bool { b }
+    | c = CONSTR e = simple_expr {Expr.Constr (c, e)}
     | u = identifier; WITH; s = sim_sub {Expr.Closure (u, s)} // not a simple_expr because it contains a WITH application
     (* bigger constructs *)
     | IF e1 = expr THEN e2 = expr ELSE e3=expr {Expr.IfThenElse (e1, e2, e3)}
@@ -175,7 +194,8 @@ expr:
     | LET decl = id_typ_declaration EQ e1 = expr IN e2 = expr %prec DEFN_EQ {Expr.LetBinding (decl, e1, e2)}
     | LET REC decl = id_typ_declaration EQ e1 = expr IN e2 = expr %prec DEFN_EQ {Expr.LetRec (decl, e1, e2)}
     | BOX LEFT_PAREN decl_list = separated_list(COMMA, id_typ_declaration) TURNSTILE e = expr RIGHT_PAREN {Expr.Box (decl_list, e)}
-    | LET BOX u = identifier EQ e1 = expr IN e2 = expr {Expr.LetBox (u, e1, e2)} // TODO: distinguish metaidentifier and identifier
+    | LET BOX u = identifier EQ e1 = expr IN e2 = expr {Expr.LetBox (u, e1, e2)}
+    | MATCH e = simple_expr WITH option("|") pattern_list = separated_nonempty_list("|", pattern_expr) {Expr.Match (e, pattern_list)};
 
 constant:
     | i = INT {Constant.Integer i}

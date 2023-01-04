@@ -18,7 +18,8 @@ let nat = ['0'-'9'] ['0'-'9']*
 
 let white = [' ' '\t']+
 let newline = '\r' | '\n' | "\r\n"
-let id = ['a'-'z' 'A'-'Z' '_'] ['a'-'z' 'A'-'Z' '0'-'9' '_']*
+let id = ['a'-'z' '_'] ['a'-'z' 'A'-'Z' '0'-'9' '_']* (*Lower case is normal id*)
+let constr_id = ['A'-'Z'] ['a'-'z' 'A'-'Z' '0'-'9' '_']* (*Upper case is Constr id*)
 
 rule read = 
     parse
@@ -74,8 +75,10 @@ rule read =
     | "RESET" {DIR_RESET}
     | "ENV" {DIR_ENV}
     | "QUIT" {DIR_QUIT}
+    | "datatype" {DATATYPE}
     | nat   { INT (int_of_string (Lexing.lexeme lexbuf)) }
     | id    {ID (Lexing.lexeme lexbuf)}
+    | constr_id {CONSTR (Lexing.lexeme lexbuf)}
     | eof {EOF}
     | _ {raise (SyntaxError ("Lexer - Illegal character: " ^ Lexing.lexeme lexbuf))}
 and comment = 

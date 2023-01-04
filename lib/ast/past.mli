@@ -2,6 +2,10 @@ module type Identifier_type = sig
   type t = string [@@deriving sexp, show, equal, compare]
 end
 
+module Constructor : sig
+  type t = string [@@deriving sexp, show, equal, compare]
+end
+
 module rec Identifier : Identifier_type
 
 and Typ : sig
@@ -48,7 +52,18 @@ and UnaryOperator : sig
 end
 
 and Constant : sig
-  type t = Integer of int | Boolean of bool | Unit [@@deriving sexp, show, equal, compare]
+  type t = Integer of int | Boolean of bool | Unit
+  [@@deriving sexp, show, equal, compare]
+end
+
+and Pattern : sig
+  type t =
+    | Datatype of (Constructor.t * Identifier.t list)
+    | Inl of Identifier.t
+    | Inr of Identifier.t
+    | Prod of Identifier.t list
+    | Id of Identifier.t
+  [@@deriving sexp, show, equal, compare]
 end
 
 and Expr : sig
@@ -75,6 +90,8 @@ and Expr : sig
     | Box of Context.t * t (*box (x:A, y:B |- e)*)
     | LetBox of Identifier.t * t * t (*let box u = e in e'*)
     | Closure of Identifier.t * t list (*u with (e1, e2, e3, ...)*)
+    | Constr of Constructor.t * t (* Constr e*)
+    | Match of t * (Pattern.t * t) list
   [@@deriving sexp, show, equal, compare]
 end
 
@@ -88,6 +105,7 @@ and TopLevelDefn : sig
     | RecursiveDefinition of IdentifierDefn.t * Expr.t
     | Expression of Expr.t
     | Directive of Directive.t
+    | DatatypeDecl of Identifier.t * (Constructor.t * Typ.t) list
   [@@deriving sexp, show, equal, compare]
 end
 

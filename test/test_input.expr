@@ -1,2 +1,9 @@
-let rec (pow: int -> int -> int) = fun (n:int) -> if n = 0 then (fun (x:int) -> 1) else (fun (x:int) -> x * (pow (n-1) x));; 
-pow 2 3;;
+datatype sometype = Con1 of int | Con3 of unit | Con4 of (int * sometype);;
+
+let x:sometype = Con1 1;;
+
+let y:sometype = Con4 (1, Con2 1);;
+
+match y with
+    | Con1 (x) -> x
+    | _ -> 1;;
