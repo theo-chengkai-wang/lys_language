@@ -66,6 +66,12 @@ module type TypeConstrContext_type = sig
 
   val get_typ_from_constr : t -> Ast.Constructor.t -> constr_record option
   val empty : t
+
+  val to_typing_decl :
+    t ->
+    (Ast.TypeIdentifier.t * (Ast.Constructor.t * Ast.Typ.t option) list) list
+
+  val to_typeconstrtypingcontext : t -> Typing_context.TypeConstrTypingContext.t
 end
 
 module ConstructorsMap = Map.Make (Ast.Constructor)
@@ -127,6 +133,21 @@ module TypeConstrContext : TypeConstrContext_type = struct
 
   let empty =
     { typ_constr_map = TypMap.empty; constr_typ_map = ConstructorsMap.empty }
+
+  let to_typing_decl ctx =
+    let fold_func ~key ~data acc =
+      (key, List.map data ~f:(fun record -> (record.constr, record.arg_type)))
+      :: acc
+    in
+    TypMap.fold ctx.typ_constr_map ~init:[] ~f:fold_func
+
+  let to_typeconstrtypingcontext ctx =
+    (*Use ok_exn here because no error is expected*)
+    to_typing_decl ctx
+    |> List.fold ~init:Typing_context.TypeConstrTypingContext.empty
+         ~f:(fun acc x ->
+           Typing_context.TypeConstrTypingContext.add_typ_from_decl acc x
+           |> ok_exn)
 end
 
 (* module TypeConstructorContext *)
@@ -136,8 +157,7 @@ end
 
    let evaluate_program program = [] *)
 
-let rec multi_step_reduce ~top_level_context
-    ~(type_constr_context) ~expr =
+let rec multi_step_reduce ~top_level_context ~type_constr_context ~expr =
   let open Or_error.Monad_infix in
   match expr with
   | Ast.Expr.Identifier id ->
@@ -679,4 +699,4 @@ let evaluate_program ?(top_level_context = EvaluationContext.empty)
     ?(type_constr_context = TypeConstrContext.empty) program =
   let open Or_error.Monad_infix in
   evaluate_top_level_defns ~top_level_context ~type_constr_context program
-  >>= fun (evaluation_res, _) -> Ok evaluation_res
+  >>= fun (evaluation_res, _, _) -> Ok evaluation_res

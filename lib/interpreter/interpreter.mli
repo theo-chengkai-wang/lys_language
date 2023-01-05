@@ -38,6 +38,12 @@ module type TypeConstrContext_type = sig
 
   val get_typ_from_constr : t -> Ast.Constructor.t -> constr_record option
   val empty : t
+  val to_typing_decl :
+  t ->
+  (Ast.TypeIdentifier.t * (Ast.Constructor.t * Ast.Typ.t option) list) list
+
+val to_typeconstrtypingcontext : t -> Typing_context.TypeConstrTypingContext.t
+
 end
 
 module TypeConstrContext : TypeConstrContext_type
@@ -71,7 +77,8 @@ val evaluate_top_level_defns :
   ?top_level_context:EvaluationContext.t ->
   ?type_constr_context:TypeConstrContext.t ->
   Ast.TypedProgram.t ->
-  (TopLevelEvaluationResult.t list * EvaluationContext.t) Or_error.t
+  (TopLevelEvaluationResult.t list * EvaluationContext.t * TypeConstrContext.t)
+  Or_error.t
 
 val evaluate_program :
   ?top_level_context:EvaluationContext.t ->
