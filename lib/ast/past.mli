@@ -92,7 +92,7 @@ and Expr : sig
     | Box of Context.t * t (*box (x:A, y:B |- e)*)
     | LetBox of Identifier.t * t * t (*let box u = e in e'*)
     | Closure of Identifier.t * t list (*u with (e1, e2, e3, ...)*)
-    | Constr of Constructor.t * t (* Constr e*)
+    | Constr of Constructor.t * t option (* Constr e*)
     | Match of t * (Pattern.t * t) list
   [@@deriving sexp, show, equal, compare]
 end
@@ -107,7 +107,7 @@ and TopLevelDefn : sig
     | RecursiveDefinition of IdentifierDefn.t * Expr.t
     | Expression of Expr.t
     | Directive of Directive.t
-    | DatatypeDecl of Identifier.t * (Constructor.t * Typ.t) list
+    | DatatypeDecl of Identifier.t * (Constructor.t * Typ.t option) list
   [@@deriving sexp, show, equal, compare]
 end
 

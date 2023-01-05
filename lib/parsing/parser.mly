@@ -138,7 +138,7 @@ prog:
     | EOF {[]}
     | t = top_level SEMICOLON SEMICOLON p = prog {t::p}
 
-datatype_decl_clause: c = CONSTR OF t = typ {(c, t)}
+datatype_decl_clause: c = CONSTR OF t = typ  {(c, Some t)} | c = CONSTR {(c, None)}
 
 top_level:
     | d = directive {TopLevelDefn.Directive d}
@@ -186,7 +186,7 @@ expr:
     | a = arith { a }
     | c = comp { c }
     | b = bool { b }
-    | c = CONSTR e = simple_expr {Expr.Constr (c, e)}
+    | c = CONSTR e = option(simple_expr) {Expr.Constr (c, e)}
     | u = identifier; WITH; s = sim_sub {Expr.Closure (u, s)} // not a simple_expr because it contains a WITH application
     (* bigger constructs *)
     | IF e1 = expr THEN e2 = expr ELSE e3=expr {Expr.IfThenElse (e1, e2, e3)}

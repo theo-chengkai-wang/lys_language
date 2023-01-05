@@ -15,7 +15,7 @@ module MetaTypingContext :
 module type TypeConstrTypingContext_type = sig
   type constr_record = {
     constr : Ast.Constructor.t;
-    arg_type : Ast.Typ.t;
+    arg_type : Ast.Typ.t option;
     belongs_to_typ : Ast.TypeIdentifier.t;
   }
   [@@deriving sexp, show, equal, compare]
@@ -24,7 +24,7 @@ module type TypeConstrTypingContext_type = sig
 
   val add_typ_from_decl :
     t ->
-    Ast.TypeIdentifier.t * (Ast.Constructor.t * Ast.Typ.t) list ->
+    Ast.TypeIdentifier.t * (Ast.Constructor.t * Ast.Typ.t option) list ->
     t Or_error.t (*Error thrown when duplicated constructor name*)
 
   val get_constr_from_typ :
@@ -41,7 +41,7 @@ module TypMap = Map.Make (Ast.TypeIdentifier)
 module TypeConstrTypingContext : TypeConstrTypingContext_type = struct
   type constr_record = {
     constr : Ast.Constructor.t;
-    arg_type : Ast.Typ.t;
+    arg_type : Ast.Typ.t option;
     belongs_to_typ : Ast.TypeIdentifier.t;
   }
   [@@deriving sexp, show, equal, compare]
@@ -67,7 +67,7 @@ module TypeConstrTypingContext : TypeConstrTypingContext_type = struct
           [%sexp_of:
             Ast.Constructor.t
             * Ast.TypeIdentifier.t
-            * (Ast.Constructor.t * Ast.Typ.t) list]
+            * (Ast.Constructor.t * Ast.Typ.t option) list]
     | None ->
         let new_records =
           List.map constructor_type_list ~f:(fun (constr, typ) ->

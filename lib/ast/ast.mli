@@ -174,7 +174,7 @@ and Expr : sig
     | Box of Context.t * t (*box (x:A, y:B |- e)*)
     | LetBox of MetaIdentifier.t * t * t (*let box u = e in e'*)
     | Closure of MetaIdentifier.t * t list (*u with (e1, e2, e3, ...)*)
-    | Constr of Constructor.t * t (* Constr e*)
+    | Constr of Constructor.t * t option (* Constr e*)
     | Match of t * (Pattern.t * t) list
   [@@deriving sexp, show, compare, equal]
 
@@ -205,7 +205,7 @@ and Value : sig
     | Right of Typ.t * Typ.t * t (*R[A,B] e*)
     | Lambda of IdentifierDefn.t * Expr.t (*fun (x : A) -> e*)
     | Box of Context.t * Expr.t (*box (x:A, y:B |- e)*)
-    | Constr of Constructor.t * t
+    | Constr of Constructor.t * t option
   [@@deriving sexp, show, compare, equal]
 
   val to_expr : Value.t -> Expr.t
@@ -223,7 +223,7 @@ and TopLevelDefn : sig
     | RecursiveDefinition of IdentifierDefn.t * Expr.t
     | Expression of Expr.t
     | Directive of Directive.t
-    | DatatypeDecl of TypeIdentifier.t * (Constructor.t * Typ.t) list
+    | DatatypeDecl of TypeIdentifier.t * (Constructor.t * Typ.t option) list
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.TopLevelDefn.t -> t
@@ -241,7 +241,7 @@ module TypedTopLevelDefn : sig
     | RecursiveDefinition of Typ.t * IdentifierDefn.t * Expr.t
     | Expression of Typ.t * Expr.t
     | Directive of Directive.t
-    | DatatypeDecl of TypeIdentifier.t * (Constructor.t * Typ.t) list
+    | DatatypeDecl of TypeIdentifier.t * (Constructor.t * Typ.t option) list
   [@@deriving sexp, show, compare, equal]
 
   val populate_index : t -> t Or_error.t

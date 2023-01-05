@@ -418,8 +418,9 @@ and type_inference_expression meta_ctx ctx type_ctx e =
                   (*2- get list*)
                   let typs =
                     match constr_record.arg_type with
-                    | Ast.Typ.TProd typs -> typs
-                    | typ -> [ typ ]
+                    | Some (Ast.Typ.TProd typs) -> typs
+                    | Some typ -> [ typ ]
+                    | None -> []
                   in
                   (*3- Match id list*)
                   Utils.try_zip_list_or_error id_list typs
@@ -459,7 +460,7 @@ and type_inference_expression meta_ctx ctx type_ctx e =
                ~compare:Ast.Typ.compare)
             [%sexp_of: Ast.Typ.t list]
       | Some typ -> Ok typ)
-  | Ast.Expr.Constr (constr, e) -> (
+  | Ast.Expr.Constr (constr, e_opt) -> (
       (* Check if constructor is defined *)
       match
         Typing_context.TypeConstrTypingContext.get_typ_from_constr type_ctx
@@ -469,15 +470,26 @@ and type_inference_expression meta_ctx ctx type_ctx e =
           Or_error.error "TypeInferenceError: Constructor is undefined" constr
             [%sexp_of: Ast.Constructor.t]
       | Some constr_record ->
-        (* Defined, so check arguments *)
-          type_check_expression meta_ctx ctx type_ctx e constr_record.arg_type
-          |> Or_error.tag
-               ~tag:
-                 (Printf.sprintf
-                    "TypeInferenceError: On Constructor %s: argument type \
-                     mismatch. Expected type %s"
-                    (Ast.Constructor.get_name constr)
-                    (Ast.Typ.show constr_record.arg_type))
+          (match (constr_record.arg_type, e_opt) with
+          | None, None -> Ok ()
+          | Some t, Some e ->
+              (* Defined, so check arguments *)
+              type_check_expression meta_ctx ctx type_ctx e t
+              |> Or_error.tag
+                   ~tag:
+                     (Printf.sprintf
+                        "TypeInferenceError: On Constructor %s: argument type \
+                         mismatch. Expected type %s"
+                        (Ast.Constructor.get_name constr)
+                        (Ast.Typ.show t))
+          | _ ->
+              Or_error.error
+                (Printf.sprintf
+                   "TypeInferenceError: On Constructor %s, argument type \
+                    mismatch."
+                   (Ast.Constructor.show constr))
+                (constr_record.arg_type, e_opt)
+                [%sexp_of: Ast.Typ.t option * Ast.Expr.t option])
           >>= fun _ -> Ok (Ast.Typ.TIdentifier constr_record.belongs_to_typ))
 
 let process_top_level meta_ctx ctx type_ctx = function

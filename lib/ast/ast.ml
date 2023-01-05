@@ -237,9 +237,8 @@ end = struct
     | Past.Typ.TIdentifier id -> TIdentifier (TypeIdentifier.of_past id)
     | Past.Typ.TFun (t1, t2) -> TFun (of_past t1, of_past t2)
     | Past.Typ.TBox (ctx, t1) -> TBox (Context.of_past ctx, of_past t1)
-    | Past.Typ.TProd (ts) -> TProd (List.map ts ~f:(of_past))
+    | Past.Typ.TProd ts -> TProd (List.map ts ~f:of_past)
     | Past.Typ.TSum (t1, t2) -> TSum (of_past t1, of_past t2)
-
 end
 
 and IdentifierDefn : sig
@@ -394,7 +393,7 @@ and Expr : sig
     | BinaryOp of BinaryOperator.t * t * t (*e op e'*)
     | Prod of t list (*(e, e')*)
     (* | Fst of t (*fst e*)
-    | Snd of t snd e *)
+       | Snd of t snd e *)
     | Nth of (t * int)
     | Left of Typ.t * Typ.t * t (*L[A,B] e*)
     | Right of Typ.t * Typ.t * t (*R[A,B] e*)
@@ -411,7 +410,7 @@ and Expr : sig
     | Box of Context.t * t (*box (x:A, y:B |- e)*)
     | LetBox of MetaIdentifier.t * t * t (*let box u = e in e'*)
     | Closure of MetaIdentifier.t * t list (*u with (e1, e2, e3, ...)*)
-    | Constr of Constructor.t * t (* Constr e*)
+    | Constr of Constructor.t * t option (* Constr e*)
     | Match of t * (Pattern.t * t) list
   [@@deriving sexp, show, compare, equal]
 
@@ -440,7 +439,7 @@ end = struct
     | BinaryOp of BinaryOperator.t * t * t (*e op e'*)
     | Prod of t list (*(e, e')*)
     (* | Fst of t (*fst e*)
-    | Snd of t snd e *)
+       | Snd of t snd e *)
     | Nth of (t * int)
     | Left of Typ.t * Typ.t * t (*L[A,B] e*)
     | Right of Typ.t * Typ.t * t (*R[A,B] e*)
@@ -457,7 +456,7 @@ end = struct
     | Box of Context.t * t (*box (x:A, y:B |- e)*)
     | LetBox of MetaIdentifier.t * t * t (*let box u = e in e'*)
     | Closure of MetaIdentifier.t * t list (*u with (e1, e2, e3, ...)*)
-    | Constr of Constructor.t * t (* Constr e*)
+    | Constr of Constructor.t * t option (* Constr e*)
     | Match of t * (Pattern.t * t) list
   [@@deriving sexp, show, compare, equal]
 
@@ -468,9 +467,9 @@ end = struct
         UnaryOp (UnaryOperator.of_past op, of_past expr)
     | Past.Expr.BinaryOp (op, expr, expr2) ->
         BinaryOp (BinaryOperator.of_past op, of_past expr, of_past expr2)
-    | Past.Expr.Prod (expr_list) -> Prod (List.map expr_list ~f:(of_past))
+    | Past.Expr.Prod expr_list -> Prod (List.map expr_list ~f:of_past)
     (* | Past.Expr.Fst expr -> Fst (of_past expr)
-    | Past.Expr.Snd expr -> Snd (of_past expr) *)
+       | Past.Expr.Snd expr -> Snd (of_past expr) *)
     | Past.Expr.Nth (expr, i) -> Nth (of_past expr, i)
     | Past.Expr.Left (t1, t2, expr) ->
         Left (Typ.of_past t1, Typ.of_past t2, of_past expr)
@@ -497,8 +496,10 @@ end = struct
         LetBox (MetaIdentifier.of_past metaid, of_past e, of_past e2)
     | Past.Expr.Closure (metaid, exprs) ->
         Closure (MetaIdentifier.of_past metaid, List.map exprs ~f:of_past)
-    | Past.Expr.Constr (constructor, value) ->
-        Constr (Constructor.of_past constructor, Expr.of_past value)
+    | Past.Expr.Constr (constructor, Some value) ->
+        Constr (Constructor.of_past constructor, Some (Expr.of_past value))
+    | Past.Expr.Constr (constructor, None) ->
+        Constr (Constructor.of_past constructor, None)
     | Past.Expr.Match (e, pattns) ->
         Match
           ( of_past e,
@@ -526,20 +527,25 @@ end = struct
         populate_index expr2 ~current_ast_level ~current_identifiers
           ~current_meta_ast_level ~current_meta_identifiers
         >>= fun expr2 -> Ok (BinaryOp (op, expr, expr2))
-    | Prod (exprs) ->
-        List.map exprs ~f:(populate_index ~current_ast_level ~current_identifiers ~current_meta_ast_level ~current_meta_identifiers)
-        |> Or_error.combine_errors >>= fun new_exprs -> Ok (Prod (new_exprs))
+    | Prod exprs ->
+        List.map exprs
+          ~f:
+            (populate_index ~current_ast_level ~current_identifiers
+               ~current_meta_ast_level ~current_meta_identifiers)
+        |> Or_error.combine_errors
+        >>= fun new_exprs -> Ok (Prod new_exprs)
     (* | Fst expr ->
+           populate_index expr ~current_ast_level ~current_identifiers
+             ~current_meta_ast_level ~current_meta_identifiers
+           >>= fun expr -> Ok (Fst expr)
+       | Snd expr ->
+           populate_index expr ~current_ast_level ~current_identifiers
+             ~current_meta_ast_level ~current_meta_identifiers
+           >>= fun expr -> Ok (Snd expr) *)
+    | Nth (expr, i) ->
         populate_index expr ~current_ast_level ~current_identifiers
           ~current_meta_ast_level ~current_meta_identifiers
-        >>= fun expr -> Ok (Fst expr)
-    | Snd expr ->
-        populate_index expr ~current_ast_level ~current_identifiers
-          ~current_meta_ast_level ~current_meta_identifiers
-        >>= fun expr -> Ok (Snd expr) *)
-    | Nth (expr, i) -> populate_index expr ~current_ast_level ~current_identifiers
-    ~current_meta_ast_level ~current_meta_identifiers
-  >>= fun expr -> Ok (Nth (expr, i))
+        >>= fun expr -> Ok (Nth (expr, i))
     | Left (t1, t2, expr) ->
         populate_index expr ~current_ast_level ~current_identifiers
           ~current_meta_ast_level ~current_meta_identifiers
@@ -702,17 +708,20 @@ end = struct
         >>= fun expr ->
         shift_indices expr2 ~obj_depth ~meta_depth ~obj_offset ~meta_offset
         >>= fun expr2 -> Ok (BinaryOp (op, expr, expr2))
-    | Prod (exprs) ->
-        List.map exprs ~f:(shift_indices ~obj_depth ~meta_depth ~obj_offset ~meta_offset)
-        |> Or_error.combine_errors >>= fun exprs -> Ok (Prod (exprs))
+    | Prod exprs ->
+        List.map exprs
+          ~f:(shift_indices ~obj_depth ~meta_depth ~obj_offset ~meta_offset)
+        |> Or_error.combine_errors
+        >>= fun exprs -> Ok (Prod exprs)
     (* | Fst expr ->
+           shift_indices expr ~obj_depth ~meta_depth ~obj_offset ~meta_offset
+           >>= fun expr -> Ok (Fst expr)
+       | Snd expr ->
+           shift_indices expr ~obj_depth ~meta_depth ~obj_offset ~meta_offset
+           >>= fun expr -> Ok (Snd expr) *)
+    | Nth (expr, i) ->
         shift_indices expr ~obj_depth ~meta_depth ~obj_offset ~meta_offset
-        >>= fun expr -> Ok (Fst expr)
-    | Snd expr ->
-        shift_indices expr ~obj_depth ~meta_depth ~obj_offset ~meta_offset
-        >>= fun expr -> Ok (Snd expr) *)
-    | Nth (expr, i) -> shift_indices expr ~obj_depth ~meta_depth ~obj_offset ~meta_offset
-    >>= fun expr -> Ok (Nth (expr, i))
+        >>= fun expr -> Ok (Nth (expr, i))
     | Left (t1, t2, expr) ->
         shift_indices expr ~obj_depth ~meta_depth ~obj_offset ~meta_offset
         >>= fun expr -> Ok (Left (t1, t2, expr))
@@ -793,7 +802,7 @@ and Value : sig
     | Right of Typ.t * Typ.t * t (*R[A,B] e*)
     | Lambda of IdentifierDefn.t * Expr.t (*fun (x : A) -> e*)
     | Box of Context.t * Expr.t (*box (x:A, y:B |- e)*)
-    | Constr of Constructor.t * t
+    | Constr of Constructor.t * t option
   [@@deriving sexp, show, compare, equal]
 
   val to_expr : Value.t -> Expr.t
@@ -805,17 +814,18 @@ end = struct
     | Right of Typ.t * Typ.t * t (*R[A,B] e*)
     | Lambda of IdentifierDefn.t * Expr.t (*fun (x : A) -> e*)
     | Box of Context.t * Expr.t (*box (x:A, y:B |- e)*)
-    | Constr of Constructor.t * t
+    | Constr of Constructor.t * t option
   [@@deriving sexp, show, compare, equal]
 
   let rec to_expr = function
     | Constant c -> Expr.Constant c
-    | Prod (xs) -> Expr.Prod (List.map xs ~f:(to_expr))
+    | Prod xs -> Expr.Prod (List.map xs ~f:to_expr)
     | Left (t1, t2, v) -> Expr.Left (t1, t2, to_expr v)
     | Right (t1, t2, v) -> Expr.Right (t1, t2, to_expr v)
     | Lambda (iddef, expr) -> Expr.Lambda (iddef, expr)
     | Box (ctx, expr) -> Expr.Box (ctx, expr)
-    | Constr (constr, v) -> Expr.Constr (constr, to_expr v)
+    | Constr (constr, Some v) -> Expr.Constr (constr, Some (to_expr v))
+    | Constr (constr, None) -> Expr.Constr (constr, None)
 end
 
 and Directive : sig
@@ -837,7 +847,7 @@ and TopLevelDefn : sig
     | RecursiveDefinition of IdentifierDefn.t * Expr.t
     | Expression of Expr.t
     | Directive of Directive.t
-    | DatatypeDecl of TypeIdentifier.t * (Constructor.t * Typ.t) list
+    | DatatypeDecl of TypeIdentifier.t * (Constructor.t * Typ.t option) list
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.TopLevelDefn.t -> t
@@ -848,7 +858,7 @@ end = struct
     | RecursiveDefinition of IdentifierDefn.t * Expr.t
     | Expression of Expr.t
     | Directive of Directive.t
-    | DatatypeDecl of TypeIdentifier.t * (Constructor.t * Typ.t) list
+    | DatatypeDecl of TypeIdentifier.t * (Constructor.t * Typ.t option) list
   [@@deriving sexp, show, compare, equal]
 
   let of_past = function
@@ -862,7 +872,10 @@ end = struct
         DatatypeDecl
           ( TypeIdentifier.of_past id,
             List.map constr_typ_list ~f:(fun (constr, typ) ->
-                (Constructor.of_past constr, Typ.of_past typ)) )
+                match typ with
+                | None -> (Constructor.of_past constr, None)
+                | Some typ ->
+                    (Constructor.of_past constr, Some (Typ.of_past typ))) )
 end
 
 and Program : sig
@@ -881,7 +894,7 @@ module TypedTopLevelDefn : sig
     | RecursiveDefinition of Typ.t * IdentifierDefn.t * Expr.t
     | Expression of Typ.t * Expr.t
     | Directive of Directive.t
-    | DatatypeDecl of TypeIdentifier.t * (Constructor.t * Typ.t) list
+    | DatatypeDecl of TypeIdentifier.t * (Constructor.t * Typ.t option) list
   [@@deriving sexp, show, compare, equal]
 
   val populate_index : t -> t Or_error.t
@@ -893,7 +906,7 @@ end = struct
     | RecursiveDefinition of Typ.t * IdentifierDefn.t * Expr.t
     | Expression of Typ.t * Expr.t
     | Directive of Directive.t
-    | DatatypeDecl of TypeIdentifier.t * (Constructor.t * Typ.t) list
+    | DatatypeDecl of TypeIdentifier.t * (Constructor.t * Typ.t option) list
   [@@deriving sexp, show, compare, equal]
 
   let populate_index typed_defn =

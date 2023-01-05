@@ -65,8 +65,10 @@ let test_app _ =
                         Past.Expr.Identifier "g" ),
                     Past.Expr.Identifier "h" ),
                 Past.Expr.Prod
-                  ( [Past.Expr.Constant (Past.Constant.Integer 1);
-                    Past.Expr.Constant (Past.Constant.Integer 2)] ) ),
+                  [
+                    Past.Expr.Constant (Past.Constant.Integer 1);
+                    Past.Expr.Constant (Past.Constant.Integer 2);
+                  ] ),
             Past.Expr.Left
               ( Past.Typ.TInt,
                 Past.Typ.TInt,
@@ -457,10 +459,12 @@ let test_datatype_def _ =
       Past.TopLevelDefn.DatatypeDecl
         ( "sometype",
           [
-            ("Con1", Past.Typ.TInt);
-            ("Con3", Past.Typ.TUnit);
+            ("Con1", Some Past.Typ.TInt);
+            ("Con3", Some Past.Typ.TUnit);
             ( "Con4",
-              Past.Typ.TProd ([Past.Typ.TInt; Past.Typ.TIdentifier "sometype"]) );
+              Some
+                (Past.Typ.TProd
+                   [ Past.Typ.TInt; Past.Typ.TIdentifier "sometype" ]) );
           ] );
     ]
     (parse_program
@@ -473,8 +477,8 @@ let test_datatype_definition _ =
     [
       Past.TopLevelDefn.Definition
         ( ("x", Past.Typ.TIdentifier "sometype"),
-          Past.Expr.Constr ("Con1", Past.Expr.Constant (Past.Constant.Integer 1))
-        );
+          Past.Expr.Constr
+            ("Con1", Some (Past.Expr.Constant (Past.Constant.Integer 1))) );
     ]
     (parse_program (Lexing.from_string "let x:sometype = Con1 1;;"));
   assert_equal
@@ -483,11 +487,14 @@ let test_datatype_definition _ =
         ( ("y", Past.Typ.TIdentifier "sometype"),
           Past.Expr.Constr
             ( "Con4",
-              Past.Expr.Prod
-                ( [Past.Expr.Constant (Past.Constant.Integer 1);
-                  Past.Expr.Constr
-                    ("Con2", Past.Expr.Constant (Past.Constant.Integer 1))] ) )
-        );
+              Some
+                (Past.Expr.Prod
+                   [
+                     Past.Expr.Constant (Past.Constant.Integer 1);
+                     Past.Expr.Constr
+                       ( "Con2",
+                         Some (Past.Expr.Constant (Past.Constant.Integer 1)) );
+                   ]) ) );
     ]
     (parse_program (Lexing.from_string "let y:sometype = Con4 (1, Con2 1);;"))
 
@@ -517,7 +524,7 @@ let suite =
          "test_bool_false" >:: test_bool_false;
          "test_prod" >:: test_prod;
          (* "test_fst" >:: test_fst;
-         "test_snd" >:: test_snd; *)
+            "test_snd" >:: test_snd; *)
          "test_nth" >:: test_nth;
          "test_fun" >:: test_fun;
          "test_app" >:: test_app;
