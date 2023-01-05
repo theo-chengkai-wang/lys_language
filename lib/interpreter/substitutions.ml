@@ -262,8 +262,8 @@ let sim_substitute exprs context expr_subst_in =
   | List.Or_unequal_lengths.Unequal_lengths ->
       error
         "SimultaneousSubstitutionError: Expr and Context have unequal lengths! \
-         Type check must have gone wrong!"
-        (exprs, context) [%sexp_of: Ast.Expr.t list * Ast.Context.t]
+         Type check must have gone wrong! (exprs, context, expr_subst_in)"
+        (exprs, context, expr_subst_in) [%sexp_of: Ast.Expr.t list * Ast.Context.t * Ast.Expr.t]
   | List.Or_unequal_lengths.Ok zipped ->
       Ok zipped >>= fun zipped ->
       (*Assume that all the ids have De Bruijn index 0*)
@@ -351,9 +351,9 @@ let rec meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth
       >>= fun e ->
       meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth e2
       >>= fun e2 -> Ok (Ast.Expr.LetRec (iddef, e, e2))
-  | Ast.Expr.Box (ctx, e) ->
+  | Ast.Expr.Box (ctx2, e) ->
       meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth e
-      >>= fun e -> Ok (Ast.Expr.Box (ctx, e))
+      >>= fun e -> Ok (Ast.Expr.Box (ctx2, e))
   | Ast.Expr.LetBox (metaid, e, e2) ->
       meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth e
       (*TODO: There was an error here. it's current_meta_depth without the +1 because u is non-binding in e*)
@@ -385,8 +385,10 @@ let rec meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth
              ~meta_offset:current_meta_depth
         >>= fun expr_subst_for ->
         sim_substitute exprs_in_subs ctx expr_subst_for
-        |> Or_error.tag
-             ~tag:"MetaSubstitutionError: Problem in simulatenous substitution."
+        |> fun or_error -> Or_error.tag_arg or_error
+             "MetaSubstitutionError: Problem in simulatenous substitution. (ctx, expr_subst_for, meta_id_str, current_meta_depth)"
+             (ctx, expr_subst_for, meta_id_str, current_meta_depth)
+             [%sexp_of: Ast.Context.t * Ast.Expr.t * string * int]
   | Ast.Expr.Constr (tid, e_opt) -> (
       match e_opt with
       | None -> Ok (Ast.Expr.Constr (tid, e_opt))

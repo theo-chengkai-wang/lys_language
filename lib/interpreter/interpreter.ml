@@ -428,7 +428,12 @@ let rec multi_step_reduce ~top_level_context ~type_constr_context ~expr =
       >>= fun box_v ->
       match box_v with
       | Ast.Value.Box (ctx, e_box) ->
-          Substitutions.meta_substitute ctx e_box metaid e2
+          Substitutions.meta_substitute ctx e_box metaid e2 |> fun or_error ->
+          Or_error.tag_arg or_error
+            "EvaluationError: Meta substitution error: metaid, e->v, ctx, v"
+            (metaid, box_v, ctx, e2)
+            [%sexp_of:
+              Ast.MetaIdentifier.t * Ast.Value.t * Ast.Context.t * Ast.Expr.t]
           >>= fun res_meta_sub ->
           multi_step_reduce ~top_level_context ~type_constr_context
             ~expr:res_meta_sub

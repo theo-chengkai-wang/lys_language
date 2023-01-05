@@ -302,8 +302,8 @@ let test_match_identifier _ =
                 Ast.Value.Constr (Ast.Constructor.of_string "Con2", None) )))
         (List.last results)
 
-let suite =
-  "interpreter_suite"
+let interpreter_suite =
+  "interpreter_main_suite"
   >::: [
          "test_interp_int" >:: test_interp_int;
          "test_interp_var_def" >:: test_interp_var_def;
@@ -316,3 +316,60 @@ let suite =
          "test_match_wildcard" >:: test_match_wildcard;
          "test_match_identifier" >:: test_match_identifier;
        ]
+
+let test_intlist_map _ =
+  let program =
+    "let rec (pow: int -> int -> int) = fun (n:int) -> if n = 0 then (fun \n\
+    \      (x:int) -> 1) else (fun (x:int) -> x * (pow (n-1) x));;\n\
+    \   \n\
+    \   pow 2 3;; (*gives 9*)\n\
+    \   \n\
+    \   \n\
+    \   let rec (pow2: int -> [b:int]int) = fun (n:int) -> \n\
+    \   if n = 0 then box (b:int |- 1)\n\
+    \   else \n\
+    \       let box u = pow2 (n-1) in box (b:int |- b * (u with (b)));;\n\
+    \   \n\
+    \   pow2 2;;\n\
+    \   \n\
+    \   let box u = pow2 2 in u with (3);; (*gives 9*)"
+  in
+  let res_opt = exec_program program in
+  match res_opt with
+  | None -> assert_string "Program Execution Failed"
+  | Some results ->
+      assert_equal
+        (Some
+           (Interpreter.TopLevelEvaluationResult.ExprValue
+              ( Ast.Typ.TIdentifier (Ast.TypeIdentifier.of_string "intlist"),
+                Ast.Value.Constr
+                  ( Ast.Constructor.of_string "Cons",
+                    Some
+                      (Ast.Value.Prod
+                         [
+                           Ast.Value.Constant (Ast.Constant.Integer 2);
+                           Ast.Value.Constr
+                             ( Ast.Constructor.of_string "Cons",
+                               Some
+                                 (Ast.Value.Prod
+                                    [
+                                      Ast.Value.Constant
+                                        (Ast.Constant.Integer 4);
+                                      Ast.Value.Constr
+                                        ( Ast.Constructor.of_string "Cons",
+                                          Some
+                                            (Ast.Value.Prod
+                                               [
+                                                 Ast.Value.Constant
+                                                   (Ast.Constant.Integer 6);
+                                                 Ast.Value.Constr
+                                                   ( Ast.Constructor.of_string
+                                                       "Nil",
+                                                     None );
+                                               ]) );
+                                    ]) );
+                         ]) ) )))
+        (List.last results)
+
+let interpreter_regression_suite = "interpreter_regression_suite" >::: []
+let suite = "interpreter_suite" >::: [ interpreter_suite ]

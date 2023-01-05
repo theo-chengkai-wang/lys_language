@@ -252,7 +252,9 @@ and type_inference_expression meta_ctx ctx type_ctx e =
       else Ok ())
       >>= fun () ->
       let new_ctx =
-        Typing_context.ObjTypingContext.add_all_mappings ctx context
+        Typing_context.ObjTypingContext.add_all_mappings
+          (Typing_context.ObjTypingContext.create_empty_context ())
+          context (*Bug here*)
       in
       type_inference_expression meta_ctx new_ctx type_ctx e >>= fun e_typ ->
       Ok (Ast.Typ.TBox (context, e_typ))
@@ -550,5 +552,4 @@ let type_check_program
     ?(meta_ctx = Typing_context.MetaTypingContext.create_empty_context ())
     ?(obj_ctx = Typing_context.ObjTypingContext.create_empty_context ())
     ?(type_ctx = Typing_context.TypeConstrTypingContext.empty) program =
-  let open Or_error.Monad_infix in
   program |> type_check_program_aux meta_ctx obj_ctx type_ctx
