@@ -85,4 +85,5 @@ rule read =
 and comment = 
   parse
   | "*)" {read lexbuf}
+  | newline  { next_line lexbuf; comment lexbuf }
   | _ (*skip*) {comment lexbuf}

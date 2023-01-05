@@ -1,4 +1,4 @@
-datatype sometype = Con1 of int | Con2 | Con3 of unit | Con4 of (int * sometype);;
+(*datatype sometype = Con1 of int | Con2 | Con3 of unit | Con4 of (int * sometype);;
 datatype sometype2;;
 let x:sometype = Con1 1;;
 
@@ -7,8 +7,11 @@ let y:sometype = Con4 (1, Con1 1);;
 match y with
     | Con1 (x) -> x
     | Con3 (u) -> 2
+    | Con2 -> 0
     | Con4 (i, s) ->  i
     | _ -> 1;;
+
+*)
 
 (*let m1: (([x:_c]_a) -> ([y1: _c, y2: _d]_a)) = 
     fun (z: [x:_c]_a) -> 
@@ -24,6 +27,47 @@ let rec (pow: int -> int -> int) = fun (n:int) -> if n = 0 then (fun
   RESET;;
   let rec (pow: int -> [b:int]int) = fun (n:int) -> if n = 0 then box 
    (b:int |- 1) else let box u = pow (n-1) in box (b:int |- b * (u with (b)));;
-
-let box u = pow 2 in u with (1);;*)
+let box u = pow 2 in u with (1);; *)
   
+(*Test for datatypes + matching*)
+
+datatype tree = Lf | Br of (int * tree * tree);;
+
+let t1: tree = Lf;;
+let t2: tree = Br (1, Br (3, Lf, Lf), Br (4, Lf, Lf));;
+
+let rec sum:(tree -> int) = fun (t:tree) -> 
+    match t with
+    | Lf -> 0 
+    | Br (i, l, r) -> i + (sum l) + (sum r);;
+
+sum t2;;
+
+(* Test for matching on n-ary products *)
+
+let x4: (int * unit * (unit * int) * int) = (1, (), ((), 2), 3);;
+
+match x4 with
+| (a, b, c, d) -> c;;
+
+(* Test for matching on Inl and Inr *)
+match (L[int, unit] 10) with
+| L x -> x
+| R y -> 0;;
+
+match (R[int, unit] ()) with
+| L x -> x
+| R y -> 0;;
+
+(* Test for wildcard and just id *)
+
+datatype sometype = Con1 of int | Con2 | Con3 of unit | Con4 of (int * sometype);;
+let y:sometype = Con2;;
+
+match y with
+    | Con1 (x) -> x
+    | Con3 (u) -> 2
+    | _ -> 1;;
+
+match y with
+    | z -> z;;
