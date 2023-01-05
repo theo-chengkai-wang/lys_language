@@ -34,8 +34,8 @@ end = struct
   let show v =
     v |> String_map.to_alist
     |> List.fold ~init:"" ~f:(fun acc (id, record) ->
-           acc ^ Printf.sprintf "(%s, %s)" id (show_single_record record))
-    |> fun str -> Printf.sprintf "[%s]" str
+           acc ^ Printf.sprintf "(%s, %s);" id (show_single_record record))
+    |> fun str -> Printf.sprintf "[\n%s]" str
 
   let to_typing_obj_context v =
     v |> String_map.to_alist
@@ -72,6 +72,7 @@ module type TypeConstrContext_type = sig
     (Ast.TypeIdentifier.t * (Ast.Constructor.t * Ast.Typ.t option) list) list
 
   val to_typeconstrtypingcontext : t -> Typing_context.TypeConstrTypingContext.t
+  val show : t -> string
 end
 
 module ConstructorsMap = Map.Make (Ast.Constructor)
@@ -148,9 +149,26 @@ module TypeConstrContext : TypeConstrContext_type = struct
          ~f:(fun acc x ->
            Typing_context.TypeConstrTypingContext.add_typ_from_decl acc x
            |> ok_exn)
-end
 
-(* module TypeConstructorContext *)
+  let show ctx =
+    ctx |> to_typing_decl
+    |> List.fold ~init:"" ~f:(fun acc (tid, constr_typ_list) ->
+           acc
+           ^ Printf.sprintf "\t %s : \n\t\t%s;\n"
+               (Ast.TypeIdentifier.show tid)
+               ("["
+               ^ List.fold constr_typ_list ~init:""
+                   ~f:(fun acc (constr, typ_opt) ->
+                     acc
+                     ^ Printf.sprintf "(%s, %s);"
+                         (Ast.Constructor.get_name constr)
+                         (match typ_opt with
+                         | None -> "None"
+                         | Some typ ->
+                             Printf.sprintf "Some (%s)" (Ast.Typ.show typ)))
+               ^ "]"))
+    |> Printf.sprintf "[\n%s]"
+end
 
 (*
    let reduce ~top_level_context ~expr = ()
@@ -652,7 +670,18 @@ let evaluate_top_level_defn ?(top_level_context = EvaluationContext.empty)
       match d with
       | Ast.Directive.Env ->
           let env = EvaluationContext.show top_level_context in
-          let message = Printf.sprintf "ENV: \n\t%s" env in
+          let type_env = TypeConstrContext.show type_constr_context in
+          let message =
+            Printf.sprintf
+              "ENV: \n\
+               -------------------\n\
+               \tVARIABLES: \n\
+               %s\n\
+               -------------------\n\
+               \tDATATYPES: \n\
+               %s"
+              env type_env
+          in
           Ok
             ( TopLevelEvaluationResult.Directive (d, message),
               top_level_context,

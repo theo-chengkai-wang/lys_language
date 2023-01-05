@@ -38,12 +38,13 @@ module type TypeConstrContext_type = sig
 
   val get_typ_from_constr : t -> Ast.Constructor.t -> constr_record option
   val empty : t
+
   val to_typing_decl :
-  t ->
-  (Ast.TypeIdentifier.t * (Ast.Constructor.t * Ast.Typ.t option) list) list
+    t ->
+    (Ast.TypeIdentifier.t * (Ast.Constructor.t * Ast.Typ.t option) list) list
 
-val to_typeconstrtypingcontext : t -> Typing_context.TypeConstrTypingContext.t
-
+  val to_typeconstrtypingcontext : t -> Typing_context.TypeConstrTypingContext.t
+  val show : t -> string
 end
 
 module TypeConstrContext : TypeConstrContext_type
