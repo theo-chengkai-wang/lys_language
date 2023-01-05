@@ -6,4 +6,6 @@ let y:sometype = Con4 (1, Con1 1);;
 
 match y with
     | Con1 (x) -> x
+    | Con3 (u) -> 2
+    | Con4 (i, s) ->  i
     | _ -> 1;;

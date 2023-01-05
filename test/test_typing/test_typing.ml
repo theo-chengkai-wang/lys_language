@@ -28,9 +28,19 @@ let type_infer_from_str
     ?meta_context:(meta_ctx =
         Typing_context.MetaTypingContext.create_empty_context ())
     ?obj_context:(obj_ctx =
-        Typing_context.ObjTypingContext.create_empty_context ()) str =
-  type_infer ~meta_context:meta_ctx ~obj_context:obj_ctx
+        Typing_context.ObjTypingContext.create_empty_context ())
+    ?type_context:(typ_ctx = Typing_context.TypeConstrTypingContext.empty) str =
+  type_infer ~meta_context:meta_ctx ~obj_context:obj_ctx ~type_context:typ_ctx
     (Lexing.from_string str)
+
+let type_check_program_from_str
+    ?meta_context:(meta_ctx =
+        Typing_context.MetaTypingContext.create_empty_context ())
+    ?obj_context:(obj_ctx =
+        Typing_context.ObjTypingContext.create_empty_context ())
+    ?type_context:(type_ctx = Typing_context.TypeConstrTypingContext.empty) str =
+  str |> Lexing.from_string |> Lys_parsing.Lex_and_parse.parse_program |> Lys_ast.Ast.Program.of_past
+  |> Lys_typing.Typecore.type_check_program ~meta_ctx ~obj_ctx ~type_ctx |> Or_error.ok
 
 (* m1-m8 *)
 
@@ -218,5 +228,24 @@ let cmtt_suite =
          >:: test_closure_unmatched_context_wrt_arguments;
        ]
 
+(*ADT Suite*)
+let test_datatypes _ = 
+  let program = "
+  datatype sometype = Con1 of int | Con3 of unit | Con4 of (int * sometype);;
+
+  let x:sometype = Con1 1;;
+  
+  let y:sometype = Con4 (1, Con1 1);;
+  
+  match y with
+      | Con1 (x) -> x
+      | Con3 (u) -> 2
+      | Con4 (i, s) ->  i
+      | _ -> 1;;
+  " in
+  assert_bool "Type check hasn't failed" (Option.is_some (type_check_program_from_str program))
+let adt_suite = "adt_suite" >::: [ "test_datatypes" >:: test_datatypes ]
+
 let suite =
-  "typing_suite" >::: [ cmtt_suite; standard_suite; example_programs_suite ]
+  "typing_suite"
+  >::: [ cmtt_suite; standard_suite; example_programs_suite; adt_suite ]
