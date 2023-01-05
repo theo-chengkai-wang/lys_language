@@ -1,5 +1,5 @@
-datatype sometype = Con1 of int | Con3 of unit | Con4 of (int * sometype);;
-
+(*datatype sometype = Con1 of int | Con3 of unit | Con4 of (int * sometype);;
+datatype sometype2;;
 let x:sometype = Con1 1;;
 
 let y:sometype = Con4 (1, Con1 1);;
@@ -9,3 +9,21 @@ match y with
     | Con3 (u) -> 2
     | Con4 (i, s) ->  i
     | _ -> 1;;
+
+let m1: (([x:_c]_a) -> ([y1: _c, y2: _d]_a)) = 
+    fun (z: [x:_c]_a) -> 
+        let box u = z in box (y1: _c, y2: _d |- u with (y1))
+;;
+
+m1 x;;*)
+
+let rec (pow: int -> int -> int) = fun (n:int) -> if n = 0 then (fun 
+   (x:int) -> 1) else (fun (x:int) -> x * (pow (n-1) x));;
+  pow 2 3;;
+  ENV;;
+  RESET;;
+  let rec (pow: int -> [b:int]int) = fun (n:int) -> if n = 0 then box 
+   (b:int |- 1) else let box u = pow (n-1) in box (b:int |- b * (u with (b)));;
+
+let box u = pow 2 in u with (3);;
+  

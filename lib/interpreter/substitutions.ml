@@ -113,6 +113,23 @@ let rec substitute_aux expr_subst_for id_str current_depth expr_subst_in =
       |> List.map ~f:(substitute_aux expr_subst_for id_str current_depth)
       |> Or_error.combine_errors
       >>= fun exprs -> Ok (Ast.Expr.Closure (metaid, exprs))
+  | Ast.Expr.Constr (tid, e_opt) -> (
+      match e_opt with
+      | None -> Ok (Ast.Expr.Constr (tid, e_opt))
+      | Some e ->
+          substitute_aux expr_subst_for id_str current_depth e >>= fun e ->
+          Ok (Ast.Expr.Constr (tid, Some e)))
+  | Ast.Expr.Match (e, pattn_expr_list) ->
+      substitute_aux expr_subst_for id_str current_depth e >>= fun e ->
+      List.map pattn_expr_list ~f:(fun (pattn, expr) ->
+          let binders = Ast.Pattern.get_binders pattn in
+          let new_depth =
+            if List.is_empty binders then current_depth else current_depth + 1
+          in
+          substitute_aux expr_subst_for id_str new_depth expr >>= fun expr ->
+          Ok (pattn, expr))
+      |> Or_error.combine_errors
+      >>= fun pattn_expr_list -> Ok (Ast.Expr.Match (e, pattn_expr_list))
 
 let substitute expr_subst_for id expr_subst_in =
   (*Assume that the id has De Bruijn index 0*)
@@ -214,6 +231,23 @@ let rec sim_substitute_aux zipped_exprs_ids current_depth expr_subst_in =
       |> List.map ~f:(sim_substitute_aux zipped_exprs_ids current_depth)
       |> Or_error.combine_errors
       >>= fun exprs -> Ok (Ast.Expr.Closure (metaid, exprs))
+  | Ast.Expr.Constr (tid, e_opt) -> (
+      match e_opt with
+      | None -> Ok (Ast.Expr.Constr (tid, e_opt))
+      | Some e ->
+          sim_substitute_aux zipped_exprs_ids current_depth e >>= fun e ->
+          Ok (Ast.Expr.Constr (tid, Some e)))
+  | Ast.Expr.Match (e, pattn_expr_list) ->
+      sim_substitute_aux zipped_exprs_ids current_depth e >>= fun e ->
+      List.map pattn_expr_list ~f:(fun (pattn, expr) ->
+          let binders = Ast.Pattern.get_binders pattn in
+          let new_depth =
+            if List.is_empty binders then current_depth else current_depth + 1
+          in
+          sim_substitute_aux zipped_exprs_ids new_depth expr >>= fun expr ->
+          Ok (pattn, expr))
+      |> Or_error.combine_errors
+      >>= fun pattn_expr_list -> Ok (Ast.Expr.Match (e, pattn_expr_list))
 
 let sim_substitute exprs context expr_subst_in =
   let open Or_error.Monad_infix in
@@ -318,9 +352,10 @@ let rec meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth
       meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth e
       >>= fun e -> Ok (Ast.Expr.Box (ctx, e))
   | Ast.Expr.LetBox (metaid, e, e2) ->
-      meta_substitute_aux ctx expr_subst_for meta_id_str
-        (current_meta_depth + 1) e
-      >>= fun e ->
+      meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth e
+      (*TODO: There was an error here. it's current_meta_depth without the +1 because u is non-binding in e*)
+      >>=
+      fun e ->
       meta_substitute_aux ctx expr_subst_for meta_id_str
         (current_meta_depth + 1) e2
       >>= fun e2 -> Ok (Ast.Expr.LetBox (metaid, e, e2))
@@ -349,6 +384,22 @@ let rec meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth
         sim_substitute exprs_in_subs ctx expr_subst_for
         |> Or_error.tag
              ~tag:"MetaSubstitutionError: Problem in simulatenous substitution."
+  | Ast.Expr.Constr (tid, e_opt) -> (
+      match e_opt with
+      | None -> Ok (Ast.Expr.Constr (tid, e_opt))
+      | Some e ->
+          meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth
+            e
+          >>= fun e -> Ok (Ast.Expr.Constr (tid, Some e)))
+  | Ast.Expr.Match (e, pattn_expr_list) ->
+      meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth e
+      >>= fun e ->
+      List.map pattn_expr_list ~f:(fun (pattn, expr) ->
+          meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth
+            expr
+          >>= fun expr -> Ok (pattn, expr))
+      |> Or_error.combine_errors
+      >>= fun pattn_expr_list -> Ok (Ast.Expr.Match (e, pattn_expr_list))
 
 let meta_substitute ctx expr meta_id expr_subst_in =
   let meta_id_str = Ast.MetaIdentifier.get_name meta_id in

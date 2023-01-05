@@ -123,6 +123,7 @@ module rec ObjIdentifier : ObjIdentifier_type = struct
     (* If ~current_ast_level or ~current_identifiers not given, assume that we're talking about an identifier definition, so the index returned should be Index.none *)
     let open Or_error.Monad_infix in
     let level_opt = String_map.find current_identifiers id in
+    (*Get the level at which id is defined.*)
     match level_opt with
     | None ->
         Ok (id, DeBruijnIndex.top_level) (*Assume top level if not in context.*)
@@ -690,6 +691,48 @@ end = struct
         MetaIdentifier.populate_index metaid ~current_ast_level
           ~current_identifiers ~current_meta_ast_level ~current_meta_identifiers
         >>= fun metaid -> Ok (Closure (metaid, exprs))
+    | Constr (tid, e_opt) -> (
+        (* Or_error.unimplemented "not implemented" *)
+        (* Congruence*)
+        match e_opt with
+        | None -> Ok (Constr (tid, None))
+        | Some e ->
+            populate_index ~current_ast_level ~current_identifiers
+              ~current_meta_ast_level ~current_meta_identifiers e
+            >>= fun e -> Ok (Constr (tid, Some e)))
+    | Match (e, pattn_expr_list) ->
+        (* Or_error.unimplemented "Not implemented" *)
+        (* Get all binders, and if there are binders, increment level, otherwise don't *)
+        populate_index e ~current_ast_level ~current_identifiers
+          ~current_meta_ast_level ~current_meta_identifiers
+        >>= fun e ->
+        let process_binder_expr (pattern, expr) =
+          let binders = Pattern.get_binders pattern in
+          if List.is_empty binders then
+            (* No adding new binders and no incrementing *)
+            populate_index ~current_ast_level ~current_identifiers
+              ~current_meta_ast_level ~current_meta_identifiers expr
+            >>= fun expr -> Ok (pattern, expr)
+          else
+            (* Add the binders in obj context *)
+            let new_current_identifiers =
+              List.fold binders ~init:current_identifiers ~f:(fun acc binder ->
+                  String_map.set acc
+                    ~key:(ObjIdentifier.get_name binder)
+                    ~data:current_ast_level)
+            in
+            (* And populate indices with incremented context *)
+            let new_level = current_ast_level + 1 in
+            populate_index expr ~current_ast_level:new_level
+              ~current_identifiers:new_current_identifiers
+              ~current_meta_ast_level ~current_meta_identifiers
+            >>= fun expr -> Ok (pattern, expr)
+        in
+        List.map pattn_expr_list ~f:process_binder_expr
+        |> Or_error.combine_errors
+        |> Or_error.tag
+             ~tag:"DeBruijnPopulationError[OBJECT]: Error in Match statement."
+        >>= fun new_pattn_expr_list -> Ok (Match (e, new_pattn_expr_list))
 
   let rec shift_indices expr ~obj_depth ~meta_depth ~obj_offset ~meta_offset =
     let open Or_error.Monad_infix in
@@ -792,6 +835,28 @@ end = struct
           ~tag:"DeBruijnShiftingError[META]: Shifting meta index failed."
           (MetaIdentifier.shift metaid ~depth:meta_depth ~offset:meta_offset)
         >>= fun metaid -> Ok (Closure (metaid, exprs))
+    | Constr (tid, e_opt) -> (
+        match e_opt with
+        | None -> Ok (Constr (tid, None))
+        | Some e ->
+            shift_indices e ~obj_depth ~meta_depth ~obj_offset ~meta_offset
+            >>= fun e -> Ok (Constr (tid, Some e)))
+    | Match (e, pattn_expr_list) ->
+        shift_indices e ~obj_depth ~meta_depth ~obj_offset ~meta_offset
+        >>= fun e ->
+        List.map pattn_expr_list ~f:(fun (pattn, expr) ->
+            let binders = Pattern.get_binders pattn in
+            (* Add 1 to obj depth only if BINDING *)
+            let new_obj_depth =
+              if List.is_empty binders then obj_depth else obj_depth + 1
+            in
+            shift_indices expr ~obj_depth:new_obj_depth ~meta_depth ~obj_offset
+              ~meta_offset
+            >>= fun new_expr -> Ok (pattn, new_expr))
+        |> Or_error.combine_errors
+        |> Or_error.tag
+             ~tag:"DeBruijnShiftingError[OBJECT]: Error in match statement."
+        >>= fun pattn_expr_list -> Ok (Match (e, pattn_expr_list))
 end
 
 and Value : sig
@@ -933,6 +998,8 @@ end = struct
           ~current_meta_identifiers:String_map.empty
         >>= fun expr -> Ok (Expression (typ, expr))
     | Directive d -> Ok (Directive d)
+    | DatatypeDecl (tid, constr_typ_list) ->
+        Ok (DatatypeDecl (tid, constr_typ_list))
 
   let convert_from_untyped_without_typecheck = function
     | TopLevelDefn.Definition (iddef, e) -> Definition (Typ.TUnit, iddef, e)

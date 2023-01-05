@@ -44,6 +44,9 @@ end = struct
     |> Typing_context.ObjTypingContext.add_all_mappings
          (Typing_context.ObjTypingContext.create_empty_context ())
 end
+
+(* module TypeConstructorContext *)
+
 (*
    let reduce ~top_level_context ~expr = ()
 

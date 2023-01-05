@@ -71,7 +71,7 @@ let loop3 str () =
   (* |> Ast.Program.of_past
      |> Ast.TypedProgram.convert_from_untyped_without_typecheck *)
   |> Ast.Program.of_past
-  |> Typecore.type_check_program |> ok_exn |> Interpreter.evaluate_program
+  |> Typecore.type_check_program |> ok_exn |> Ast.TypedProgram.populate_index |> ok_exn |> Interpreter.evaluate_program
   |> ok_exn
   |> fun l ->
   let _ =
