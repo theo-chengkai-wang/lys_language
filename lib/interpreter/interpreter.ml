@@ -45,6 +45,90 @@ end = struct
          (Typing_context.ObjTypingContext.create_empty_context ())
 end
 
+module type TypeConstrContext_type = sig
+  type constr_record = {
+    constr : Ast.Constructor.t;
+    arg_type : Ast.Typ.t option;
+    belongs_to_typ : Ast.TypeIdentifier.t;
+  }
+  [@@deriving sexp, show, equal, compare]
+
+  type t [@@deriving sexp, equal, compare]
+
+  val add_typ_from_decl :
+    t ->
+    Ast.TypeIdentifier.t * (Ast.Constructor.t * Ast.Typ.t option) list ->
+    t Or_error.t (*Error thrown when duplicated constructor name*)
+
+  val get_constr_from_typ :
+    t -> Ast.TypeIdentifier.t -> constr_record list option
+  (*None means type doesn't exist, Some [] means type exists but is empty*)
+
+  val get_typ_from_constr : t -> Ast.Constructor.t -> constr_record option
+  val empty : t
+end
+
+module ConstructorsMap = Map.Make (Ast.Constructor)
+module TypMap = Map.Make (Ast.TypeIdentifier)
+
+module TypeConstrContext : TypeConstrContext_type = struct
+  type constr_record = {
+    constr : Ast.Constructor.t;
+    arg_type : Ast.Typ.t option;
+    belongs_to_typ : Ast.TypeIdentifier.t;
+  }
+  [@@deriving sexp, show, equal, compare]
+
+  type t = {
+    typ_constr_map : constr_record list TypMap.t;
+    constr_typ_map : constr_record ConstructorsMap.t;
+  }
+  [@@deriving sexp, equal, compare]
+
+  let add_typ_from_decl { typ_constr_map; constr_typ_map }
+      (tid, constructor_type_list) =
+    match
+      List.find constructor_type_list ~f:(fun (constr, _) ->
+          ConstructorsMap.mem constr_typ_map constr)
+    with
+    | Some (c, _) ->
+        Or_error.error
+          (Printf.sprintf
+             "TypeConstrContextError: Constructor %s already defined"
+             (Ast.Constructor.get_name c))
+          (c, tid, constructor_type_list)
+          [%sexp_of:
+            Ast.Constructor.t
+            * Ast.TypeIdentifier.t
+            * (Ast.Constructor.t * Ast.Typ.t option) list]
+    | None ->
+        let new_records =
+          List.map constructor_type_list ~f:(fun (constr, typ) ->
+              { constr; arg_type = typ; belongs_to_typ = tid })
+        in
+        let new_typ_constr_map =
+          TypMap.set typ_constr_map ~key:tid ~data:new_records
+        in
+        let new_constr_typ_map =
+          List.fold new_records ~init:constr_typ_map ~f:(fun acc n_record ->
+              ConstructorsMap.set acc ~key:n_record.constr ~data:n_record)
+        in
+        Ok
+          {
+            typ_constr_map = new_typ_constr_map;
+            constr_typ_map = new_constr_typ_map;
+          }
+
+  let get_constr_from_typ { typ_constr_map; _ } typ =
+    TypMap.find typ_constr_map typ
+
+  let get_typ_from_constr { constr_typ_map; _ } constr =
+    ConstructorsMap.find constr_typ_map constr
+
+  let empty =
+    { typ_constr_map = TypMap.empty; constr_typ_map = ConstructorsMap.empty }
+end
+
 (* module TypeConstructorContext *)
 
 (*
@@ -52,7 +136,8 @@ end
 
    let evaluate_program program = [] *)
 
-let rec multi_step_reduce ~top_level_context ~expr =
+let rec multi_step_reduce ~top_level_context
+    ~(type_constr_context) ~expr =
   let open Or_error.Monad_infix in
   match expr with
   | Ast.Expr.Identifier id ->
@@ -75,7 +160,7 @@ let rec multi_step_reduce ~top_level_context ~expr =
         else
           (* Recursion: handle once together. *)
           Ast.DeBruijnIndex.create 0 >>= fun debruijn_index ->
-          multi_step_reduce ~top_level_context
+          multi_step_reduce ~top_level_context ~type_constr_context
             ~expr:
               (Ast.Expr.LetRec
                  ( (Ast.ObjIdentifier.of_string id_str, typ),
@@ -85,7 +170,8 @@ let rec multi_step_reduce ~top_level_context ~expr =
                         debruijn_index) ))
   | Ast.Expr.Constant c -> Ok (Ast.Value.Constant c)
   | Ast.Expr.UnaryOp (op, expr) -> (
-      multi_step_reduce ~top_level_context ~expr >>= fun v ->
+      multi_step_reduce ~top_level_context ~type_constr_context ~expr
+      >>= fun v ->
       match (op, v) with
       | Ast.UnaryOperator.NEG, Ast.Value.Constant (Ast.Constant.Integer i) ->
           Ok (Ast.Value.Constant (Ast.Constant.Integer (-i)))
@@ -98,8 +184,10 @@ let rec multi_step_reduce ~top_level_context ~expr =
             (Ast.Expr.UnaryOp (op, expr))
             [%sexp_of: Ast.Expr.t])
   | Ast.Expr.BinaryOp (op, expr1, expr2) -> (
-      multi_step_reduce ~top_level_context ~expr:expr1 >>= fun v1 ->
-      multi_step_reduce ~top_level_context ~expr:expr2 >>= fun v2 ->
+      multi_step_reduce ~top_level_context ~type_constr_context ~expr:expr1
+      >>= fun v1 ->
+      multi_step_reduce ~top_level_context ~type_constr_context ~expr:expr2
+      >>= fun v2 ->
       match (op, v1, v2) with
       | ( Ast.BinaryOperator.ADD,
           Ast.Value.Constant (Ast.Constant.Integer i1),
@@ -160,11 +248,12 @@ let rec multi_step_reduce ~top_level_context ~expr =
             (Ast.Expr.BinaryOp (op, expr1, expr2))
             [%sexp_of: Ast.Expr.t])
   | Ast.Expr.Prod exprs ->
-      List.map exprs ~f:(fun expr -> multi_step_reduce ~top_level_context ~expr)
+      List.map exprs ~f:(fun expr ->
+          multi_step_reduce ~top_level_context ~type_constr_context ~expr)
       |> Or_error.combine_errors
       >>= fun values -> Ok (Ast.Value.Prod values)
   (* | Ast.Expr.Fst expr -> (
-         multi_step_reduce ~top_level_context ~expr >>= fun v ->
+         multi_step_reduce ~top_level_context ~type_constr_context ~expr >>= fun v ->
          match v with
          | Ast.Value.Prod (v1, _) -> Ok v1
          | _ ->
@@ -173,7 +262,7 @@ let rec multi_step_reduce ~top_level_context ~expr =
                 Type check should have prevented this."
                (Ast.Expr.Fst expr) [%sexp_of: Ast.Expr.t])
      | Ast.Expr.Snd expr -> (
-         multi_step_reduce ~top_level_context ~expr >>= fun v ->
+         multi_step_reduce ~top_level_context ~type_constr_context ~expr >>= fun v ->
          match v with
          | Ast.Value.Prod (_, v2) -> Ok v2
          | _ ->
@@ -182,7 +271,8 @@ let rec multi_step_reduce ~top_level_context ~expr =
                 Type check should have prevented this."
                (Ast.Expr.Snd expr) [%sexp_of: Ast.Expr.t]) *)
   | Ast.Expr.Nth (expr, i) -> (
-      multi_step_reduce ~top_level_context ~expr >>= fun v ->
+      multi_step_reduce ~top_level_context ~type_constr_context ~expr
+      >>= fun v ->
       match v with
       | Ast.Value.Prod values -> (
           match List.nth values i with
@@ -201,15 +291,16 @@ let rec multi_step_reduce ~top_level_context ~expr =
             (Ast.Expr.Nth (expr, i))
             [%sexp_of: Ast.Expr.t])
   | Ast.Expr.Left (t1, t2, expr) ->
-      multi_step_reduce ~top_level_context ~expr >>= fun v ->
-      Ok (Ast.Value.Left (t1, t2, v))
+      multi_step_reduce ~top_level_context ~type_constr_context ~expr
+      >>= fun v -> Ok (Ast.Value.Left (t1, t2, v))
       (* We don't run RT type check here. *)
   | Ast.Expr.Right (t1, t2, expr) ->
-      multi_step_reduce ~top_level_context ~expr >>= fun v ->
-      Ok (Ast.Value.Right (t1, t2, v))
+      multi_step_reduce ~top_level_context ~type_constr_context ~expr
+      >>= fun v -> Ok (Ast.Value.Right (t1, t2, v))
       (* We don't run RT type check here. *)
   | Ast.Expr.Case (e, (id1, _), e1, (id2, _), e2) ->
-      multi_step_reduce ~top_level_context ~expr:e >>= fun v ->
+      multi_step_reduce ~top_level_context ~type_constr_context ~expr:e
+      >>= fun v ->
       let new_expr_or_error =
         match v with
         | Ast.Value.Left (_, _, v) ->
@@ -223,36 +314,43 @@ let rec multi_step_reduce ~top_level_context ~expr =
               expr [%sexp_of: Ast.Expr.t]
       in
       new_expr_or_error >>= fun new_expr ->
-      multi_step_reduce ~top_level_context ~expr:new_expr
+      multi_step_reduce ~top_level_context ~type_constr_context ~expr:new_expr
   | Ast.Expr.Lambda (iddef, e) -> Ok (Ast.Value.Lambda (iddef, e))
   | Ast.Expr.Application (e1, e2) -> (
-      multi_step_reduce ~top_level_context ~expr:e1 >>= fun v1 ->
-      multi_step_reduce ~top_level_context ~expr:e2 >>= fun v2 ->
+      multi_step_reduce ~top_level_context ~type_constr_context ~expr:e1
+      >>= fun v1 ->
+      multi_step_reduce ~top_level_context ~type_constr_context ~expr:e2
+      >>= fun v2 ->
       match v1 with
       | Ast.Value.Lambda ((id, _), e) ->
           Substitutions.substitute (Ast.Value.to_expr v2) id e
           >>= fun new_expr ->
-          multi_step_reduce ~top_level_context ~expr:new_expr
+          multi_step_reduce ~top_level_context ~type_constr_context
+            ~expr:new_expr
       | _ ->
           error
             "EvaluationError: type mismatch at Lambda. [FATAL] should not \
              happen! Type check should have prevented this."
             expr [%sexp_of: Ast.Expr.t])
   | Ast.Expr.IfThenElse (b, e1, e2) -> (
-      multi_step_reduce ~top_level_context ~expr:b >>= fun bv ->
+      multi_step_reduce ~top_level_context ~type_constr_context ~expr:b
+      >>= fun bv ->
       match bv with
       | Ast.Value.Constant (Ast.Constant.Boolean v) ->
-          if v then multi_step_reduce ~top_level_context ~expr:e1
-          else multi_step_reduce ~top_level_context ~expr:e2
+          if v then
+            multi_step_reduce ~top_level_context ~type_constr_context ~expr:e1
+          else
+            multi_step_reduce ~top_level_context ~type_constr_context ~expr:e2
       | _ ->
           error
             "EvaluationError: type mismatch at IfThenElse. [FATAL] should not \
              happen! Type check should have prevented this."
             expr [%sexp_of: Ast.Expr.t])
   | Ast.Expr.LetBinding ((id, _), e, e2) ->
-      multi_step_reduce ~top_level_context ~expr:e >>= fun ev ->
+      multi_step_reduce ~top_level_context ~type_constr_context ~expr:e
+      >>= fun ev ->
       Substitutions.substitute (Ast.Value.to_expr ev) id e2 >>= fun e ->
-      multi_step_reduce ~top_level_context ~expr:e
+      multi_step_reduce ~top_level_context ~type_constr_context ~expr:e
   | Ast.Expr.LetRec ((id, typ), e, e2) ->
       (* let rec f = v in e  ~~~~~> [([(let rec f = v in f)/f]v)/f]e
 
@@ -268,7 +366,8 @@ let rec multi_step_reduce ~top_level_context ~expr =
          However, I can't just translate it to the above, for it will easily stack overflow, in a very unfortunate way,
          do to my call by value semantics. Instead, I shall have to actually manually write the substitutions out.
       *)
-      multi_step_reduce ~top_level_context ~expr:e >>= fun v ->
+      multi_step_reduce ~top_level_context ~type_constr_context ~expr:e
+      >>= fun v ->
       Ast.DeBruijnIndex.create 0 >>= fun db_index_0 ->
       (*let v1 = [(let rec f = v in f)/f]v*)
       let ev = Ast.Value.to_expr v in
@@ -284,15 +383,17 @@ let rec multi_step_reduce ~top_level_context ~expr =
       Substitutions.substitute to_sub_in id ev >>= fun ev1 ->
       (*[v1/f]e*)
       Substitutions.substitute ev1 id e2 >>= fun ev2 ->
-      multi_step_reduce ~top_level_context ~expr:ev2
+      multi_step_reduce ~top_level_context ~type_constr_context ~expr:ev2
   | Ast.Expr.Box (ctx, e) -> Ok (Ast.Value.Box (ctx, e))
   | Ast.Expr.LetBox (metaid, e, e2) -> (
-      multi_step_reduce ~top_level_context ~expr:e >>= fun box_v ->
+      multi_step_reduce ~top_level_context ~type_constr_context ~expr:e
+      >>= fun box_v ->
       match box_v with
       | Ast.Value.Box (ctx, e_box) ->
           Substitutions.meta_substitute ctx e_box metaid e2
           >>= fun res_meta_sub ->
-          multi_step_reduce ~top_level_context ~expr:res_meta_sub
+          multi_step_reduce ~top_level_context ~type_constr_context
+            ~expr:res_meta_sub
       | _ ->
           error
             "EvaluationError: type mismatch at LetBox. [FATAL] should not \
@@ -301,7 +402,132 @@ let rec multi_step_reduce ~top_level_context ~expr =
   | Ast.Expr.Closure (_, _) ->
       error "EvaluationError: One should never have to evaluate a raw closure."
         expr [%sexp_of: Ast.Expr.t]
-
+  | Ast.Expr.Constr (constr, e_opt) -> (
+      if
+        Option.is_none
+          (TypeConstrContext.get_typ_from_constr type_constr_context constr)
+      then
+        error "EvaluationError: FATAL: constructor undefined" constr
+          [%sexp_of: Ast.Constructor.t]
+      else
+        match e_opt with
+        | None -> Ok (Ast.Value.Constr (constr, None))
+        | Some e ->
+            multi_step_reduce ~top_level_context ~type_constr_context ~expr:e
+            >>= fun v -> Ok (Ast.Value.Constr (constr, Some v)))
+  | Ast.Expr.Match (e, pattn_expr_list) -> (
+      multi_step_reduce ~top_level_context ~type_constr_context ~expr:e
+      >>= fun v ->
+      let match_pattn_expr v (pattn, expr) =
+        (* Processes the pattern: if not matched, return None; if matched return Some (Value.t Or_error.t) *)
+        match (pattn, v) with
+        | Ast.Pattern.Wildcard, _ ->
+            multi_step_reduce ~top_level_context ~type_constr_context ~expr
+            |> Some
+        | Ast.Pattern.Id id, _ ->
+            let expr_of_v = Ast.Value.to_expr v in
+            Substitutions.substitute expr_of_v id expr
+            >>= (fun substituted_expr ->
+                  multi_step_reduce ~top_level_context ~type_constr_context
+                    ~expr:substituted_expr)
+            |> Some
+        | Ast.Pattern.Inl id, Ast.Value.Left (_, _, v) ->
+            let expr_of_v = Ast.Value.to_expr v in
+            Substitutions.substitute expr_of_v id expr
+            >>= (fun substituted_expr ->
+                  multi_step_reduce ~top_level_context ~type_constr_context
+                    ~expr:substituted_expr)
+            |> Some
+        | Ast.Pattern.Inr id, Ast.Value.Right (_, _, v) ->
+            let expr_of_v = Ast.Value.to_expr v in
+            Substitutions.substitute expr_of_v id expr
+            >>= (fun substituted_expr ->
+                  multi_step_reduce ~top_level_context ~type_constr_context
+                    ~expr:substituted_expr)
+            |> Some
+        | Ast.Pattern.Prod id_list, Ast.Value.Prod value_list ->
+            let expr_list = List.map value_list ~f:Ast.Value.to_expr in
+            let idstr_list = List.map id_list ~f:Ast.ObjIdentifier.get_name in
+            Utils.try_zip_list_or_error expr_list idstr_list
+              (Or_error.error
+                 "EvaluationError: argument number mismatch at match clause."
+                 (pattn, expr) [%sexp_of: Ast.Pattern.t * Ast.Expr.t])
+            >>= (fun zipped_list ->
+                  Substitutions.sim_substitute_from_zipped_list zipped_list expr
+                  >>= fun substituted_expr ->
+                  multi_step_reduce ~top_level_context ~type_constr_context
+                    ~expr:substituted_expr)
+            |> Some
+        | Ast.Pattern.Datatype (constr, []), Ast.Value.Constr (constr2, None) ->
+            (* CHECK IF constr exists *)
+            if
+              Option.is_none
+                (TypeConstrContext.get_typ_from_constr type_constr_context
+                   constr)
+            then
+              error "EvaluationError: FATAL: constructor undefined" constr
+                [%sexp_of: Ast.Constructor.t]
+              |> Some
+            else if not (Ast.Constructor.equal constr constr2) then None
+            else
+              multi_step_reduce ~top_level_context ~type_constr_context ~expr
+              |> Some
+        | ( Ast.Pattern.Datatype (constr, [ id ]),
+            Ast.Value.Constr (constr2, Some v) ) ->
+            if
+              Option.is_none
+                (TypeConstrContext.get_typ_from_constr type_constr_context
+                   constr)
+            then
+              error "EvaluationError: FATAL: constructor undefined" constr
+                [%sexp_of: Ast.Constructor.t]
+              |> Some
+            else if not (Ast.Constructor.equal constr constr2) then None
+            else
+              (* If constructors match, no of arguments should match too, otherwise error *)
+              let expr_to_sub_for = Ast.Value.to_expr v in
+              Substitutions.substitute expr_to_sub_for id expr
+              >>= (fun substituted_expr ->
+                    multi_step_reduce ~top_level_context ~type_constr_context
+                      ~expr:substituted_expr)
+              |> Some
+        | ( Ast.Pattern.Datatype (constr, id_list),
+            Ast.Value.Constr (constr2, Some (Ast.Value.Prod vlist)) ) ->
+            if
+              Option.is_none
+                (TypeConstrContext.get_typ_from_constr type_constr_context
+                   constr)
+            then
+              error "EvaluationError: FATAL: constructor undefined" constr
+                [%sexp_of: Ast.Constructor.t]
+              |> Some
+            else if not (Ast.Constructor.equal constr constr2) then None
+            else
+              let expr_list = List.map vlist ~f:Ast.Value.to_expr in
+              let idstr_list = List.map id_list ~f:Ast.ObjIdentifier.get_name in
+              Utils.try_zip_list_or_error expr_list idstr_list
+                (Or_error.error
+                   "EvaluationError: argument number mismatch at match clause."
+                   (pattn, expr) [%sexp_of: Ast.Pattern.t * Ast.Expr.t])
+              >>= (fun zipped_list ->
+                    Substitutions.sim_substitute_from_zipped_list zipped_list
+                      expr
+                    >>= fun substituted_expr ->
+                    multi_step_reduce ~top_level_context ~type_constr_context
+                      ~expr:substituted_expr)
+              |> Some
+        | _ -> None
+      in
+      let match_and_exec_result =
+        Utils.list_traverse_and_try pattn_expr_list ~f:(fun (pattn, expr) ->
+            match_pattn_expr v (pattn, expr))
+      in
+      match match_and_exec_result with
+      | None ->
+          error "EvaluationError: Pattern matching non-exhaustive."
+            (Ast.Expr.Match (e, pattn_expr_list))
+            [%sexp_of: Ast.Expr.t]
+      | Some res -> res)
 (*
    | Ast.Expr.Identifier id -> Ok ()
    | Ast.Expr.Constant c -> Ok ()
@@ -329,6 +555,8 @@ module TopLevelEvaluationResult = struct
     | Defn of Ast.IdentifierDefn.t * Ast.Value.t
     | RecDefn of Ast.IdentifierDefn.t * Ast.Value.t
     | Directive of Ast.Directive.t * string
+    | DatatypeDecl of
+        Ast.TypeIdentifier.t * (Ast.Constructor.t * Ast.Typ.t option) list
   [@@deriving sexp, compare, equal, show]
 
   let get_str_output = function
@@ -347,22 +575,41 @@ module TopLevelEvaluationResult = struct
         Printf.sprintf
           "Executed directive %s\n\tMessage from the directive:\n\t %s"
           (Ast.Directive.show d) message
+    | DatatypeDecl (tid, constr_typ_list) ->
+        let init =
+          Printf.sprintf "datatype %s = \n" (Ast.TypeIdentifier.get_name tid)
+        in
+        List.fold constr_typ_list ~init ~f:(fun acc (constr, typ_opt) ->
+            acc
+            ^
+            match typ_opt with
+            | None ->
+                Printf.sprintf "\t| %s\n" (Ast.Constructor.get_name constr)
+            | Some typ ->
+                Printf.sprintf "\t| %s of\n\t\t%s\n"
+                  (Ast.Constructor.get_name constr)
+                  (Ast.Typ.show typ))
 end
 
 let evaluate_top_level_defn ?(top_level_context = EvaluationContext.empty)
-    top_level_defn =
+    ?(type_constr_context = TypeConstrContext.empty) top_level_defn =
   let open Or_error.Monad_infix in
   match top_level_defn with
   | Ast.TypedTopLevelDefn.Definition (typ, (id, _), e) ->
-      multi_step_reduce ~top_level_context ~expr:e >>= fun v ->
+      multi_step_reduce ~top_level_context ~type_constr_context ~expr:e
+      >>= fun v ->
       let new_context =
         EvaluationContext.set top_level_context
           ~key:(Ast.ObjIdentifier.get_name id)
           ~data:{ is_rec = false; typ; value = v }
       in
-      Ok (TopLevelEvaluationResult.Defn ((id, typ), v), new_context)
+      Ok
+        ( TopLevelEvaluationResult.Defn ((id, typ), v),
+          new_context,
+          type_constr_context )
   | Ast.TypedTopLevelDefn.RecursiveDefinition (typ, (id, _), e) ->
-      multi_step_reduce ~top_level_context ~expr:e >>= fun v ->
+      multi_step_reduce ~top_level_context ~type_constr_context ~expr:e
+      >>= fun v ->
       let new_entry : EvaluationContext.single_record =
         { is_rec = true; typ; value = v }
       in
@@ -370,42 +617,66 @@ let evaluate_top_level_defn ?(top_level_context = EvaluationContext.empty)
       let new_context =
         EvaluationContext.set top_level_context ~key ~data:new_entry
       in
-      Ok (TopLevelEvaluationResult.RecDefn ((id, typ), v), new_context)
+      Ok
+        ( TopLevelEvaluationResult.RecDefn ((id, typ), v),
+          new_context,
+          type_constr_context )
   | Ast.TypedTopLevelDefn.Expression (typ, e) ->
-      multi_step_reduce ~top_level_context ~expr:e >>= fun v ->
-      Ok (TopLevelEvaluationResult.ExprValue (typ, v), top_level_context)
+      multi_step_reduce ~top_level_context ~type_constr_context ~expr:e
+      >>= fun v ->
+      Ok
+        ( TopLevelEvaluationResult.ExprValue (typ, v),
+          top_level_context,
+          type_constr_context )
   | Ast.TypedTopLevelDefn.Directive d -> (
       match d with
       | Ast.Directive.Env ->
           let env = EvaluationContext.show top_level_context in
           let message = Printf.sprintf "ENV: \n\t%s" env in
-          Ok (TopLevelEvaluationResult.Directive (d, message), top_level_context)
+          Ok
+            ( TopLevelEvaluationResult.Directive (d, message),
+              top_level_context,
+              type_constr_context )
       | Ast.Directive.Quit ->
           Ok
             ( TopLevelEvaluationResult.Directive (d, "User Quit."),
-              top_level_context )
+              top_level_context,
+              type_constr_context )
       | Ast.Directive.Reset ->
           let message = "Cleared Env" in
           let new_env = EvaluationContext.empty in
-          Ok (TopLevelEvaluationResult.Directive (d, message), new_env))
+          Ok
+            ( TopLevelEvaluationResult.Directive (d, message),
+              new_env,
+              type_constr_context ))
+  | Ast.TypedTopLevelDefn.DatatypeDecl (tid, constructor_type_list) ->
+      TypeConstrContext.add_typ_from_decl type_constr_context
+        (tid, constructor_type_list)
+      >>= fun new_typ_context ->
+      Ok
+        ( TopLevelEvaluationResult.DatatypeDecl (tid, constructor_type_list),
+          top_level_context,
+          new_typ_context )
 
 let rec evaluate_top_level_defns ?(top_level_context = EvaluationContext.empty)
-    program =
+    ?(type_constr_context = TypeConstrContext.empty) program =
   let open Or_error.Monad_infix in
   match program with
-  | [] -> Ok ([], top_level_context)
+  | [] -> Ok ([], top_level_context, type_constr_context)
   | top :: tops -> (
-      evaluate_top_level_defn ~top_level_context top
-      >>= fun (top_level_result, new_context) ->
+      evaluate_top_level_defn ~top_level_context ~type_constr_context top
+      >>= fun (top_level_result, new_context, new_typ_context) ->
       match top_level_result with
       | TopLevelEvaluationResult.Directive (Ast.Directive.Quit, _) ->
-          Ok ([ top_level_result ], new_context)
+          Ok ([ top_level_result ], new_context, new_typ_context)
       | _ ->
-          evaluate_top_level_defns ~top_level_context:new_context tops
-          >>= fun (evaluation_res, new_context) ->
-          Ok (top_level_result :: evaluation_res, new_context))
+          evaluate_top_level_defns ~top_level_context:new_context
+            ~type_constr_context:new_typ_context tops
+          >>= fun (evaluation_res, new_context, new_typ_context) ->
+          Ok (top_level_result :: evaluation_res, new_context, new_typ_context))
 
-let evaluate_program ?(top_level_context = EvaluationContext.empty) program =
+let evaluate_program ?(top_level_context = EvaluationContext.empty)
+    ?(type_constr_context = TypeConstrContext.empty) program =
   let open Or_error.Monad_infix in
-  evaluate_top_level_defns ~top_level_context program
+  evaluate_top_level_defns ~top_level_context ~type_constr_context program
   >>= fun (evaluation_res, _) -> Ok evaluation_res

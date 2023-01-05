@@ -249,6 +249,9 @@ let rec sim_substitute_aux zipped_exprs_ids current_depth expr_subst_in =
       |> Or_error.combine_errors
       >>= fun pattn_expr_list -> Ok (Ast.Expr.Match (e, pattn_expr_list))
 
+let sim_substitute_from_zipped_list expr_id_zipped expr_subst_in =
+  sim_substitute_aux expr_id_zipped 0 expr_subst_in
+
 let sim_substitute exprs context expr_subst_in =
   let open Or_error.Monad_infix in
   context

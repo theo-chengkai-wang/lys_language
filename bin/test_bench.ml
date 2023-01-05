@@ -61,7 +61,8 @@ let loop2 str () =
     | _ -> failwith "Not supposed to be here" )
   |> fun e ->
   Interpreter.multi_step_reduce
-    ~top_level_context:Interpreter.EvaluationContext.empty ~expr:e
+    ~top_level_context:Interpreter.EvaluationContext.empty
+    ~type_constr_context: Interpreter.TypeConstrContext.empty ~expr:e
   |> ok_exn |> Ast.Value.show
   |> fun s -> print_endline (Printf.sprintf "Run result of expression:\n %s" s)
 
