@@ -1,8 +1,8 @@
-let m4: ([x: A]B) -> ([y1: A][y2: B]C) -> ([z: A]C) = 
-    fun (x1: [x:A]B) -> fun (x2: [y1: A][y2: B]C) ->
+let m4: ([x: _a]_b) -> ([y1: _a][y2: _b]_c) -> ([z: _a]_c) = 
+    fun (x1: [x:_a]_b) -> fun (x2: [y1: _a][y2: _b]_c) ->
         let box u = x1 in 
             let box v = x2 in 
-                box (z: A |- let box w = (v with (z)) in 
+                box (z: _a |- let box w = (v with (z)) in 
                     w with ((u with (z))))
 in ()
 ;;

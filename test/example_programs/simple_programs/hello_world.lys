@@ -1,0 +1,14 @@
+let rec (pow: int -> int -> int) = fun (n:int) -> if n = 0 then (fun 
+   (x:int) -> 1) else (fun (x:int) -> x * (pow (n-1) x));;
+
+pow 2 3;; (*gives 9*)
+
+
+let rec (pow2: int -> [b:int]int) = fun (n:int) -> 
+if n = 0 then box (b:int |- 1)
+else 
+    let box u = pow2 (n-1) in box (b:int |- b * (u with (b)));;
+
+pow2 2;;
+
+let box u = pow2 2 in u with (3);; (*gives 9*)

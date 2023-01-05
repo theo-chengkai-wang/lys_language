@@ -1,2 +1,2 @@
-let m3:[x: A]A = box (x: A |- x) in ()
+let m3:[x: _a]_a = box (x: _a |- x) in ()
 ;;

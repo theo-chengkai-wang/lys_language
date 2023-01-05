@@ -1,6 +1,10 @@
 (* let () = print_endline "Hello, World!" *)
 (* My test bench *)
 
+(*
+  TODO: not going to work: moved populate_index out of type-checking   
+*)
+
 open Core
 open Lys_parsing
 open Lys_typing
@@ -57,7 +61,8 @@ let loop2 str () =
     | _ -> failwith "Not supposed to be here" )
   |> fun e ->
   Interpreter.multi_step_reduce
-    ~top_level_context:Interpreter.EvaluationContext.empty ~expr:e
+    ~top_level_context:Interpreter.EvaluationContext.empty
+    ~type_constr_context: Interpreter.TypeConstrContext.empty ~expr:e
   |> ok_exn |> Ast.Value.show
   |> fun s -> print_endline (Printf.sprintf "Run result of expression:\n %s" s)
 
@@ -67,7 +72,7 @@ let loop3 str () =
   (* |> Ast.Program.of_past
      |> Ast.TypedProgram.convert_from_untyped_without_typecheck *)
   |> Ast.Program.of_past
-  |> Typecore.type_check_program |> ok_exn |> Interpreter.evaluate_program
+  |> Typecore.type_check_program |> ok_exn |> Ast.TypedProgram.populate_index |> ok_exn |> Interpreter.evaluate_program
   |> ok_exn
   |> fun l ->
   let _ =

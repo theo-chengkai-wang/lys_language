@@ -4,6 +4,8 @@ open Core
 val substitute: Ast.Expr.t -> Ast.ObjIdentifier.t -> Ast.Expr.t -> Ast.Expr.t Or_error.t
 (* [e/z]e' *)
 
+val sim_substitute_from_zipped_list: (Ast.Expr.t * string) list -> Ast.Expr.t -> Ast.Expr.t Or_error.t
+
 val sim_substitute: Ast.Expr.t list -> Ast.Context.t -> Ast.Expr.t -> Ast.Expr.t Or_error.t
 (* [\sigma / \Psi] e *)
 

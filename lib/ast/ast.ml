@@ -66,10 +66,19 @@ module type ObjIdentifier_type = sig
   val shift : t -> depth:int -> offset:int -> t Or_error.t
 end
 
+module type Constructor_type = sig
+  type t [@@deriving sexp, show, compare, equal]
+
+  val of_string : string -> t
+  val of_past : Past.Constructor.t -> t
+  val get_name : t -> string
+end
+
 module type TypeIdentifier_type = sig
   (*Unused for now*)
   type t [@@deriving sexp, show, compare, equal]
 
+  val get_name : t -> string
   val of_string : string -> t
   val of_past : Past.Identifier.t -> t
 end
@@ -114,6 +123,7 @@ module rec ObjIdentifier : ObjIdentifier_type = struct
     (* If ~current_ast_level or ~current_identifiers not given, assume that we're talking about an identifier definition, so the index returned should be Index.none *)
     let open Or_error.Monad_infix in
     let level_opt = String_map.find current_identifiers id in
+    (*Get the level at which id is defined.*)
     match level_opt with
     | None ->
         Ok (id, DeBruijnIndex.top_level) (*Assume top level if not in context.*)
@@ -183,8 +193,17 @@ end
 and TypeIdentifier : TypeIdentifier_type = struct
   type t = string [@@deriving sexp, show, compare, equal]
 
+  let get_name v = v
   let of_string x = x
   let of_past (past_identifier : Past.Identifier.t) = past_identifier
+end
+
+and Constructor : Constructor_type = struct
+  type t = string [@@deriving sexp, show, compare, equal]
+
+  let get_name v = v
+  let of_string v = v
+  let of_past (past_constructor : Past.Constructor.t) = past_constructor
 end
 
 and Typ : sig
@@ -195,7 +214,7 @@ and Typ : sig
     | TIdentifier of TypeIdentifier.t
     | TFun of t * t
     | TBox of Context.t * t
-    | TProd of t * t
+    | TProd of t list
     | TSum of t * t
   [@@deriving sexp, show, compare, equal]
 
@@ -208,7 +227,7 @@ end = struct
     | TIdentifier of TypeIdentifier.t
     | TFun of t * t
     | TBox of Context.t * t
-    | TProd of t * t
+    | TProd of t list
     | TSum of t * t
   [@@deriving sexp, show, compare, equal]
 
@@ -219,7 +238,7 @@ end = struct
     | Past.Typ.TIdentifier id -> TIdentifier (TypeIdentifier.of_past id)
     | Past.Typ.TFun (t1, t2) -> TFun (of_past t1, of_past t2)
     | Past.Typ.TBox (ctx, t1) -> TBox (Context.of_past ctx, of_past t1)
-    | Past.Typ.TProd (t1, t2) -> TProd (of_past t1, of_past t2)
+    | Past.Typ.TProd ts -> TProd (List.map ts ~f:of_past)
     | Past.Typ.TSum (t1, t2) -> TSum (of_past t1, of_past t2)
 end
 
@@ -322,19 +341,65 @@ end = struct
     | Past.Constant.Unit -> Unit
 end
 
+and Pattern : sig
+  type t =
+    | Datatype of (Constructor.t * ObjIdentifier.t list)
+      (*Empty list means that data type doesn't have arguments.*)
+    | Inl of ObjIdentifier.t
+    | Inr of ObjIdentifier.t
+    | Prod of ObjIdentifier.t list
+    | Id of ObjIdentifier.t
+    | Wildcard
+  [@@deriving sexp, show, equal, compare]
+
+  val of_past : Past.Pattern.t -> t
+  val get_binders : t -> ObjIdentifier.t list
+end = struct
+  type t =
+    | Datatype of (Constructor.t * ObjIdentifier.t list)
+      (*Empty list means that data type doesn't have arguments.*)
+    | Inl of ObjIdentifier.t
+    | Inr of ObjIdentifier.t
+    | Prod of ObjIdentifier.t list
+    | Id of ObjIdentifier.t
+    | Wildcard
+  [@@deriving sexp, show, equal, compare]
+
+  let of_past = function
+    | Past.Pattern.Datatype (cons, objid_list) ->
+        Datatype
+          ( Constructor.of_past cons,
+            List.map objid_list ~f:ObjIdentifier.of_past )
+    | Past.Pattern.Inl id -> Inl (ObjIdentifier.of_past id)
+    | Past.Pattern.Inr id -> Inr (ObjIdentifier.of_past id)
+    | Past.Pattern.Prod id_list ->
+        Prod (List.map id_list ~f:ObjIdentifier.of_past)
+    | Past.Pattern.Id id -> Id (ObjIdentifier.of_past id)
+    | Past.Pattern.Wildcard -> Wildcard
+
+  let get_binders = function
+    | Datatype (_, objid_list) -> objid_list
+    | Inl id -> [ id ]
+    | Inr id -> [ id ]
+    | Prod id_list -> id_list
+    | Id id -> [ id ]
+    | Wildcard -> []
+end
+
 and Expr : sig
   type t =
     | Identifier of ObjIdentifier.t (*x*)
     | Constant of Constant.t (*c*)
     | UnaryOp of UnaryOperator.t * t (*unop e*)
     | BinaryOp of BinaryOperator.t * t * t (*e op e'*)
-    | Prod of t * t (*(e, e')*)
-    | Fst of t (*fst e*)
-    | Snd of t (*snd e*)
+    | Prod of t list (*(e, e')*)
+    (* | Fst of t (*fst e*)
+       | Snd of t snd e *)
+    | Nth of (t * int)
     | Left of Typ.t * Typ.t * t (*L[A,B] e*)
     | Right of Typ.t * Typ.t * t (*R[A,B] e*)
-    | Match of t * IdentifierDefn.t * t * IdentifierDefn.t * t
-      (*match e with
+    | Case of t * IdentifierDefn.t * t * IdentifierDefn.t * t
+      (*case e of
         L (x: A) -> e' | R (y: B) -> e'' translates to 1 expr and 2 lambdas*)
     | Lambda of IdentifierDefn.t * t (*fun (x : A) -> e*)
     | Application of t * t (*e e'*)
@@ -346,6 +411,8 @@ and Expr : sig
     | Box of Context.t * t (*box (x:A, y:B |- e)*)
     | LetBox of MetaIdentifier.t * t * t (*let box u = e in e'*)
     | Closure of MetaIdentifier.t * t list (*u with (e1, e2, e3, ...)*)
+    | Constr of Constructor.t * t option (* Constr e*)
+    | Match of t * (Pattern.t * t) list
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.Expr.t -> t
@@ -371,12 +438,13 @@ end = struct
     | Constant of Constant.t (*c*)
     | UnaryOp of UnaryOperator.t * t (*unop e*)
     | BinaryOp of BinaryOperator.t * t * t (*e op e'*)
-    | Prod of t * t (*(e, e')*)
-    | Fst of t (*fst e*)
-    | Snd of t (*snd e*)
+    | Prod of t list (*(e, e')*)
+    (* | Fst of t (*fst e*)
+       | Snd of t snd e *)
+    | Nth of (t * int)
     | Left of Typ.t * Typ.t * t (*L[A,B] e*)
     | Right of Typ.t * Typ.t * t (*R[A,B] e*)
-    | Match of t * IdentifierDefn.t * t * IdentifierDefn.t * t
+    | Case of t * IdentifierDefn.t * t * IdentifierDefn.t * t
       (*match e with
         L (x: A) -> e' | R (y: B) -> e'' translates to 1 expr and 2 lambdas*)
     | Lambda of IdentifierDefn.t * t (*fun (x : A) -> e*)
@@ -389,6 +457,8 @@ end = struct
     | Box of Context.t * t (*box (x:A, y:B |- e)*)
     | LetBox of MetaIdentifier.t * t * t (*let box u = e in e'*)
     | Closure of MetaIdentifier.t * t list (*u with (e1, e2, e3, ...)*)
+    | Constr of Constructor.t * t option (* Constr e*)
+    | Match of t * (Pattern.t * t) list
   [@@deriving sexp, show, compare, equal]
 
   let rec of_past = function
@@ -398,15 +468,16 @@ end = struct
         UnaryOp (UnaryOperator.of_past op, of_past expr)
     | Past.Expr.BinaryOp (op, expr, expr2) ->
         BinaryOp (BinaryOperator.of_past op, of_past expr, of_past expr2)
-    | Past.Expr.Prod (expr1, expr2) -> Prod (of_past expr1, of_past expr2)
-    | Past.Expr.Fst expr -> Fst (of_past expr)
-    | Past.Expr.Snd expr -> Snd (of_past expr)
+    | Past.Expr.Prod expr_list -> Prod (List.map expr_list ~f:of_past)
+    (* | Past.Expr.Fst expr -> Fst (of_past expr)
+       | Past.Expr.Snd expr -> Snd (of_past expr) *)
+    | Past.Expr.Nth (expr, i) -> Nth (of_past expr, i)
     | Past.Expr.Left (t1, t2, expr) ->
         Left (Typ.of_past t1, Typ.of_past t2, of_past expr)
     | Past.Expr.Right (t1, t2, expr) ->
         Right (Typ.of_past t1, Typ.of_past t2, of_past expr)
-    | Past.Expr.Match (e, iddef1, e1, iddef2, e2) ->
-        Match
+    | Past.Expr.Case (e, iddef1, e1, iddef2, e2) ->
+        Case
           ( of_past e,
             IdentifierDefn.of_past iddef1,
             of_past e1,
@@ -426,6 +497,15 @@ end = struct
         LetBox (MetaIdentifier.of_past metaid, of_past e, of_past e2)
     | Past.Expr.Closure (metaid, exprs) ->
         Closure (MetaIdentifier.of_past metaid, List.map exprs ~f:of_past)
+    | Past.Expr.Constr (constructor, Some value) ->
+        Constr (Constructor.of_past constructor, Some (Expr.of_past value))
+    | Past.Expr.Constr (constructor, None) ->
+        Constr (Constructor.of_past constructor, None)
+    | Past.Expr.Match (e, pattns) ->
+        Match
+          ( of_past e,
+            List.map pattns ~f:(fun (pattn, expr) ->
+                (Pattern.of_past pattn, of_past expr)) )
 
   let rec populate_index expr ~current_ast_level ~current_identifiers
       ~current_meta_ast_level ~current_meta_identifiers =
@@ -448,21 +528,25 @@ end = struct
         populate_index expr2 ~current_ast_level ~current_identifiers
           ~current_meta_ast_level ~current_meta_identifiers
         >>= fun expr2 -> Ok (BinaryOp (op, expr, expr2))
-    | Prod (expr1, expr2) ->
-        populate_index expr1 ~current_ast_level ~current_identifiers
-          ~current_meta_ast_level ~current_meta_identifiers
-        >>= fun expr1 ->
-        populate_index expr2 ~current_ast_level ~current_identifiers
-          ~current_meta_ast_level ~current_meta_identifiers
-        >>= fun expr2 -> Ok (Prod (expr1, expr2))
-    | Fst expr ->
+    | Prod exprs ->
+        List.map exprs
+          ~f:
+            (populate_index ~current_ast_level ~current_identifiers
+               ~current_meta_ast_level ~current_meta_identifiers)
+        |> Or_error.combine_errors
+        >>= fun new_exprs -> Ok (Prod new_exprs)
+    (* | Fst expr ->
+           populate_index expr ~current_ast_level ~current_identifiers
+             ~current_meta_ast_level ~current_meta_identifiers
+           >>= fun expr -> Ok (Fst expr)
+       | Snd expr ->
+           populate_index expr ~current_ast_level ~current_identifiers
+             ~current_meta_ast_level ~current_meta_identifiers
+           >>= fun expr -> Ok (Snd expr) *)
+    | Nth (expr, i) ->
         populate_index expr ~current_ast_level ~current_identifiers
           ~current_meta_ast_level ~current_meta_identifiers
-        >>= fun expr -> Ok (Fst expr)
-    | Snd expr ->
-        populate_index expr ~current_ast_level ~current_identifiers
-          ~current_meta_ast_level ~current_meta_identifiers
-        >>= fun expr -> Ok (Snd expr)
+        >>= fun expr -> Ok (Nth (expr, i))
     | Left (t1, t2, expr) ->
         populate_index expr ~current_ast_level ~current_identifiers
           ~current_meta_ast_level ~current_meta_identifiers
@@ -471,7 +555,7 @@ end = struct
         populate_index expr ~current_ast_level ~current_identifiers
           ~current_meta_ast_level ~current_meta_identifiers
         >>= fun expr -> Ok (Right (t1, t2, expr))
-    | Match (e, iddef1, e1, iddef2, e2) ->
+    | Case (e, iddef1, e1, iddef2, e2) ->
         (*Addition for De Bruijn*)
         let id1, _ = iddef1 and id2, _ = iddef2 in
         let new_current_identifiers_1 =
@@ -497,7 +581,7 @@ end = struct
           ~current_meta_identifiers
         >>= fun e2 ->
         (*We don't need to modify iddefs because the identifiers inside are already having the right index, i.e. None*)
-        Ok (Match (e, iddef1, e1, iddef2, e2))
+        Ok (Case (e, iddef1, e1, iddef2, e2))
     | Lambda (iddef, e) ->
         (*Addition for De Bruijn*)
         let id, _ = iddef in
@@ -607,6 +691,48 @@ end = struct
         MetaIdentifier.populate_index metaid ~current_ast_level
           ~current_identifiers ~current_meta_ast_level ~current_meta_identifiers
         >>= fun metaid -> Ok (Closure (metaid, exprs))
+    | Constr (tid, e_opt) -> (
+        (* Or_error.unimplemented "not implemented" *)
+        (* Congruence*)
+        match e_opt with
+        | None -> Ok (Constr (tid, None))
+        | Some e ->
+            populate_index ~current_ast_level ~current_identifiers
+              ~current_meta_ast_level ~current_meta_identifiers e
+            >>= fun e -> Ok (Constr (tid, Some e)))
+    | Match (e, pattn_expr_list) ->
+        (* Or_error.unimplemented "Not implemented" *)
+        (* Get all binders, and if there are binders, increment level, otherwise don't *)
+        populate_index e ~current_ast_level ~current_identifiers
+          ~current_meta_ast_level ~current_meta_identifiers
+        >>= fun e ->
+        let process_binder_expr (pattern, expr) =
+          let binders = Pattern.get_binders pattern in
+          if List.is_empty binders then
+            (* No adding new binders and no incrementing *)
+            populate_index ~current_ast_level ~current_identifiers
+              ~current_meta_ast_level ~current_meta_identifiers expr
+            >>= fun expr -> Ok (pattern, expr)
+          else
+            (* Add the binders in obj context *)
+            let new_current_identifiers =
+              List.fold binders ~init:current_identifiers ~f:(fun acc binder ->
+                  String_map.set acc
+                    ~key:(ObjIdentifier.get_name binder)
+                    ~data:current_ast_level)
+            in
+            (* And populate indices with incremented context *)
+            let new_level = current_ast_level + 1 in
+            populate_index expr ~current_ast_level:new_level
+              ~current_identifiers:new_current_identifiers
+              ~current_meta_ast_level ~current_meta_identifiers
+            >>= fun expr -> Ok (pattern, expr)
+        in
+        List.map pattn_expr_list ~f:process_binder_expr
+        |> Or_error.combine_errors
+        |> Or_error.tag
+             ~tag:"DeBruijnPopulationError[OBJECT]: Error in Match statement."
+        >>= fun new_pattn_expr_list -> Ok (Match (e, new_pattn_expr_list))
 
   let rec shift_indices expr ~obj_depth ~meta_depth ~obj_offset ~meta_offset =
     let open Or_error.Monad_infix in
@@ -625,24 +751,27 @@ end = struct
         >>= fun expr ->
         shift_indices expr2 ~obj_depth ~meta_depth ~obj_offset ~meta_offset
         >>= fun expr2 -> Ok (BinaryOp (op, expr, expr2))
-    | Prod (expr1, expr2) ->
-        shift_indices expr1 ~obj_depth ~meta_depth ~obj_offset ~meta_offset
-        >>= fun expr1 ->
-        shift_indices expr2 ~obj_depth ~meta_depth ~obj_offset ~meta_offset
-        >>= fun expr2 -> Ok (Prod (expr1, expr2))
-    | Fst expr ->
+    | Prod exprs ->
+        List.map exprs
+          ~f:(shift_indices ~obj_depth ~meta_depth ~obj_offset ~meta_offset)
+        |> Or_error.combine_errors
+        >>= fun exprs -> Ok (Prod exprs)
+    (* | Fst expr ->
+           shift_indices expr ~obj_depth ~meta_depth ~obj_offset ~meta_offset
+           >>= fun expr -> Ok (Fst expr)
+       | Snd expr ->
+           shift_indices expr ~obj_depth ~meta_depth ~obj_offset ~meta_offset
+           >>= fun expr -> Ok (Snd expr) *)
+    | Nth (expr, i) ->
         shift_indices expr ~obj_depth ~meta_depth ~obj_offset ~meta_offset
-        >>= fun expr -> Ok (Fst expr)
-    | Snd expr ->
-        shift_indices expr ~obj_depth ~meta_depth ~obj_offset ~meta_offset
-        >>= fun expr -> Ok (Snd expr)
+        >>= fun expr -> Ok (Nth (expr, i))
     | Left (t1, t2, expr) ->
         shift_indices expr ~obj_depth ~meta_depth ~obj_offset ~meta_offset
         >>= fun expr -> Ok (Left (t1, t2, expr))
     | Right (t1, t2, expr) ->
         shift_indices expr ~obj_depth ~meta_depth ~obj_offset ~meta_offset
         >>= fun expr -> Ok (Right (t1, t2, expr))
-    | Match (e, iddef1, e1, iddef2, e2) ->
+    | Case (e, iddef1, e1, iddef2, e2) ->
         shift_indices e ~obj_depth ~meta_depth ~obj_offset ~meta_offset
         >>= fun e ->
         shift_indices e1 ~obj_depth:(obj_depth + 1) ~meta_depth ~obj_offset
@@ -650,7 +779,7 @@ end = struct
         >>= fun e1 ->
         shift_indices e2 ~obj_depth:(obj_depth + 1) ~meta_depth ~obj_offset
           ~meta_offset
-        >>= fun e2 -> Ok (Match (e, iddef1, e1, iddef2, e2))
+        >>= fun e2 -> Ok (Case (e, iddef1, e1, iddef2, e2))
     | Lambda (iddef, e) ->
         shift_indices e ~obj_depth:(obj_depth + 1) ~meta_depth ~obj_offset
           ~meta_offset
@@ -706,36 +835,62 @@ end = struct
           ~tag:"DeBruijnShiftingError[META]: Shifting meta index failed."
           (MetaIdentifier.shift metaid ~depth:meta_depth ~offset:meta_offset)
         >>= fun metaid -> Ok (Closure (metaid, exprs))
+    | Constr (tid, e_opt) -> (
+        match e_opt with
+        | None -> Ok (Constr (tid, None))
+        | Some e ->
+            shift_indices e ~obj_depth ~meta_depth ~obj_offset ~meta_offset
+            >>= fun e -> Ok (Constr (tid, Some e)))
+    | Match (e, pattn_expr_list) ->
+        shift_indices e ~obj_depth ~meta_depth ~obj_offset ~meta_offset
+        >>= fun e ->
+        List.map pattn_expr_list ~f:(fun (pattn, expr) ->
+            let binders = Pattern.get_binders pattn in
+            (* Add 1 to obj depth only if BINDING *)
+            let new_obj_depth =
+              if List.is_empty binders then obj_depth else obj_depth + 1
+            in
+            shift_indices expr ~obj_depth:new_obj_depth ~meta_depth ~obj_offset
+              ~meta_offset
+            >>= fun new_expr -> Ok (pattn, new_expr))
+        |> Or_error.combine_errors
+        |> Or_error.tag
+             ~tag:"DeBruijnShiftingError[OBJECT]: Error in match statement."
+        >>= fun pattn_expr_list -> Ok (Match (e, pattn_expr_list))
 end
 
 and Value : sig
   type t =
     | Constant of Constant.t (*c*)
-    | Prod of t * t (*(e, e')*)
+    | Prod of t list (*(e, e')*)
     | Left of Typ.t * Typ.t * t (*L[A,B] e*)
     | Right of Typ.t * Typ.t * t (*R[A,B] e*)
     | Lambda of IdentifierDefn.t * Expr.t (*fun (x : A) -> e*)
     | Box of Context.t * Expr.t (*box (x:A, y:B |- e)*)
+    | Constr of Constructor.t * t option
   [@@deriving sexp, show, compare, equal]
 
   val to_expr : Value.t -> Expr.t
 end = struct
   type t =
     | Constant of Constant.t (*c*)
-    | Prod of t * t (*(e, e')*)
+    | Prod of t list (*(e, e')*)
     | Left of Typ.t * Typ.t * t (*L[A,B] e*)
     | Right of Typ.t * Typ.t * t (*R[A,B] e*)
     | Lambda of IdentifierDefn.t * Expr.t (*fun (x : A) -> e*)
     | Box of Context.t * Expr.t (*box (x:A, y:B |- e)*)
+    | Constr of Constructor.t * t option
   [@@deriving sexp, show, compare, equal]
 
   let rec to_expr = function
     | Constant c -> Expr.Constant c
-    | Prod (a, b) -> Expr.Prod (to_expr a, to_expr b)
+    | Prod xs -> Expr.Prod (List.map xs ~f:to_expr)
     | Left (t1, t2, v) -> Expr.Left (t1, t2, to_expr v)
     | Right (t1, t2, v) -> Expr.Right (t1, t2, to_expr v)
     | Lambda (iddef, expr) -> Expr.Lambda (iddef, expr)
     | Box (ctx, expr) -> Expr.Box (ctx, expr)
+    | Constr (constr, Some v) -> Expr.Constr (constr, Some (to_expr v))
+    | Constr (constr, None) -> Expr.Constr (constr, None)
 end
 
 and Directive : sig
@@ -757,6 +912,7 @@ and TopLevelDefn : sig
     | RecursiveDefinition of IdentifierDefn.t * Expr.t
     | Expression of Expr.t
     | Directive of Directive.t
+    | DatatypeDecl of TypeIdentifier.t * (Constructor.t * Typ.t option) list
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.TopLevelDefn.t -> t
@@ -767,6 +923,7 @@ end = struct
     | RecursiveDefinition of IdentifierDefn.t * Expr.t
     | Expression of Expr.t
     | Directive of Directive.t
+    | DatatypeDecl of TypeIdentifier.t * (Constructor.t * Typ.t option) list
   [@@deriving sexp, show, compare, equal]
 
   let of_past = function
@@ -776,6 +933,14 @@ end = struct
         RecursiveDefinition (IdentifierDefn.of_past iddef, Expr.of_past e)
     | Past.TopLevelDefn.Expression e -> Expression (Expr.of_past e)
     | Past.TopLevelDefn.Directive d -> Directive (Directive.of_past d)
+    | Past.TopLevelDefn.DatatypeDecl (id, constr_typ_list) ->
+        DatatypeDecl
+          ( TypeIdentifier.of_past id,
+            List.map constr_typ_list ~f:(fun (constr, typ) ->
+                match typ with
+                | None -> (Constructor.of_past constr, None)
+                | Some typ ->
+                    (Constructor.of_past constr, Some (Typ.of_past typ))) )
 end
 
 and Program : sig
@@ -794,6 +959,7 @@ module TypedTopLevelDefn : sig
     | RecursiveDefinition of Typ.t * IdentifierDefn.t * Expr.t
     | Expression of Typ.t * Expr.t
     | Directive of Directive.t
+    | DatatypeDecl of TypeIdentifier.t * (Constructor.t * Typ.t option) list
   [@@deriving sexp, show, compare, equal]
 
   val populate_index : t -> t Or_error.t
@@ -805,6 +971,7 @@ end = struct
     | RecursiveDefinition of Typ.t * IdentifierDefn.t * Expr.t
     | Expression of Typ.t * Expr.t
     | Directive of Directive.t
+    | DatatypeDecl of TypeIdentifier.t * (Constructor.t * Typ.t option) list
   [@@deriving sexp, show, compare, equal]
 
   let populate_index typed_defn =
@@ -831,6 +998,8 @@ end = struct
           ~current_meta_identifiers:String_map.empty
         >>= fun expr -> Ok (Expression (typ, expr))
     | Directive d -> Ok (Directive d)
+    | DatatypeDecl (tid, constr_typ_list) ->
+        Ok (DatatypeDecl (tid, constr_typ_list))
 
   let convert_from_untyped_without_typecheck = function
     | TopLevelDefn.Definition (iddef, e) -> Definition (Typ.TUnit, iddef, e)
@@ -838,6 +1007,8 @@ end = struct
         RecursiveDefinition (Typ.TUnit, iddef, e)
     | TopLevelDefn.Expression e -> Expression (Typ.TUnit, e)
     | TopLevelDefn.Directive d -> Directive d
+    | TopLevelDefn.DatatypeDecl (id, constr_typ_list) ->
+        DatatypeDecl (id, constr_typ_list)
 end
 
 module TypedProgram : sig

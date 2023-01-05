@@ -1,9 +1,9 @@
-let m8: [x: A](A -> B) -> [y: B]C -> [z: A]C = 
-    fun (x1: [x:A](A->B)) -> 
-        fun (x2: [y: B]C) -> 
+let m8: [x: _a](_a -> _b) -> [y: _b]_c -> [z: _a]_c = 
+    fun (x1: [x:_a](_a->_b)) -> 
+        fun (x2: [y: _b]_c) -> 
             let box u = x1 in 
                 let box v = x2 in
-                    box (z: A |- v with ((u with (z)) z))
+                    box (z: _a |- v with ((u with (z)) z))
 in ()
 ;;
                                     

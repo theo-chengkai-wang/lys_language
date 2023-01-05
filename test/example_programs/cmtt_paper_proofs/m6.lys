@@ -1,5 +1,5 @@
-let m6: [x:C]A -> [y1:D][y2:C]A = 
-    fun (x1: [x:C]A) -> 
-        let box u = x1 in box (y1: D |- box (y2: C |- u with (y2)))
+let m6: [x:_c]_a -> [y1:_d][y2:_c]_a = 
+    fun (x1: [x:_c]_a) -> 
+        let box u = x1 in box (y1: _d |- box (y2: _c |- u with (y2)))
 in ()
 ;;
