@@ -151,6 +151,7 @@ and Expr : sig
     | Closure of Identifier.t * t list (*u with (e1, e2, e3, ...)*)
     | Constr of Constructor.t * t option (* Constr e*)
     | Match of t * (Pattern.t * t) list
+    | Lift of Typ.t * t (* lift[typ] e*)
   [@@deriving sexp, show, equal, compare]
 end = struct
   type t =
@@ -180,6 +181,7 @@ end = struct
     | Constr of Constructor.t * t option (* Constr e*)
     | Match of t * (Pattern.t * t) list
       (*match e with pattern -> ... | ... -> ... | ... -> ... | ...*)
+    | Lift of Typ.t * t
   [@@deriving sexp, show, equal, compare]
 end
 

@@ -130,6 +130,9 @@ let rec substitute_aux expr_subst_for id_str current_depth expr_subst_in =
           Ok (pattn, expr))
       |> Or_error.combine_errors
       >>= fun pattn_expr_list -> Ok (Ast.Expr.Match (e, pattn_expr_list))
+  | Ast.Expr.Lift (typ, expr) ->
+      substitute_aux expr_subst_for id_str current_depth expr >>= fun expr ->
+      Ok (Ast.Expr.Lift (typ, expr))
 
 let substitute expr_subst_for id expr_subst_in =
   (*Assume that the id has De Bruijn index 0*)
@@ -248,6 +251,9 @@ let rec sim_substitute_aux zipped_exprs_ids current_depth expr_subst_in =
           Ok (pattn, expr))
       |> Or_error.combine_errors
       >>= fun pattn_expr_list -> Ok (Ast.Expr.Match (e, pattn_expr_list))
+  | Ast.Expr.Lift (typ, expr) ->
+      sim_substitute_aux zipped_exprs_ids current_depth expr >>= fun expr ->
+      Ok (Ast.Expr.Lift (typ, expr))
 
 let sim_substitute_from_zipped_list expr_id_zipped expr_subst_in =
   sim_substitute_aux expr_id_zipped 0 expr_subst_in
@@ -263,7 +269,8 @@ let sim_substitute exprs context expr_subst_in =
       error
         "SimultaneousSubstitutionError: Expr and Context have unequal lengths! \
          Type check must have gone wrong! (exprs, context, expr_subst_in)"
-        (exprs, context, expr_subst_in) [%sexp_of: Ast.Expr.t list * Ast.Context.t * Ast.Expr.t]
+        (exprs, context, expr_subst_in)
+        [%sexp_of: Ast.Expr.t list * Ast.Context.t * Ast.Expr.t]
   | List.Or_unequal_lengths.Ok zipped ->
       Ok zipped >>= fun zipped ->
       (*Assume that all the ids have De Bruijn index 0*)
@@ -384,11 +391,12 @@ let rec meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth
         |> Ast.Expr.shift_indices ~obj_depth:0 ~meta_depth:0 ~obj_offset:0
              ~meta_offset:current_meta_depth
         >>= fun expr_subst_for ->
-        sim_substitute exprs_in_subs ctx expr_subst_for
-        |> fun or_error -> Or_error.tag_arg or_error
-             "MetaSubstitutionError: Problem in simulatenous substitution. (ctx, expr_subst_for, meta_id_str, current_meta_depth)"
-             (ctx, expr_subst_for, meta_id_str, current_meta_depth)
-             [%sexp_of: Ast.Context.t * Ast.Expr.t * string * int]
+        sim_substitute exprs_in_subs ctx expr_subst_for |> fun or_error ->
+        Or_error.tag_arg or_error
+          "MetaSubstitutionError: Problem in simulatenous substitution. (ctx, \
+           expr_subst_for, meta_id_str, current_meta_depth)"
+          (ctx, expr_subst_for, meta_id_str, current_meta_depth)
+          [%sexp_of: Ast.Context.t * Ast.Expr.t * string * int]
   | Ast.Expr.Constr (tid, e_opt) -> (
       match e_opt with
       | None -> Ok (Ast.Expr.Constr (tid, e_opt))
@@ -405,6 +413,9 @@ let rec meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth
           >>= fun expr -> Ok (pattn, expr))
       |> Or_error.combine_errors
       >>= fun pattn_expr_list -> Ok (Ast.Expr.Match (e, pattn_expr_list))
+  | Ast.Expr.Lift (typ, expr) ->
+      meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth expr
+      >>= fun expr -> Ok (Ast.Expr.Lift (typ, expr))
 
 let meta_substitute ctx expr meta_id expr_subst_in =
   let meta_id_str = Ast.MetaIdentifier.get_name meta_id in

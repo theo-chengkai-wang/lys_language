@@ -42,6 +42,7 @@ let list_to_tuple l =
 %token DIV "/"
 %token MOD "%"
 %token UNDERSCORE
+%token LIFT
 %token GT ">"
 %token GTE ">="
 %token LT "<"
@@ -187,6 +188,7 @@ expr:
     | c = comp { c }
     | b = bool { b }
     | c = CONSTR e = option(simple_expr) {Expr.Constr (c, e)}
+    | LIFT LEFT_BRACKET t = typ RIGHT_BRACKET e = simple_expr {Expr.Lift (t, e)}
     | u = identifier; WITH; s = sim_sub {Expr.Closure (u, s)} // not a simple_expr because it contains a WITH application
     (* bigger constructs *)
     | IF e1 = expr THEN e2 = expr ELSE e3=expr {Expr.IfThenElse (e1, e2, e3)}

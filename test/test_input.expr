@@ -1,25 +1,7 @@
-datatype intlist = Nil | Cons of (int * intlist);;
+let x:int = 1;;
+lift[int] x;;
 
-let rec map_int_int:(intlist -> (int -> int) -> intlist) = 
-    fun (xs: intlist) -> fun (f:(int -> int)) -> 
-    match xs with
-    | Nil -> Nil
-    | Cons (x, xs) -> Cons (f x, map_int_int xs f);;
+datatype tree = Lf | Br of (int * tree * tree);;
+let t:tree = Br (1, Lf, Br (2, Lf, Lf));;
 
-map_int_int (Cons (1, Cons (2, Cons (3, Nil)))) (fun (x:int) -> x * 2);;
-
-let rec lift_int: int -> []int = fun (n:int) -> 
-    if n = 0 then box (|- 0) else let box u = lift_int (n-1) in box (|- (u with ()) + 1);;
-
-let rec map_int_int_b:(intlist -> [f:(int -> int)]intlist) = 
-    fun (xs:intlist) -> 
-    match xs with
-    | Nil -> box (f: (int -> int) |- Nil)
-    | Cons (x, xs) -> 
-        let box v = map_int_int_b xs in
-        let box lifted_x = lift_int x in
-        box (f: (int -> int) |- Cons (f (lifted_x with ()), v with (f)));;
-
-let res:([f:(int -> int)]intlist) = map_int_int_b (Cons (1, Cons (2, Cons (3, Nil))));;
-
-let box u = res in u with (fun (x:int) -> x * 2);;
+lift[tree] t;;

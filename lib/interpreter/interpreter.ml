@@ -445,6 +445,11 @@ let rec multi_step_reduce ~top_level_context ~type_constr_context ~expr =
   | Ast.Expr.Closure (_, _) ->
       error "EvaluationError: One should never have to evaluate a raw closure."
         expr [%sexp_of: Ast.Expr.t]
+  | Ast.Expr.Lift (_, expr) ->
+      multi_step_reduce ~top_level_context ~type_constr_context ~expr
+      >>= fun v ->
+      let expr_v = Ast.Value.to_expr v in
+      Ok (Ast.Value.Box ([], expr_v))
   | Ast.Expr.Constr (constr, e_opt) -> (
       if
         Option.is_none
