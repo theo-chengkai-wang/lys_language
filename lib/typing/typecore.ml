@@ -545,8 +545,8 @@ and type_inference_expression meta_ctx ctx type_ctx e =
       (* check if typ exists has function types *)
       if includes_function_type ~type_ctx typ then
         Or_error.error
-          "TypeInferenceError: Type given as argument to `lift` contains a \
-           function type. (typ)"
+          "TypeInferenceError: Type given as argument to `lift` cannot contain \
+           function types. Given type: (typ)"
           typ [%sexp_of: Ast.Typ.t]
       else
         type_check_expression meta_ctx ctx type_ctx expr typ >>= fun () ->

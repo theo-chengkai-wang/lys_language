@@ -515,6 +515,16 @@ let test_match_clause _ =
        (Lexing.from_string
           "match y with\n         | Con1 (x) -> x\n         | _ -> 1;;\n     "))
 
+let test_lift _ =
+  let program = "lift[int] 1;;" in
+  assert_equal
+    [
+      Past.TopLevelDefn.Expression
+        (Past.Expr.Lift
+           (Past.Typ.TInt, Past.Expr.Constant (Past.Constant.Integer 1)));
+    ]
+    (program |> Lexing.from_string |> parse_program)
+
 (* Name the test cases and group them together *)
 let suite =
   "parsing_suite"
@@ -563,4 +573,5 @@ let suite =
          "test_datatype_def" >:: test_datatype_def;
          "test_datatype_definition" >:: test_datatype_definition;
          "test_match_clause" >:: test_match_clause;
+         "test_lift" >:: test_lift;
        ]

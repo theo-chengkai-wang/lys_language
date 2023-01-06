@@ -302,6 +302,62 @@ let test_match_identifier _ =
                 Ast.Value.Constr (Ast.Constructor.of_string "Con2", None) )))
         (List.last results)
 
+let test_lift_primitive _ =
+  let program = "lift[int] 1;;" in
+  let res_opt = exec_program program in
+  match res_opt with
+  | None -> assert_string "Program Execution Failed"
+  | Some results ->
+      assert_equal
+        (Some
+           (Interpreter.TopLevelEvaluationResult.ExprValue
+              ( Ast.Typ.TBox ([], Ast.Typ.TInt),
+                Ast.Value.Box ([], Ast.Expr.Constant (Ast.Constant.Integer 1))
+              )))
+        (List.last results)
+
+let test_lift_non_primitive _ =
+  let program =
+    "datatype tree = Lf | Br of (int * tree * tree);;\n\
+    \  let t:tree = Br (1, Lf, Br (2, Lf, Lf));;\n\
+    \  lift[tree] t;;"
+  in
+  let res_opt = exec_program program in
+  match res_opt with
+  | None -> assert_string "Program Execution Failed"
+  | Some results ->
+      assert_equal
+        (Some
+           (Interpreter.TopLevelEvaluationResult.ExprValue
+              ( Ast.Typ.TBox
+                  ([], Ast.Typ.TIdentifier (Ast.TypeIdentifier.of_string "tree")),
+                Ast.Value.Box
+                  ( [],
+                    Ast.Expr.Constr
+                      ( Ast.Constructor.of_string "Br",
+                        Some
+                          (Ast.Expr.Prod
+                             [
+                               Ast.Expr.Constant (Ast.Constant.Integer 1);
+                               Ast.Expr.Constr
+                                 (Ast.Constructor.of_string "Lf", None);
+                               Ast.Expr.Constr
+                                 ( Ast.Constructor.of_string "Br",
+                                   Some
+                                     (Ast.Expr.Prod
+                                        [
+                                          Ast.Expr.Constant
+                                            (Ast.Constant.Integer 2);
+                                          Ast.Expr.Constr
+                                            ( Ast.Constructor.of_string "Lf",
+                                              None );
+                                          Ast.Expr.Constr
+                                            ( Ast.Constructor.of_string "Lf",
+                                              None );
+                                        ]) );
+                             ]) ) ) )))
+        (List.last results)
+
 let interpreter_suite =
   "interpreter_main_suite"
   >::: [
@@ -315,6 +371,8 @@ let interpreter_suite =
          "test_matching_inl_inr" >:: test_matching_inl_inr;
          "test_match_wildcard" >:: test_match_wildcard;
          "test_match_identifier" >:: test_match_identifier;
+         "test_lift_primitive" >:: test_lift_primitive;
+         "test_lift_non_primitive" >:: test_lift_non_primitive;
        ]
 
 let test_intlist_map _ =

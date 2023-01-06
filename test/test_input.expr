@@ -2,6 +2,6 @@ let x:int = 1;;
 lift[int] x;;
 
 datatype tree = Lf | Br of (int * tree * tree);;
-let t:tree = Br (1, Lf, Br (2, Br (3, Lf, Lf), Lf));;
+let t:tree = Br (1, Lf, Br (2, Lf, Lf));;
 
 lift[tree] t;;

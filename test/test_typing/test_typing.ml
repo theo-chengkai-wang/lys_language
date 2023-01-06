@@ -38,9 +38,12 @@ let type_check_program_from_str
         Typing_context.MetaTypingContext.create_empty_context ())
     ?obj_context:(obj_ctx =
         Typing_context.ObjTypingContext.create_empty_context ())
-    ?type_context:(type_ctx = Typing_context.TypeConstrTypingContext.empty) str =
-  str |> Lexing.from_string |> Lys_parsing.Lex_and_parse.parse_program |> Lys_ast.Ast.Program.of_past
-  |> Lys_typing.Typecore.type_check_program ~meta_ctx ~obj_ctx ~type_ctx |> Or_error.ok
+    ?type_context:(type_ctx = Typing_context.TypeConstrTypingContext.empty) str
+    =
+  str |> Lexing.from_string |> Lys_parsing.Lex_and_parse.parse_program
+  |> Lys_ast.Ast.Program.of_past
+  |> Lys_typing.Typecore.type_check_program ~meta_ctx ~obj_ctx ~type_ctx
+  |> Or_error.ok
 
 (* m1-m8 *)
 
@@ -215,6 +218,22 @@ let test_closure_unmatched_context_wrt_arguments _ =
        (type_infer_from_str "let box u = box (x:int |- x) in (u with (true));;"))
     None
 
+let test_lift_primitive _ =
+  assert_equal (Some (Ast.Typ.TBox ([], Ast.Typ.TInt))) (Or_error.ok (type_infer_from_str "lift[int] 1;;"))
+
+let test_lift_non_primitive _ =
+  let program =
+    "datatype tree = Lf | Br of (int * tree * tree);;\n\
+    \  let t:tree = Br (1, Lf, Br (2, Br (3, Lf, Lf), Lf));;"
+  in
+  assert_bool "Program type checks"
+    (type_check_program_from_str program |> Option.is_some)
+
+let test_lift_function_fails _ =
+  assert_equal None
+    ("lift[int -> int] (fun (x:int) -> x);;" |> type_infer_from_str
+   |> Or_error.ok)
+
 let cmtt_suite =
   "cmtt_suite"
   >::: [
@@ -226,24 +245,31 @@ let cmtt_suite =
          >:: test_closure_unmatched_context_and_arg_list_length;
          "test_closure_unmatched_context_wrt_arguments"
          >:: test_closure_unmatched_context_wrt_arguments;
+         "test_lift_primitive" >:: test_lift_primitive;
+         "test_lift_non_primitive" >:: test_lift_non_primitive;
+         "test_lift_function_fails" >:: test_lift_function_fails;
        ]
 
 (*ADT Suite*)
-let test_datatypes _ = 
-  let program = "
-  datatype sometype = Con1 of int | Con3 of unit | Con4 of (int * sometype);;
+let test_datatypes _ =
+  let program =
+    "\n\
+    \  datatype sometype = Con1 of int | Con3 of unit | Con4 of (int * \
+     sometype);;\n\n\
+    \  let x:sometype = Con1 1;;\n\
+    \  \n\
+    \  let y:sometype = Con4 (1, Con1 1);;\n\
+    \  \n\
+    \  match y with\n\
+    \      | Con1 (x) -> x\n\
+    \      | Con3 (u) -> 2\n\
+    \      | Con4 (i, s) ->  i\n\
+    \      | _ -> 1;;\n\
+    \  "
+  in
+  assert_bool "Type check hasn't failed"
+    (Option.is_some (type_check_program_from_str program))
 
-  let x:sometype = Con1 1;;
-  
-  let y:sometype = Con4 (1, Con1 1);;
-  
-  match y with
-      | Con1 (x) -> x
-      | Con3 (u) -> 2
-      | Con4 (i, s) ->  i
-      | _ -> 1;;
-  " in
-  assert_bool "Type check hasn't failed" (Option.is_some (type_check_program_from_str program))
 let adt_suite = "adt_suite" >::: [ "test_datatypes" >:: test_datatypes ]
 
 let suite =
