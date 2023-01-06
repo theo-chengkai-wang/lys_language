@@ -20,6 +20,52 @@ let box_context_contains_duplicates ctx =
   in
   check_duplicates_aux BoxContextSet.empty ctx
 
+(* Check whether the type contains a function type *)
+module TypSet = Set.Make (Ast.TypeIdentifier)
+
+let rec includes_function_type_aux
+    ~(type_ctx : Typing_context.TypeConstrTypingContext.t)
+    ~(types_visited : TypSet.t) = function
+  | Ast.Typ.TFun (_, _) -> (true, types_visited)
+  | Ast.Typ.TProd tlist ->
+      List.fold ~init:(false, types_visited) tlist
+        ~f:(fun (prev_result, types_visited) typ ->
+          if prev_result then (prev_result, types_visited)
+          else includes_function_type_aux typ ~type_ctx ~types_visited)
+  | Ast.Typ.TSum (t1, t2) ->
+      let outcome1, types_visited1 =
+        includes_function_type_aux ~type_ctx ~types_visited t1
+      in
+      if outcome1 then (outcome1, types_visited1)
+      else
+        (includes_function_type_aux ~type_ctx ~types_visited:types_visited1) t2
+  | Ast.Typ.TIdentifier tid -> (
+      if TypSet.mem types_visited tid then (false, types_visited)
+      else
+        let types_visited = TypSet.add types_visited tid in
+        let constr_records_opt =
+          Typing_context.TypeConstrTypingContext.get_constr_from_typ type_ctx
+            tid
+        in
+        match constr_records_opt with
+        | None -> (false, types_visited)
+        | Some constr_records ->
+            List.fold constr_records ~init:(false, types_visited)
+              ~f:(fun (prev_result, types_visited) record ->
+                if prev_result then (prev_result, types_visited)
+                else
+                  match record.arg_type with
+                  | None -> (false, types_visited)
+                  | Some typ ->
+                      includes_function_type_aux ~type_ctx ~types_visited typ))
+  | _ -> (false, types_visited)
+
+let includes_function_type
+    ~(type_ctx : Typing_context.TypeConstrTypingContext.t)
+    ?(types_visited : TypSet.t = TypSet.empty) typ =
+  let res, _ = includes_function_type_aux ~type_ctx ~types_visited typ in
+  res
+
 let rec type_check_expression meta_ctx ctx
     (type_ctx : Typing_context.TypeConstrTypingContext.t) expr typ =
   let open Or_error.Monad_infix in
@@ -493,6 +539,18 @@ and type_inference_expression meta_ctx ctx type_ctx e =
                 (constr_record.arg_type, e_opt)
                 [%sexp_of: Ast.Typ.t option * Ast.Expr.t option])
           >>= fun _ -> Ok (Ast.Typ.TIdentifier constr_record.belongs_to_typ))
+  | Ast.Expr.Lift (typ, expr) ->
+      (* Only support lifting primitive types
+         (int, unit, char...), box types and all other thing without function types *)
+      (* check if typ exists has function types *)
+      if includes_function_type ~type_ctx typ then
+        Or_error.error
+          "TypeInferenceError: Type given as argument to `lift` contains a \
+           function type. (typ)"
+          typ [%sexp_of: Ast.Typ.t]
+      else
+        type_check_expression meta_ctx ctx type_ctx expr typ >>= fun () ->
+        Ok (Ast.Typ.TBox ([], typ))
 
 let process_top_level meta_ctx ctx type_ctx = function
   | Ast.TopLevelDefn.Definition (iddef, e) ->

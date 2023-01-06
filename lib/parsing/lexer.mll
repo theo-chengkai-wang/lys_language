@@ -35,6 +35,7 @@ rule read =
     | "not" {NOT}
     | "and" {AND}
     | "or" {OR}
+    | "lift" {LIFT}
     | "+" {PLUS}
     | "-" {MINUS}
     | "*" {TIMES}

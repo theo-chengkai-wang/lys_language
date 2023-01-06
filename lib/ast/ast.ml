@@ -413,6 +413,7 @@ and Expr : sig
     | Closure of MetaIdentifier.t * t list (*u with (e1, e2, e3, ...)*)
     | Constr of Constructor.t * t option (* Constr e*)
     | Match of t * (Pattern.t * t) list
+    | Lift of Typ.t * t
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.Expr.t -> t
@@ -459,6 +460,7 @@ end = struct
     | Closure of MetaIdentifier.t * t list (*u with (e1, e2, e3, ...)*)
     | Constr of Constructor.t * t option (* Constr e*)
     | Match of t * (Pattern.t * t) list
+    | Lift of Typ.t * t
   [@@deriving sexp, show, compare, equal]
 
   let rec of_past = function
@@ -506,6 +508,7 @@ end = struct
           ( of_past e,
             List.map pattns ~f:(fun (pattn, expr) ->
                 (Pattern.of_past pattn, of_past expr)) )
+    | Past.Expr.Lift (typ, expr) -> Lift (Typ.of_past typ, of_past expr)
 
   let rec populate_index expr ~current_ast_level ~current_identifiers
       ~current_meta_ast_level ~current_meta_identifiers =
@@ -733,6 +736,10 @@ end = struct
         |> Or_error.tag
              ~tag:"DeBruijnPopulationError[OBJECT]: Error in Match statement."
         >>= fun new_pattn_expr_list -> Ok (Match (e, new_pattn_expr_list))
+    | Lift (typ, expr) ->
+        populate_index ~current_ast_level ~current_identifiers
+          ~current_meta_ast_level ~current_meta_identifiers expr
+        >>= fun expr -> Ok (Lift (typ, expr))
 
   let rec shift_indices expr ~obj_depth ~meta_depth ~obj_offset ~meta_offset =
     let open Or_error.Monad_infix in
@@ -857,6 +864,9 @@ end = struct
         |> Or_error.tag
              ~tag:"DeBruijnShiftingError[OBJECT]: Error in match statement."
         >>= fun pattn_expr_list -> Ok (Match (e, pattn_expr_list))
+    | Lift (typ, expr) ->
+        shift_indices ~obj_depth ~meta_depth ~obj_offset ~meta_offset expr
+        >>= fun expr -> Ok (Lift (typ, expr))
 end
 
 and Value : sig
