@@ -211,6 +211,7 @@ and Typ : sig
     | TUnit
     | TBool
     | TInt
+    | TChar
     | TIdentifier of TypeIdentifier.t
     | TFun of t * t
     | TBox of Context.t * t
@@ -224,6 +225,7 @@ end = struct
     | TUnit
     | TBool
     | TInt
+    | TChar
     | TIdentifier of TypeIdentifier.t
     | TFun of t * t
     | TBox of Context.t * t
@@ -235,6 +237,7 @@ end = struct
     | Past.Typ.TUnit -> TUnit
     | Past.Typ.TBool -> TBool
     | Past.Typ.TInt -> TInt
+    | Past.Typ.TChar -> TChar
     | Past.Typ.TIdentifier id -> TIdentifier (TypeIdentifier.of_past id)
     | Past.Typ.TFun (t1, t2) -> TFun (of_past t1, of_past t2)
     | Past.Typ.TBox (ctx, t1) -> TBox (Context.of_past ctx, of_past t1)
@@ -327,18 +330,19 @@ end = struct
 end
 
 and Constant : sig
-  type t = Integer of int | Boolean of bool | Unit
+  type t = Integer of int | Boolean of bool | Unit | Character of char
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.Constant.t -> t
 end = struct
-  type t = Integer of int | Boolean of bool | Unit
+  type t = Integer of int | Boolean of bool | Unit | Character of char
   [@@deriving sexp, show, compare, equal]
 
   let of_past = function
     | Past.Constant.Integer i -> Integer i
     | Past.Constant.Boolean b -> Boolean b
     | Past.Constant.Unit -> Unit
+    | Past.Constant.Character c -> Character c
 end
 
 and Pattern : sig

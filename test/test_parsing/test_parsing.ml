@@ -6,6 +6,12 @@ let test_int _ =
   assert_equal (Some (Past.Expr.Constant (Past.Constant.Integer 2)))
     (parse_expression (Lexing.from_string "2;;"))
 
+let test_char _ =
+  assert_equal (Some (Past.Expr.Constant (Past.Constant.Character 'c')))
+    (parse_expression (Lexing.from_string "'c';;"));
+  assert_equal (Some (Past.Expr.Constant (Past.Constant.Character '\n')))
+    (parse_expression (Lexing.from_string "'\\n';;"))
+
 let test_bool_true _ =
   assert_equal (Some (Past.Expr.Constant (Past.Constant.Boolean true)))
     (parse_expression (Lexing.from_string "true;;"))
@@ -530,6 +536,7 @@ let suite =
   "parsing_suite"
   >::: [
          "test_int" >:: test_int;
+         "test_char" >:: test_char;
          "test_bool_true" >:: test_bool_true;
          "test_bool_false" >:: test_bool_false;
          "test_prod" >:: test_prod;

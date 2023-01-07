@@ -97,7 +97,8 @@ and type_inference_expression meta_ctx ctx type_ctx e =
       match c with
       | Ast.Constant.Boolean _ -> Ok Ast.Typ.TBool
       | Ast.Constant.Integer _ -> Ok Ast.Typ.TInt
-      | Ast.Constant.Unit -> Ok Ast.Typ.TUnit)
+      | Ast.Constant.Unit -> Ok Ast.Typ.TUnit
+      | Ast.Constant.Character _ -> Ok Ast.Typ.TChar)
   | Ast.Expr.UnaryOp (op, expr) -> (
       match op with
       | Ast.UnaryOperator.NEG ->
