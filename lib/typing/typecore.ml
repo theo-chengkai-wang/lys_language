@@ -74,10 +74,18 @@ let rec type_check_expression meta_ctx ctx
   else
     error
       (Printf.sprintf
-         "TypeCheckError: Inferred type %s\n Not Equal to checked type %s."
+         "TypeCheckError: Inferred type %s\n\
+         \ Not Equal to checked type %s. (expr, inferred_typ, typ, ctx, \
+          meta_ctx)"
          (Ast.Typ.show inferred_typ)
          (Ast.Typ.show typ))
-      (expr, inferred_typ, typ) [%sexp_of: Ast.Expr.t * Ast.Typ.t * Ast.Typ.t]
+      (expr, inferred_typ, typ, ctx, meta_ctx)
+      [%sexp_of:
+        Ast.Expr.t
+        * Ast.Typ.t
+        * Ast.Typ.t
+        * Ast.Typ.t Typing_context.ObjTypingContext.t
+        * (Ast.Context.t * Ast.Typ.t) Typing_context.MetaTypingContext.t]
 
 and type_inference_expression meta_ctx ctx type_ctx e =
   let open Or_error.Monad_infix in
