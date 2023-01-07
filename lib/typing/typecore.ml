@@ -133,15 +133,22 @@ and type_inference_expression meta_ctx ctx type_ctx e =
         Infer one and check the other one
         Improve error message saying "both sides of equality must be of same type"   
       *)
+          (*First check if non functional type: only allow equality between functional types*)
           type_inference_expression meta_ctx ctx type_ctx expr >>= fun typ ->
-          let or_error =
-            type_check_expression meta_ctx ctx type_ctx expr2 typ
-          in
-          Or_error.tag or_error
-            ~tag:
-              ("TypeInferenceError: Type mismatch: both sides of equality must \
-                have same type: " ^ Ast.Typ.show typ)
-          >>= fun _ -> Ok Ast.Typ.TBool
+          if includes_function_type ~type_ctx typ then
+            Or_error.error
+              "TypeInferenceError: Can't decide equality between types \
+               containing functional types."
+              typ [%sexp_of: Ast.Typ.t]
+          else
+            let or_error =
+              type_check_expression meta_ctx ctx type_ctx expr2 typ
+            in
+            Or_error.tag or_error
+              ~tag:
+                ("TypeInferenceError: Type mismatch: both sides of equality \
+                  must have same type: " ^ Ast.Typ.show typ)
+            >>= fun _ -> Ok Ast.Typ.TBool
       | Ast.BinaryOperator.NEQ ->
           type_inference_expression meta_ctx ctx type_ctx expr >>= fun typ ->
           let or_error =
@@ -354,8 +361,10 @@ and type_inference_expression meta_ctx ctx type_ctx e =
       | List.Or_unequal_lengths.Unequal_lengths ->
           error
             "TypeInferenceError: the number of arguments to the `with` \
-             expression does not match the size of the context"
-            (exprs, box_context) [%sexp_of: Ast.Expr.t list * Ast.Context.t])
+             expression does not match the size of the context. (box_context, \
+             closure_expr)"
+            (box_context, Ast.Expr.Closure (meta_id, exprs))
+            [%sexp_of: Ast.Context.t * Ast.Expr.t])
       >>= fun zipped_list ->
       (*2- check types*)
       Or_error.tag
