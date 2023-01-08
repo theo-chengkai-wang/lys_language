@@ -74,10 +74,18 @@ let rec type_check_expression meta_ctx ctx
   else
     error
       (Printf.sprintf
-         "TypeCheckError: Inferred type %s\n Not Equal to checked type %s."
+         "TypeCheckError: Inferred type %s\n\
+         \ Not Equal to checked type %s. (expr, inferred_typ, typ, ctx, \
+          meta_ctx)"
          (Ast.Typ.show inferred_typ)
          (Ast.Typ.show typ))
-      (expr, inferred_typ, typ) [%sexp_of: Ast.Expr.t * Ast.Typ.t * Ast.Typ.t]
+      (expr, inferred_typ, typ, ctx, meta_ctx)
+      [%sexp_of:
+        Ast.Expr.t
+        * Ast.Typ.t
+        * Ast.Typ.t
+        * Ast.Typ.t Typing_context.ObjTypingContext.t
+        * (Ast.Context.t * Ast.Typ.t) Typing_context.MetaTypingContext.t]
 
 and type_inference_expression meta_ctx ctx type_ctx e =
   let open Or_error.Monad_infix in
@@ -97,7 +105,8 @@ and type_inference_expression meta_ctx ctx type_ctx e =
       match c with
       | Ast.Constant.Boolean _ -> Ok Ast.Typ.TBool
       | Ast.Constant.Integer _ -> Ok Ast.Typ.TInt
-      | Ast.Constant.Unit -> Ok Ast.Typ.TUnit)
+      | Ast.Constant.Unit -> Ok Ast.Typ.TUnit
+      | Ast.Constant.Character _ -> Ok Ast.Typ.TChar)
   | Ast.Expr.UnaryOp (op, expr) -> (
       match op with
       | Ast.UnaryOperator.NEG ->
@@ -124,15 +133,22 @@ and type_inference_expression meta_ctx ctx type_ctx e =
         Infer one and check the other one
         Improve error message saying "both sides of equality must be of same type"   
       *)
+          (*First check if non functional type: only allow equality between functional types*)
           type_inference_expression meta_ctx ctx type_ctx expr >>= fun typ ->
-          let or_error =
-            type_check_expression meta_ctx ctx type_ctx expr2 typ
-          in
-          Or_error.tag or_error
-            ~tag:
-              ("TypeInferenceError: Type mismatch: both sides of equality must \
-                have same type: " ^ Ast.Typ.show typ)
-          >>= fun _ -> Ok Ast.Typ.TBool
+          if includes_function_type ~type_ctx typ then
+            Or_error.error
+              "TypeInferenceError: Can't decide equality between types \
+               containing functional types."
+              typ [%sexp_of: Ast.Typ.t]
+          else
+            let or_error =
+              type_check_expression meta_ctx ctx type_ctx expr2 typ
+            in
+            Or_error.tag or_error
+              ~tag:
+                ("TypeInferenceError: Type mismatch: both sides of equality \
+                  must have same type: " ^ Ast.Typ.show typ)
+            >>= fun _ -> Ok Ast.Typ.TBool
       | Ast.BinaryOperator.NEQ ->
           type_inference_expression meta_ctx ctx type_ctx expr >>= fun typ ->
           let or_error =
@@ -345,8 +361,10 @@ and type_inference_expression meta_ctx ctx type_ctx e =
       | List.Or_unequal_lengths.Unequal_lengths ->
           error
             "TypeInferenceError: the number of arguments to the `with` \
-             expression does not match the size of the context"
-            (exprs, box_context) [%sexp_of: Ast.Expr.t list * Ast.Context.t])
+             expression does not match the size of the context. (box_context, \
+             closure_expr)"
+            (box_context, Ast.Expr.Closure (meta_id, exprs))
+            [%sexp_of: Ast.Context.t * Ast.Expr.t])
       >>= fun zipped_list ->
       (*2- check types*)
       Or_error.tag

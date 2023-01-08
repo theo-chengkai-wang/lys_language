@@ -247,14 +247,12 @@ let rec multi_step_reduce ~top_level_context ~type_constr_context ~expr =
           Ast.Value.Constant (Ast.Constant.Integer i1),
           Ast.Value.Constant (Ast.Constant.Integer i2) ) ->
           Ok (Ast.Value.Constant (Ast.Constant.Integer (i1 % i2)))
-      | ( Ast.BinaryOperator.EQ,
-          Ast.Value.Constant (Ast.Constant.Integer i1),
-          Ast.Value.Constant (Ast.Constant.Integer i2) ) ->
-          Ok (Ast.Value.Constant (Ast.Constant.Boolean (i1 = i2)))
-      | ( Ast.BinaryOperator.NEQ,
-          Ast.Value.Constant (Ast.Constant.Integer i1),
-          Ast.Value.Constant (Ast.Constant.Integer i2) ) ->
-          Ok (Ast.Value.Constant (Ast.Constant.Boolean (i1 <> i2)))
+      | Ast.BinaryOperator.EQ, v1, v2 ->
+          Ok (Ast.Value.Constant (Ast.Constant.Boolean (Ast.Value.equal v1 v2)))
+      | Ast.BinaryOperator.NEQ, v1, v2 ->
+          Ok
+            (Ast.Value.Constant
+               (Ast.Constant.Boolean (not (Ast.Value.equal v1 v2))))
       | ( Ast.BinaryOperator.GTE,
           Ast.Value.Constant (Ast.Constant.Integer i1),
           Ast.Value.Constant (Ast.Constant.Integer i2) ) ->

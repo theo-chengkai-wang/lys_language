@@ -79,6 +79,7 @@ and Typ : sig
     | TUnit
     | TBool
     | TInt
+    | TChar
     | TIdentifier of TypeIdentifier.t
     | TFun of t * t
     | TBox of Context.t * t
@@ -128,7 +129,7 @@ and UnaryOperator : sig
 end
 
 and Constant : sig
-  type t = Integer of int | Boolean of bool | Unit
+  type t = Integer of int | Boolean of bool | Unit | Character of char
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.Constant.t -> t

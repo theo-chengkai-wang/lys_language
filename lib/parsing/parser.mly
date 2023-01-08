@@ -1,6 +1,6 @@
 %{
 open Lys_ast.Past
-open Core
+(*open Core*)
 
 (*TODO: ATTEMPT Constructs an Application AST node from an expression with the function and a list of expressions f is applied to
 exception EmptyListError
@@ -27,8 +27,10 @@ let list_to_tuple l =
 %token <int> INT
 %token <string> ID
 %token <string> CONSTR
+%token <char> CHAR
 %token BOOL_typ
 %token INT_typ
+%token CHAR_typ
 %token UNIT_typ
 %token UNIT
 %token TRUE
@@ -208,7 +210,8 @@ constant:
     | i = INT {Constant.Integer i}
     | TRUE {Constant.Boolean true}
     | FALSE {Constant.Boolean false}
-    | LEFT_PAREN RIGHT_PAREN {Constant.Unit};
+    | LEFT_PAREN RIGHT_PAREN {Constant.Unit}
+    | c = CHAR {Constant.Character c}
 
 identifier:
     | i = ID {i};
@@ -224,6 +227,7 @@ typ:
     | BOOL_typ {Typ.TBool}
     | INT_typ {Typ.TInt}
     | UNIT_typ {Typ.TUnit}
+    | CHAR_typ {Typ.TChar}
     | i = ID {Typ.TIdentifier (i)}
     | t1 = typ; "->"; t2 = typ /*%prec typ_FUNCTION_ARROW*/ {Typ.TFun (t1, t2)}
     | LEFT_PAREN t = typ "*" ts = separated_nonempty_list("*", typ) RIGHT_PAREN %prec typ_PRODUCT {Typ.TProd (t::ts)}

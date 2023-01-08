@@ -10,8 +10,8 @@ map_int_int (Cons (1, Cons (2, Cons (3, Nil)))) (fun (x:int) -> x * 2);;
 
 (*Unfortunately lifting is necessary*)
 (*
-let rec lift_int: int -> []int = fun (n:int) -> 
-    if n = 0 then box (|- 0) else let box u = lift_int (n-1) in box (|- (u with ()) + 1);;
+    let rec lift_int: int -> []int = fun (n:int) -> 
+        if n = 0 then box (|- 0) else let box u = lift_int (n-1) in box (|- (u with ()) + 1);;
 *)
 (* Powerful new lifting primitive! *)
 let lift_int: int -> []int = fun (n:int) -> lift[int] n;;

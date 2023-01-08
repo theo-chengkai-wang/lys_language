@@ -12,6 +12,14 @@ let next_line lexbuf =
                pos_lnum = pos.pos_lnum + 1
     }
 
+(*From OCaml impl https://stackoverflow.com/questions/66307896/lexing-strings-in-ocamllex*)
+let char_for_backslash = function
+  | 'n' -> '\010'
+  | 'r' -> '\013'
+  | 'b' -> '\008'
+  | 't' -> '\009'
+  | c   -> c
+
 }
 
 let nat = ['0'-'9'] ['0'-'9']*
@@ -21,16 +29,21 @@ let newline = '\r' | '\n' | "\r\n"
 let id = ['a'-'z' '_'] ['a'-'z' 'A'-'Z' '0'-'9' '_']* (*Lower case is normal id*)
 let constr_id = ['A'-'Z'] ['a'-'z' 'A'-'Z' '0'-'9' '_']* (*Upper case is Constr id*)
 
+let backslash_escapes =
+    ['\\' '\'' '"' 'n' 't' 'b' 'r' ' ']
+
 rule read = 
     parse
     | white {read lexbuf}
     | newline  { next_line lexbuf; read lexbuf }
     | "(*" {comment lexbuf}
+    | "'" {character lexbuf}
     | ";" {SEMICOLON}
     | "true" {TRUE}
     | "false" {FALSE}
     | "bool" {BOOL_typ}
     | "int" {INT_typ}
+    | "char" {CHAR_typ}
     | "unit" {UNIT_typ}
     | "not" {NOT}
     | "and" {AND}
@@ -88,3 +101,7 @@ and comment =
   | "*)" {read lexbuf}
   | newline  { next_line lexbuf; comment lexbuf }
   | _ (*skip*) {comment lexbuf}
+and character = 
+  parse
+  | '\\' (backslash_escapes as c) '\'' {CHAR (char_for_backslash c)}
+  | _ as c '\'' {CHAR (char_for_backslash c)}

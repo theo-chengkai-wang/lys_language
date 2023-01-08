@@ -20,6 +20,7 @@ and Typ : sig
     | TUnit
     | TBool
     | TInt
+    | TChar
     | TIdentifier of Identifier.t
     | TFun of t * t
     | TBox of Context.t * t
@@ -31,6 +32,7 @@ end = struct
     | TUnit
     | TBool
     | TInt
+    | TChar
     | TIdentifier of Identifier.t
     | TFun of t * t
     | TBox of Context.t * t
@@ -92,10 +94,10 @@ end = struct
 end
 
 and Constant : sig
-  type t = Integer of int | Boolean of bool | Unit
+  type t = Integer of int | Boolean of bool | Unit | Character of char
   [@@deriving sexp, show, equal, compare]
 end = struct
-  type t = Integer of int | Boolean of bool | Unit
+  type t = Integer of int | Boolean of bool | Unit | Character of char
   [@@deriving sexp, show, equal, compare]
 end
 
