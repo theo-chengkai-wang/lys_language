@@ -1,9 +1,5 @@
-(*let x:int = 1;;
-lift[int] x;;
-
-datatype tree = Lf | Br of (int * tree * tree);;
-let t:tree = Br (1, Lf, Br (2, Lf, Lf));;
-
-lift[tree] t;;*)
-
-'\'';;
+box (|- 
+    let rec f:(int -> int -> int) = 
+        fun (n:int) -> f (x:int) -> 
+            if n 
+)
