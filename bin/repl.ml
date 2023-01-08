@@ -13,7 +13,7 @@ let loop program context typ_context () =
          (Interpreter.TypeConstrContext.to_typeconstrtypingcontext typ_context)
   |> ok_exn |> Ast.TypedProgram.populate_index |> ok_exn
   |> Interpreter.evaluate_top_level_defns ~top_level_context:context
-       ~type_constr_context:typ_context
+       ~type_constr_context:typ_context ~time_exec:true
   |> ok_exn
 
 let read_line () =
