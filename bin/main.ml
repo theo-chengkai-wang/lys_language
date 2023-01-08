@@ -21,7 +21,7 @@ let loop time_exec filename () =
       ())
 
 let () =
-  Command.basic_spec ~summary:"Type check the input program and display it."
+  Command.basic_spec ~summary:"Execute the program."
     Command.Spec.(
       empty +> flag "time" no_arg ~doc:"Time execution of each expression." +> anon ("filename" %: string))
     loop
