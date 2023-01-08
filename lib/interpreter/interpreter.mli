@@ -63,9 +63,9 @@ val multi_step_reduce :
    top_level_context:EvaluationContext.t -> expr:Ast.Expr.t -> Ast.Expr.t *)
 module TopLevelEvaluationResult : sig
   type t =
-    | ExprValue of Ast.Typ.t * Ast.Value.t
-    | Defn of Ast.IdentifierDefn.t * Ast.Value.t
-    | RecDefn of Ast.IdentifierDefn.t * Ast.Value.t
+    | ExprValue of Ast.Typ.t * Ast.Value.t * float option
+    | Defn of Ast.IdentifierDefn.t * Ast.Value.t * float option
+    | RecDefn of Ast.IdentifierDefn.t * Ast.Value.t * float option
     | Directive of Ast.Directive.t * string
     | DatatypeDecl of
         Ast.TypeIdentifier.t * (Ast.Constructor.t * Ast.Typ.t option) list
@@ -77,6 +77,7 @@ end
 val evaluate_top_level_defns :
   ?top_level_context:EvaluationContext.t ->
   ?type_constr_context:TypeConstrContext.t ->
+  ?time_exec:bool ->
   Ast.TypedProgram.t ->
   (TopLevelEvaluationResult.t list * EvaluationContext.t * TypeConstrContext.t)
   Or_error.t
@@ -84,5 +85,6 @@ val evaluate_top_level_defns :
 val evaluate_program :
   ?top_level_context:EvaluationContext.t ->
   ?type_constr_context:TypeConstrContext.t ->
+  ?time_exec:bool ->
   Ast.TypedProgram.t ->
   TopLevelEvaluationResult.t list Or_error.t

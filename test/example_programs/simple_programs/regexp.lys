@@ -45,7 +45,7 @@ let regexp_to_test:regexp =
     Const ('3')
 );;*)
 (*Plus (Const ('1'), Const ('2'));;*)
-Star (Const ('1'));;
+Times (Const ('0'), Star (Const ('1')));;
 
 accept1 (regexp_to_test) (Cons ('1', Cons ('1', Cons ('1', Nil))));;
 
@@ -159,7 +159,7 @@ let compiled_regexp: [str:charlist]bool = accept2 regexp_to_test;;
 compiled_regexp;;
 
 let box u = compiled_regexp in
-    u with ((Cons ('1', Cons ('1', Cons ('1', Nil)))))
+    u with ((Cons ('0', Cons ('1', Cons ('1', Nil)))))
 ;;
 
 let box u = compiled_regexp in
@@ -172,7 +172,7 @@ let box u = compiled_regexp in
 ;;
 
 let box u = compiled_regexp in
-    u with (Cons ('f', Nil))
+    u with (Cons ('0', Nil))
 ;;
 
 let box u = compiled_regexp in
