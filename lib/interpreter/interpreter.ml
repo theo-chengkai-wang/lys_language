@@ -597,24 +597,42 @@ let rec multi_step_reduce ~top_level_context ~type_constr_context ~expr =
 
 module TopLevelEvaluationResult = struct
   type t =
-    | ExprValue of Ast.Typ.t * Ast.Value.t
-    | Defn of Ast.IdentifierDefn.t * Ast.Value.t
-    | RecDefn of Ast.IdentifierDefn.t * Ast.Value.t
+    | ExprValue of Ast.Typ.t * Ast.Value.t * float option
+    | Defn of Ast.IdentifierDefn.t * Ast.Value.t * float option
+    | RecDefn of Ast.IdentifierDefn.t * Ast.Value.t * float option
     | Directive of Ast.Directive.t * string
     | DatatypeDecl of
         Ast.TypeIdentifier.t * (Ast.Constructor.t * Ast.Typ.t option) list
   [@@deriving sexp, compare, equal, show]
 
-  let get_str_output = function
-    | ExprValue (typ, v) ->
-        Printf.sprintf "val:\n\t%s \n=\n\t %s" (Ast.Typ.show typ)
+  let get_str_output res =
+    Printf.sprintf "------------------------------\n"
+    ^
+    match res with
+    | ExprValue (typ, v, time_elapsed_opt) ->
+        let time_preface =
+          match time_elapsed_opt with
+          | None -> ""
+          | Some time -> Printf.sprintf "Time elapsed (ns): %f\n" time
+        in
+        Printf.sprintf "%sval:\n\t%s \n=\n\t %s" time_preface (Ast.Typ.show typ)
           (Ast.Value.show v)
-    | Defn ((id, typ), v) ->
-        Printf.sprintf "val %s :\n\t%s \n=\n\t %s"
+    | Defn ((id, typ), v, time_elapsed_opt) ->
+        let time_preface =
+          match time_elapsed_opt with
+          | None -> ""
+          | Some time -> Printf.sprintf "Time elapsed (ns): %f\n" time
+        in
+        Printf.sprintf "%sval %s :\n\t%s \n=\n\t %s" time_preface
           (Ast.ObjIdentifier.get_name id)
           (Ast.Typ.show typ) (Ast.Value.show v)
-    | RecDefn ((id, typ), v) ->
-        Printf.sprintf "val rec %s:\n\t %s \n=\n\t %s"
+    | RecDefn ((id, typ), v, time_elapsed_opt) ->
+        let time_preface =
+          match time_elapsed_opt with
+          | None -> ""
+          | Some time -> Printf.sprintf "Time elapsed (ns): %f\n" time
+        in
+        Printf.sprintf "%sval rec %s:\n\t %s \n=\n\t %s" time_preface
           (Ast.ObjIdentifier.get_name id)
           (Ast.Typ.show typ) (Ast.Value.show v)
     | Directive (d, message) ->
@@ -638,10 +656,18 @@ module TopLevelEvaluationResult = struct
 end
 
 let evaluate_top_level_defn ?(top_level_context = EvaluationContext.empty)
-    ?(type_constr_context = TypeConstrContext.empty) top_level_defn =
+    ?(type_constr_context = TypeConstrContext.empty) ?(time_exec = false)
+    top_level_defn =
   let open Or_error.Monad_infix in
+  let time_elapsed_opt current_time time_exec =
+    if time_exec then
+      () |> Mtime_clock.now |> Mtime.span current_time |> Mtime.Span.to_float_ns
+      |> Some
+    else None
+  in
   match top_level_defn with
   | Ast.TypedTopLevelDefn.Definition (typ, (id, _), e) ->
+      let current_time = Mtime_clock.now () in
       multi_step_reduce ~top_level_context ~type_constr_context ~expr:e
       >>= fun v ->
       let new_context =
@@ -649,11 +675,13 @@ let evaluate_top_level_defn ?(top_level_context = EvaluationContext.empty)
           ~key:(Ast.ObjIdentifier.get_name id)
           ~data:{ is_rec = false; typ; value = v }
       in
+      let elapsed = time_elapsed_opt current_time time_exec in
       Ok
-        ( TopLevelEvaluationResult.Defn ((id, typ), v),
+        ( TopLevelEvaluationResult.Defn ((id, typ), v, elapsed),
           new_context,
           type_constr_context )
   | Ast.TypedTopLevelDefn.RecursiveDefinition (typ, (id, _), e) ->
+      let current_time = Mtime_clock.now () in
       multi_step_reduce ~top_level_context ~type_constr_context ~expr:e
       >>= fun v ->
       let new_entry : EvaluationContext.single_record =
@@ -663,15 +691,18 @@ let evaluate_top_level_defn ?(top_level_context = EvaluationContext.empty)
       let new_context =
         EvaluationContext.set top_level_context ~key ~data:new_entry
       in
+      let elapsed = time_elapsed_opt current_time time_exec in
       Ok
-        ( TopLevelEvaluationResult.RecDefn ((id, typ), v),
+        ( TopLevelEvaluationResult.RecDefn ((id, typ), v, elapsed),
           new_context,
           type_constr_context )
   | Ast.TypedTopLevelDefn.Expression (typ, e) ->
+      let current_time = Mtime_clock.now () in
       multi_step_reduce ~top_level_context ~type_constr_context ~expr:e
       >>= fun v ->
+      let elapsed = time_elapsed_opt current_time time_exec in
       Ok
-        ( TopLevelEvaluationResult.ExprValue (typ, v),
+        ( TopLevelEvaluationResult.ExprValue (typ, v, elapsed),
           top_level_context,
           type_constr_context )
   | Ast.TypedTopLevelDefn.Directive d -> (
@@ -716,24 +747,28 @@ let evaluate_top_level_defn ?(top_level_context = EvaluationContext.empty)
           new_typ_context )
 
 let rec evaluate_top_level_defns ?(top_level_context = EvaluationContext.empty)
-    ?(type_constr_context = TypeConstrContext.empty) program =
+    ?(type_constr_context = TypeConstrContext.empty) ?(time_exec = false)
+    program =
   let open Or_error.Monad_infix in
   match program with
   | [] -> Ok ([], top_level_context, type_constr_context)
   | top :: tops -> (
-      evaluate_top_level_defn ~top_level_context ~type_constr_context top
+      evaluate_top_level_defn ~top_level_context ~type_constr_context ~time_exec
+        top
       >>= fun (top_level_result, new_context, new_typ_context) ->
       match top_level_result with
       | TopLevelEvaluationResult.Directive (Ast.Directive.Quit, _) ->
           Ok ([ top_level_result ], new_context, new_typ_context)
       | _ ->
           evaluate_top_level_defns ~top_level_context:new_context
-            ~type_constr_context:new_typ_context tops
+            ~type_constr_context:new_typ_context ~time_exec tops
           >>= fun (evaluation_res, new_context, new_typ_context) ->
           Ok (top_level_result :: evaluation_res, new_context, new_typ_context))
 
 let evaluate_program ?(top_level_context = EvaluationContext.empty)
-    ?(type_constr_context = TypeConstrContext.empty) program =
+    ?(type_constr_context = TypeConstrContext.empty) ?(time_exec = false)
+    program =
   let open Or_error.Monad_infix in
-  evaluate_top_level_defns ~top_level_context ~type_constr_context program
+  evaluate_top_level_defns ~top_level_context ~type_constr_context ~time_exec
+    program
   >>= fun (evaluation_res, _, _) -> Ok evaluation_res
