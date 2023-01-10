@@ -4,7 +4,7 @@ open Lys_typing
 open Lys_ast
 open Lys_interpreter
 
-let loop time_exec lexbuf context typ_context () =
+let loop time_exec show_reduction_steps lexbuf context typ_context () =
   lexbuf |> Lex_and_parse.parse_program |> Ast.Program.of_past
   |> Typecore.type_check_program
        ~obj_ctx:(Interpreter.EvaluationContext.to_typing_obj_context context)
@@ -12,7 +12,7 @@ let loop time_exec lexbuf context typ_context () =
          (Interpreter.TypeConstrContext.to_typeconstrtypingcontext typ_context)
   |> ok_exn |> Ast.TypedProgram.populate_index |> ok_exn
   |> Interpreter.evaluate_top_level_defns ~top_level_context:context
-       ~type_constr_context:typ_context ~time_exec
+       ~type_constr_context:typ_context ~time_exec ~show_reduction_steps
   |> ok_exn
 
 let read_line () =
@@ -42,7 +42,7 @@ let print_exec_result res continue evaluation_context typ_context =
       evaluation_context := new_context;
       typ_context := new_typ_context
 
-let main_loop time_exec pre_load_opt () =
+let main_loop time_exec show_reduction_steps pre_load_opt () =
   let continue = ref true in
   let accumulated_program = ref "" in
   let evaluation_context = ref Interpreter.EvaluationContext.empty in
@@ -54,7 +54,7 @@ let main_loop time_exec pre_load_opt () =
       In_channel.with_file pre_load_file ~f:(fun channel ->
           let res =
             Or_error.try_with
-              (loop time_exec
+              (loop time_exec show_reduction_steps
                  (channel |> Lexing.from_channel)
                  !evaluation_context !typ_context)
           in
@@ -69,7 +69,7 @@ let main_loop time_exec pre_load_opt () =
           (*execute*)
           let res =
             Or_error.try_with
-              (loop time_exec
+              (loop time_exec show_reduction_steps
                  (!accumulated_program |> Lexing.from_string)
                  !evaluation_context !typ_context)
           in
@@ -82,10 +82,15 @@ let main_loop time_exec pre_load_opt () =
       done
 
 let () =
-  Command.basic_spec ~summary:"Lys REPL.\n Use flags -time to time the execution of each expression, and -withfile [file] to preload a file."
+  Command.basic_spec
+    ~summary:
+      "Lys REPL.\n\
+      \ Use flags -time to time the execution of each expression, and \
+       -withfile [file] to preload a file."
     Command.Spec.(
       empty
       +> flag "time" no_arg ~doc:"Time execution of each expression."
+      +> flag "step" no_arg ~doc:"Show # of reduction steps."
       +> flag "withfile" (optional Command.Spec.string) ~doc:"Pre-load file")
     main_loop
   |> Command_unix.run
