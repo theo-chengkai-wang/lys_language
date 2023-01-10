@@ -1,14 +1,26 @@
-let rec (pow: int -> int -> int) = fun (n:int) -> if n = 0 then (fun 
-   (x:int) -> 1) else (fun (x:int) -> x * (pow (n-1) x));;
+let rec (pow: int -> int -> int) = fun (n:int) -> fun (x:int) -> 
+    if n = 0 then 1
+    else (x * (pow (n-1) x));;
+
+let rec (pow: int -> int -> int) = fun (n:int) -> 
+    if n = 0 then (fun (x:int) -> 1) 
+    else (fun (x:int) -> x * (pow (n-1) x));;
+
+let rec (pow: int -> int -> int) = fun (n:int) -> 
+    if n = 0 then (fun (x:int) -> 1) 
+    else
+        let pow_n_1 = pow (n-1) in 
+        (fun (x:int) -> x * pow_n_1 x);;
 
 pow 2 3;; (*gives 9*)
 
-
-let rec (pow2: int -> [b:int]int) = fun (n:int) -> 
-if n = 0 then box (b:int |- 1)
+let rec (pow2: int -> [x:int]int) = fun (n:int) -> 
+if n = 0 then box (x:int |- 1)
 else 
-    let box u = pow2 (n-1) in box (b:int |- b * (u with (b)));;
-
+    let box u = pow2 (n-1) in 
+        box (x:int |- 
+            x * (u with (x))
+        );;
 pow2 2;;
 
 let box u = pow2 2 in u with (3);; (*gives 9*)

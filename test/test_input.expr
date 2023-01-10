@@ -1,5 +1,1 @@
-box (|- 
-    let rec f:(int -> int -> int) = 
-        fun (n:int) -> f (x:int) -> 
-            if n 
-)
+box (x: int |- x)

@@ -175,6 +175,523 @@ end
 
    let evaluate_program program = [] *)
 
+module ReduceResult : sig
+  type result = Value of Ast.Value.t | Expr of Ast.Expr.t
+  [@@deriving sexp, show, equal, compare]
+
+  type t = bool * result
+  [@@deriving sexp, equal, compare]
+end = struct
+  type result = Value of Ast.Value.t | Expr of Ast.Expr.t
+  [@@deriving sexp, show, equal, compare]
+
+  type t = bool * result
+  [@@deriving sexp, equal, compare]
+end
+
+let rec reduce ~top_level_context ~type_constr_context ~reduced expr =
+  let open Or_error.Monad_infix in
+  if reduced then Ok (reduced, ReduceResult.Expr expr) else
+  match expr with
+  | Ast.Expr.Identifier id ->
+      (*No error if we're dealing with sth at top level context, otherwise error*)
+      let index = Ast.ObjIdentifier.get_debruijn_index id in
+      if not (Ast.DeBruijnIndex.equal index Ast.DeBruijnIndex.top_level) then
+        (*Error*)
+        error
+          "SingleStepReductionError: Can only evaluate a top level identifier. \
+           A non top-level identifier \n\
+          \    must have been substituted already." id
+          [%sexp_of: Ast.ObjIdentifier.t]
+      else
+        let id_str = Ast.ObjIdentifier.get_name id in
+        EvaluationContext.find_or_error top_level_context id_str
+        >>= fun { typ; is_rec; value } ->
+        if not is_rec then
+          (*Substitution -- no need to worry about De Bruijn indices as there is no way they can go wrong*)
+          Ok
+            (true, (ReduceResult.Value value))
+        else
+          (* Recursion: handle once together. *)
+          Ast.DeBruijnIndex.create 0 >>= fun debruijn_index ->
+          Ok (true, (ReduceResult.Expr
+                  (Ast.Expr.LetRec
+                     ( (Ast.ObjIdentifier.of_string id_str, typ),
+                       Ast.Value.to_expr value,
+                       Ast.Expr.Identifier
+                         (Ast.ObjIdentifier.of_string_and_index id_str
+                            debruijn_index) ))))
+  | Ast.Expr.Constant c ->
+      (*Constants don't reduce*)
+      Ok
+        (false, 
+           (ReduceResult.Value (Ast.Value.Constant c)))
+  | Ast.Expr.UnaryOp (op, expr) -> (
+      (* Congruence or not congruence *)
+      reduce ~top_level_context ~type_constr_context ~reduced expr
+      >>= fun (reduced, res) ->
+        if reduced then Ok (reduced, res)
+        else
+      match res with
+      | ReduceResult.Expr e ->
+          (*Congruence*)
+          Ok
+            (reduced,
+               (ReduceResult.Expr (Ast.Expr.UnaryOp (op, e))))
+      | ReduceResult.Value v -> (
+          (*Reduction*)
+          match (op, v) with
+          | Ast.UnaryOperator.NEG, Ast.Value.Constant (Ast.Constant.Integer i)
+            ->
+              Ok
+                (true, 
+                   (ReduceResult.Value
+                      (Ast.Value.Constant (Ast.Constant.Integer (-i)))))
+          | Ast.UnaryOperator.NOT, Ast.Value.Constant (Ast.Constant.Boolean b)
+            ->
+              Ok
+                (true, 
+                   (ReduceResult.Value
+                      (Ast.Value.Constant (Ast.Constant.Boolean (not b)))))
+          | _, _ ->
+              error
+                "SingleStepReductionError: type mismatch at Unary operator. \
+                 [FATAL] should not happen! Type check should have prevented \
+                 this."
+                (Ast.Expr.UnaryOp (op, expr))
+                [%sexp_of: Ast.Expr.t]))
+  | Ast.Expr.BinaryOp (op, expr1, expr2) -> (
+      reduce ~top_level_context ~type_constr_context ~reduced expr1
+      >>= fun (reduced1, res1) ->
+      if reduced1 then Ok (reduced1,)
+      match res1.result with
+      | ReduceResult.Expr e1 ->
+          Ok
+            (ReduceResult.create res1.reduced
+               (ReduceResult.Expr (Ast.Expr.BinaryOp (op, e1, expr2))))
+      | ReduceResult.Value v1 -> (
+          reduce ~top_level_context ~type_constr_context
+            ~reduced:res1.reduced expr2
+          >>= fun res2 ->
+          match res2.result with
+          | ReduceResult.Expr e2 ->
+              Ok
+                (ReduceResult.create res2.reduced
+                   (ReduceResult.Expr
+                      (Ast.Expr.BinaryOp (op, Ast.Value.to_expr v1, e2))))
+          | ReduceResult.Value v2 -> (
+              let reduced = res2.reduced + 1 in
+              match (op, v1, v2) with
+              | ( Ast.BinaryOperator.ADD,
+                  Ast.Value.Constant (Ast.Constant.Integer i1),
+                  Ast.Value.Constant (Ast.Constant.Integer i2) ) ->
+                  Ok
+                    (ReduceResult.create reduced
+                       (ReduceResult.Value
+                          (Ast.Value.Constant (Ast.Constant.Integer (i1 + i2)))))
+              | ( Ast.BinaryOperator.SUB,
+                  Ast.Value.Constant (Ast.Constant.Integer i1),
+                  Ast.Value.Constant (Ast.Constant.Integer i2) ) ->
+                  Ok
+                    (ReduceResult.create reduced
+                       (ReduceResult.Value
+                          (Ast.Value.Constant (Ast.Constant.Integer (i1 - i2)))))
+              | ( Ast.BinaryOperator.MUL,
+                  Ast.Value.Constant (Ast.Constant.Integer i1),
+                  Ast.Value.Constant (Ast.Constant.Integer i2) ) ->
+                  Ok
+                    (ReduceResult.create reduced
+                       (ReduceResult.Value
+                          (Ast.Value.Constant (Ast.Constant.Integer (i1 * i2)))))
+              | ( Ast.BinaryOperator.DIV,
+                  Ast.Value.Constant (Ast.Constant.Integer i1),
+                  Ast.Value.Constant (Ast.Constant.Integer i2) ) ->
+                  Ok
+                    (ReduceResult.create reduced
+                       (ReduceResult.Value
+                          (Ast.Value.Constant (Ast.Constant.Integer (i1 / i2)))))
+              | ( Ast.BinaryOperator.MOD,
+                  Ast.Value.Constant (Ast.Constant.Integer i1),
+                  Ast.Value.Constant (Ast.Constant.Integer i2) ) ->
+                  Ok
+                    (ReduceResult.create reduced
+                       (ReduceResult.Value
+                          (Ast.Value.Constant (Ast.Constant.Integer (i1 % i2)))))
+              | Ast.BinaryOperator.EQ, v1, v2 ->
+                  Ok
+                    (ReduceResult.create reduced
+                       (ReduceResult.Value
+                          (Ast.Value.Constant
+                             (Ast.Constant.Boolean (Ast.Value.equal v1 v2)))))
+              | Ast.BinaryOperator.NEQ, v1, v2 ->
+                  Ok
+                    (ReduceResult.create reduced
+                       (ReduceResult.Value
+                          (Ast.Value.Constant
+                             (Ast.Constant.Boolean (not (Ast.Value.equal v1 v2))))))
+              | ( Ast.BinaryOperator.GTE,
+                  Ast.Value.Constant (Ast.Constant.Integer i1),
+                  Ast.Value.Constant (Ast.Constant.Integer i2) ) ->
+                  Ok
+                    (ReduceResult.create reduced
+                       (ReduceResult.Value
+                          (Ast.Value.Constant (Ast.Constant.Boolean (i1 >= i2)))))
+              | ( Ast.BinaryOperator.GT,
+                  Ast.Value.Constant (Ast.Constant.Integer i1),
+                  Ast.Value.Constant (Ast.Constant.Integer i2) ) ->
+                  Ok
+                    (ReduceResult.create reduced
+                       (ReduceResult.Value
+                          (Ast.Value.Constant (Ast.Constant.Boolean (i1 > i2)))))
+              | ( Ast.BinaryOperator.LT,
+                  Ast.Value.Constant (Ast.Constant.Integer i1),
+                  Ast.Value.Constant (Ast.Constant.Integer i2) ) ->
+                  Ok
+                    (ReduceResult.create reduced
+                       (ReduceResult.Value
+                          (Ast.Value.Constant (Ast.Constant.Boolean (i1 < i2)))))
+              | ( Ast.BinaryOperator.LTE,
+                  Ast.Value.Constant (Ast.Constant.Integer i1),
+                  Ast.Value.Constant (Ast.Constant.Integer i2) ) ->
+                  Ok
+                    (ReduceResult.create reduced
+                       (ReduceResult.Value
+                          (Ast.Value.Constant (Ast.Constant.Boolean (i1 <= i2)))))
+              | ( Ast.BinaryOperator.AND,
+                  Ast.Value.Constant (Ast.Constant.Boolean i1),
+                  Ast.Value.Constant (Ast.Constant.Boolean i2) ) ->
+                  Ok
+                    (ReduceResult.create reduced
+                       (ReduceResult.Value
+                          (Ast.Value.Constant (Ast.Constant.Boolean (i1 && i2)))))
+              | ( Ast.BinaryOperator.OR,
+                  Ast.Value.Constant (Ast.Constant.Boolean i1),
+                  Ast.Value.Constant (Ast.Constant.Boolean i2) ) ->
+                  Ok
+                    (ReduceResult.create reduced
+                       (ReduceResult.Value
+                          (Ast.Value.Constant (Ast.Constant.Boolean (i1 || i2)))))
+              | _, _, _ ->
+                  error
+                    "SingleStepReductionError: type mismatch at Binary \
+                     operator. [FATAL] should not happen! Type check should \
+                     have prevented this."
+                    (Ast.Expr.BinaryOp (op, expr1, expr2))
+                    [%sexp_of: Ast.Expr.t])))
+  | Ast.Expr.Prod exprs ->
+      (* List.map exprs ~f:(fun expr ->
+             multi_step_reduce ~top_level_context ~type_constr_context ~expr)
+         |> Or_error.combine_errors
+         >>= fun values -> Ok (Ast.Value.Prod values) *)
+      let rec process_exprs exprs reduced =
+        match exprs with
+        | [] -> Ok ([], reduced)
+        | e :: es -> (
+            reduce ~top_level_context ~type_constr_context ~reduced e
+            >>= fun res ->
+            match res.result with
+            | ReduceResult.Expr _ ->
+              let new_reduced = res.reduced in
+                Ok
+                  ( res.result
+                    :: (es |> List.map ~f:(fun e -> ReduceResult.Expr e)),
+                    new_reduced )
+            | ReduceResult.Value _ ->
+                process_exprs es res.reduced
+                >>= fun (es, new_reduced) ->
+                Ok (res.result :: es, new_reduced))
+      in
+      process_exprs exprs reduced >>= fun (results, new_reduced) ->
+      if
+        List.exists results
+          ~f:(fun res ->
+            match res with ReduceResult.Expr _ -> true | _ -> false)
+      then 
+        results |> List.map ~f:(fun res -> 
+          match res with ReduceResult.Expr e -> e
+          | ReduceResult.Value v -> Ast.Value.to_expr v
+        ) |> fun e_list -> Ok (ReduceResult.create new_reduced (ReduceResult.Expr (Ast.Expr.Prod e_list)))
+      else 
+        results |> List.map ~f:(fun res ->
+          match res with 
+          | ReduceResult.Expr _ -> failwith "Should never be here"
+          | ReduceResult.Value v -> v  
+        ) |> fun v_list -> Ok (ReduceResult.create new_reduced (ReduceResult.Value (Ast.Value.Prod v_list)))
+  | Ast.Expr.Nth (expr, i) -> (
+      multi_step_reduce ~top_level_context ~type_constr_context ~expr
+      >>= fun v ->
+      match v with
+      | Ast.Value.Prod values -> (
+          match List.nth values i with
+          | None ->
+              error
+                "SingleStepReductionError: type mismatch at Nth: access out of \
+                 bounds. [FATAL] should not happen! Type check should have \
+                 prevented this."
+                (Ast.Expr.Nth (expr, i))
+                [%sexp_of: Ast.Expr.t]
+          | Some v -> Ok v)
+      | _ ->
+          error
+            "SingleStepReductionError: type mismatch at Nth. [FATAL] should \
+             not happen! Type check should have prevented this."
+            (Ast.Expr.Nth (expr, i))
+            [%sexp_of: Ast.Expr.t])
+  | Ast.Expr.Left (t1, t2, expr) ->
+      multi_step_reduce ~top_level_context ~type_constr_context ~expr
+      >>= fun v -> Ok (Ast.Value.Left (t1, t2, v))
+      (* We don't run RT type check here. *)
+  | Ast.Expr.Right (t1, t2, expr) ->
+      multi_step_reduce ~top_level_context ~type_constr_context ~expr
+      >>= fun v -> Ok (Ast.Value.Right (t1, t2, v))
+      (* We don't run RT type check here. *)
+  | Ast.Expr.Case (e, (id1, _), e1, (id2, _), e2) ->
+      multi_step_reduce ~top_level_context ~type_constr_context ~expr:e
+      >>= fun v ->
+      let new_expr_or_error =
+        match v with
+        | Ast.Value.Left (_, _, v) ->
+            Substitutions.substitute (Ast.Value.to_expr v) id1 e1
+        | Ast.Value.Right (_, _, v) ->
+            Substitutions.substitute (Ast.Value.to_expr v) id2 e2
+        | _ ->
+            error
+              "SingleStepReductionError: type mismatch at match clause. \
+               [FATAL] should not happen! Type check should have prevented \
+               this."
+              expr [%sexp_of: Ast.Expr.t]
+      in
+      new_expr_or_error >>= fun new_expr ->
+      multi_step_reduce ~top_level_context ~type_constr_context ~expr:new_expr
+  | Ast.Expr.Lambda (iddef, e) -> Ok (Ast.Value.Lambda (iddef, e))
+  | Ast.Expr.Application (e1, e2) -> (
+      multi_step_reduce ~top_level_context ~type_constr_context ~expr:e1
+      >>= fun v1 ->
+      multi_step_reduce ~top_level_context ~type_constr_context ~expr:e2
+      >>= fun v2 ->
+      match v1 with
+      | Ast.Value.Lambda ((id, _), e) ->
+          Substitutions.substitute (Ast.Value.to_expr v2) id e
+          >>= fun new_expr ->
+          multi_step_reduce ~top_level_context ~type_constr_context
+            ~expr:new_expr
+      | _ ->
+          error
+            "SingleStepReductionError: type mismatch at Lambda. [FATAL] should \
+             not happen! Type check should have prevented this."
+            expr [%sexp_of: Ast.Expr.t])
+  | Ast.Expr.IfThenElse (b, e1, e2) -> (
+      multi_step_reduce ~top_level_context ~type_constr_context ~expr:b
+      >>= fun bv ->
+      match bv with
+      | Ast.Value.Constant (Ast.Constant.Boolean v) ->
+          if v then
+            multi_step_reduce ~top_level_context ~type_constr_context ~expr:e1
+          else
+            multi_step_reduce ~top_level_context ~type_constr_context ~expr:e2
+      | _ ->
+          error
+            "SingleStepReductionError: type mismatch at IfThenElse. [FATAL] \
+             should not happen! Type check should have prevented this."
+            expr [%sexp_of: Ast.Expr.t])
+  | Ast.Expr.LetBinding ((id, _), e, e2) ->
+      multi_step_reduce ~top_level_context ~type_constr_context ~expr:e
+      >>= fun ev ->
+      Substitutions.substitute (Ast.Value.to_expr ev) id e2 >>= fun e ->
+      multi_step_reduce ~top_level_context ~type_constr_context ~expr:e
+  | Ast.Expr.LetRec ((id, typ), e, e2) ->
+      (* let rec f = v in e  ~~~~~> [([(let rec f = v in f)/f]v)/f]e
+
+         Analysis
+           let rec f = (0)
+               v (1 -- means that index 0 at top level = f)
+           in
+               e (1)
+
+           (fun f (0)-> e(1)) ((fun f (0) -> v(1)) (let rec f(0) = v(1) in f(1)))
+
+         So Shifting is not really needed!
+         However, I can't just translate it to the above, for it will easily stack overflow, in a very unfortunate way,
+         do to my call by value semantics. Instead, I shall have to actually manually write the substitutions out.
+      *)
+      multi_step_reduce ~top_level_context ~type_constr_context ~expr:e
+      >>= fun v ->
+      Ast.DeBruijnIndex.create 0 >>= fun db_index_0 ->
+      (*let v1 = [(let rec f = v in f)/f]v*)
+      let ev = Ast.Value.to_expr v in
+      let to_sub_in =
+        Ast.Expr.LetRec
+          ( (id, typ),
+            ev,
+            Ast.Expr.Identifier
+              (Ast.ObjIdentifier.of_string_and_index
+                 (Ast.ObjIdentifier.get_name id)
+                 db_index_0) )
+      in
+      Substitutions.substitute to_sub_in id ev >>= fun ev1 ->
+      (*[v1/f]e*)
+      Substitutions.substitute ev1 id e2 >>= fun ev2 ->
+      multi_step_reduce ~top_level_context ~type_constr_context ~expr:ev2
+  | Ast.Expr.Box (ctx, e) -> Ok (Ast.Value.Box (ctx, e))
+  | Ast.Expr.LetBox (metaid, e, e2) -> (
+      multi_step_reduce ~top_level_context ~type_constr_context ~expr:e
+      >>= fun box_v ->
+      match box_v with
+      | Ast.Value.Box (ctx, e_box) ->
+          Substitutions.meta_substitute ctx e_box metaid e2 |> fun or_error ->
+          Or_error.tag_arg or_error
+            "SingleStepReductionError: Meta substitution error: metaid, e->v, \
+             ctx, v"
+            (metaid, box_v, ctx, e2)
+            [%sexp_of:
+              Ast.MetaIdentifier.t * Ast.Value.t * Ast.Context.t * Ast.Expr.t]
+          >>= fun res_meta_sub ->
+          multi_step_reduce ~top_level_context ~type_constr_context
+            ~expr:res_meta_sub
+      | _ ->
+          error
+            "SingleStepReductionError: type mismatch at LetBox. [FATAL] should \
+             not happen! Type check should have prevented this."
+            expr [%sexp_of: Ast.Expr.t])
+  | Ast.Expr.Closure (_, _) ->
+      error
+        "SingleStepReductionError: One should never have to evaluate a raw \
+         closure."
+        expr [%sexp_of: Ast.Expr.t]
+  | Ast.Expr.Lift (_, expr) ->
+      multi_step_reduce ~top_level_context ~type_constr_context ~expr
+      >>= fun v ->
+      let expr_v = Ast.Value.to_expr v in
+      Ok (Ast.Value.Box ([], expr_v))
+  | Ast.Expr.Constr (constr, e_opt) -> (
+      if
+        Option.is_none
+          (TypeConstrContext.get_typ_from_constr type_constr_context constr)
+      then
+        error "SingleStepReductionError: FATAL: constructor undefined" constr
+          [%sexp_of: Ast.Constructor.t]
+      else
+        match e_opt with
+        | None -> Ok (Ast.Value.Constr (constr, None))
+        | Some e ->
+            multi_step_reduce ~top_level_context ~type_constr_context ~expr:e
+            >>= fun v -> Ok (Ast.Value.Constr (constr, Some v)))
+  | Ast.Expr.Match (e, pattn_expr_list) -> (
+      multi_step_reduce ~top_level_context ~type_constr_context ~expr:e
+      >>= fun v ->
+      let match_pattn_expr v (pattn, expr) =
+        (* Processes the pattern: if not matched, return None; if matched return Some (Value.t Or_error.t) *)
+        match (pattn, v) with
+        | Ast.Pattern.Wildcard, _ ->
+            multi_step_reduce ~top_level_context ~type_constr_context ~expr
+            |> Some
+        | Ast.Pattern.Id id, _ ->
+            let expr_of_v = Ast.Value.to_expr v in
+            Substitutions.substitute expr_of_v id expr
+            >>= (fun substituted_expr ->
+                  multi_step_reduce ~top_level_context ~type_constr_context
+                    ~expr:substituted_expr)
+            |> Some
+        | Ast.Pattern.Inl id, Ast.Value.Left (_, _, v) ->
+            let expr_of_v = Ast.Value.to_expr v in
+            Substitutions.substitute expr_of_v id expr
+            >>= (fun substituted_expr ->
+                  multi_step_reduce ~top_level_context ~type_constr_context
+                    ~expr:substituted_expr)
+            |> Some
+        | Ast.Pattern.Inr id, Ast.Value.Right (_, _, v) ->
+            let expr_of_v = Ast.Value.to_expr v in
+            Substitutions.substitute expr_of_v id expr
+            >>= (fun substituted_expr ->
+                  multi_step_reduce ~top_level_context ~type_constr_context
+                    ~expr:substituted_expr)
+            |> Some
+        | Ast.Pattern.Prod id_list, Ast.Value.Prod value_list ->
+            let expr_list = List.map value_list ~f:Ast.Value.to_expr in
+            let idstr_list = List.map id_list ~f:Ast.ObjIdentifier.get_name in
+            Utils.try_zip_list_or_error expr_list idstr_list
+              (Or_error.error
+                 "SingleStepReductionError: argument number mismatch at match \
+                  clause."
+                 (pattn, expr) [%sexp_of: Ast.Pattern.t * Ast.Expr.t])
+            >>= (fun zipped_list ->
+                  Substitutions.sim_substitute_from_zipped_list zipped_list expr
+                  >>= fun substituted_expr ->
+                  multi_step_reduce ~top_level_context ~type_constr_context
+                    ~expr:substituted_expr)
+            |> Some
+        | Ast.Pattern.Datatype (constr, []), Ast.Value.Constr (constr2, None) ->
+            (* CHECK IF constr exists *)
+            if
+              Option.is_none
+                (TypeConstrContext.get_typ_from_constr type_constr_context
+                   constr)
+            then
+              error "SingleStepReductionError: FATAL: constructor undefined"
+                constr [%sexp_of: Ast.Constructor.t]
+              |> Some
+            else if not (Ast.Constructor.equal constr constr2) then None
+            else
+              multi_step_reduce ~top_level_context ~type_constr_context ~expr
+              |> Some
+        | ( Ast.Pattern.Datatype (constr, [ id ]),
+            Ast.Value.Constr (constr2, Some v) ) ->
+            if
+              Option.is_none
+                (TypeConstrContext.get_typ_from_constr type_constr_context
+                   constr)
+            then
+              error "SingleStepReductionError: FATAL: constructor undefined"
+                constr [%sexp_of: Ast.Constructor.t]
+              |> Some
+            else if not (Ast.Constructor.equal constr constr2) then None
+            else
+              (* If constructors match, no of arguments should match too, otherwise error *)
+              let expr_to_sub_for = Ast.Value.to_expr v in
+              Substitutions.substitute expr_to_sub_for id expr
+              >>= (fun substituted_expr ->
+                    multi_step_reduce ~top_level_context ~type_constr_context
+                      ~expr:substituted_expr)
+              |> Some
+        | ( Ast.Pattern.Datatype (constr, id_list),
+            Ast.Value.Constr (constr2, Some (Ast.Value.Prod vlist)) ) ->
+            if
+              Option.is_none
+                (TypeConstrContext.get_typ_from_constr type_constr_context
+                   constr)
+            then
+              error "SingleStepReductionError: FATAL: constructor undefined"
+                constr [%sexp_of: Ast.Constructor.t]
+              |> Some
+            else if not (Ast.Constructor.equal constr constr2) then None
+            else
+              let expr_list = List.map vlist ~f:Ast.Value.to_expr in
+              let idstr_list = List.map id_list ~f:Ast.ObjIdentifier.get_name in
+              Utils.try_zip_list_or_error expr_list idstr_list
+                (Or_error.error
+                   "SingleStepReductionError: argument number mismatch at \
+                    match clause."
+                   (pattn, expr) [%sexp_of: Ast.Pattern.t * Ast.Expr.t])
+              >>= (fun zipped_list ->
+                    Substitutions.sim_substitute_from_zipped_list zipped_list
+                      expr
+                    >>= fun substituted_expr ->
+                    multi_step_reduce ~top_level_context ~type_constr_context
+                      ~expr:substituted_expr)
+              |> Some
+        | _ -> None
+      in
+      let match_and_exec_result =
+        Utils.list_traverse_and_try pattn_expr_list ~f:(fun (pattn, expr) ->
+            match_pattn_expr v (pattn, expr))
+      in
+      match match_and_exec_result with
+      | None ->
+          error "SingleStepReductionError: Pattern matching non-exhaustive."
+            (Ast.Expr.Match (e, pattn_expr_list))
+            [%sexp_of: Ast.Expr.t]
+      | Some res -> res)
+
 let rec multi_step_reduce ~top_level_context ~type_constr_context ~expr =
   let open Or_error.Monad_infix in
   match expr with
