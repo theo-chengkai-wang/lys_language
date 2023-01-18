@@ -437,6 +437,8 @@ and Expr : sig
     obj_offset:int ->
     meta_offset:int ->
     t Or_error.t
+
+  val to_val : t -> Value.t option
 end = struct
   type t =
     | Identifier of ObjIdentifier.t (*x*)
@@ -871,6 +873,27 @@ end = struct
     | Lift (typ, expr) ->
         shift_indices ~obj_depth ~meta_depth ~obj_offset ~meta_offset expr
         >>= fun expr -> Ok (Lift (typ, expr))
+
+  let rec to_val expr =
+    let open Option.Monad_infix in
+    match expr with
+    | Constant c -> Some (Value.Constant c)
+    | Prod exprs ->
+        let rec convert_exprs = function
+          | [] -> Some []
+          | e :: es -> (
+              match to_val e with
+              | None -> None
+              | Some v -> convert_exprs es >>= fun vs -> Some (v :: vs))
+        in
+        convert_exprs exprs >>= fun vs -> Some (Value.Prod vs)
+    | Lambda (iddef, e) -> Some (Value.Lambda (iddef, e))
+    | Box (ctx, e) -> Some (Value.Box (ctx, e))
+    | Constr (tid, e_opt) -> (
+        match e_opt with
+        | None -> Some (Value.Constr (tid, None))
+        | Some e -> to_val e >>= fun v -> Some (Value.Constr (tid, Some v)))
+    | _ -> None
 end
 
 and Value : sig

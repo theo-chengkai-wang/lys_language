@@ -60,9 +60,9 @@ let loop2 str () =
         e
     | _ -> failwith "Not supposed to be here" )
   |> fun e ->
-  Interpreter.multi_step_reduce
-    ~top_level_context:Interpreter.EvaluationContext.empty
-    ~type_constr_context: Interpreter.TypeConstrContext.empty ~expr:e
+  Multi_step.multi_step_reduce
+    ~top_level_context:Interpreter_common.EvaluationContext.empty
+    ~type_constr_context: Interpreter_common.TypeConstrContext.empty ~expr:e
   |> ok_exn |> Ast.Value.show
   |> fun s -> print_endline (Printf.sprintf "Run result of expression:\n %s" s)
 
@@ -77,7 +77,7 @@ let loop3 str () =
   |> fun l ->
   let _ =
     List.map l ~f:(fun res ->
-        print_endline (Interpreter.TopLevelEvaluationResult.get_str_output res);
+        print_endline (Interpreter_common.TopLevelEvaluationResult.get_str_output res);
         print_endline "")
   in
   ()
