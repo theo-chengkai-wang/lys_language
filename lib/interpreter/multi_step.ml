@@ -1,6 +1,7 @@
 open Lys_ast
 open Core
 open Interpreter_common
+open Lys_utils
 
 let rec multi_step_reduce_with_step_count ~top_level_context
     ~type_constr_context ~expr =
