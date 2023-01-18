@@ -9,7 +9,7 @@ let rec (pow: int -> int -> int) = fun (n:int) ->
 let rec (pow: int -> int -> int) = fun (n:int) -> 
     if n = 0 then (fun (x:int) -> 1) 
     else
-        let pow_n_1 = pow (n-1) in 
+        let pow_n_1:(int -> int) = pow (n-1) in 
         (fun (x:int) -> x * pow_n_1 x);;
 
 pow 2 3;; (*gives 9*)

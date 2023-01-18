@@ -13,7 +13,7 @@ let exec_program str =
 
 let print_res res =
   List.iter res ~f:(fun res ->
-      print_endline (Interpreter.TopLevelEvaluationResult.show res);
+      print_endline (Interpreter_common.TopLevelEvaluationResult.show res);
       print_endline "")
 
 let create_debruijn_exn n = n |> Ast.DeBruijnIndex.create |> ok_exn
@@ -23,8 +23,11 @@ let test_interp_int _ =
   assert_equal
     (Some
        [
-         Interpreter.TopLevelEvaluationResult.ExprValue
-           (Ast.Typ.TInt, Ast.Value.Constant (Ast.Constant.Integer 1), None);
+         Interpreter_common.TopLevelEvaluationResult.ExprValue
+           ( Ast.Typ.TInt,
+             Ast.Value.Constant (Ast.Constant.Integer 1),
+             None,
+             None );
        ])
     res_opt
 
@@ -35,13 +38,17 @@ let test_interp_var_def _ =
   assert_equal
     (Some
        [
-         Interpreter.TopLevelEvaluationResult.Defn
+         Interpreter_common.TopLevelEvaluationResult.Defn
            ( ( Ast.ObjIdentifier.of_string_and_index "x" Ast.DeBruijnIndex.none,
                Ast.Typ.TInt ),
              Ast.Value.Constant (Ast.Constant.Integer 0),
+             None,
              None );
-         Interpreter.TopLevelEvaluationResult.ExprValue
-           (Ast.Typ.TInt, Ast.Value.Constant (Ast.Constant.Integer 0), None);
+         Interpreter_common.TopLevelEvaluationResult.ExprValue
+           ( Ast.Typ.TInt,
+             Ast.Value.Constant (Ast.Constant.Integer 0),
+             None,
+             None );
        ])
     res_opt
 
@@ -55,7 +62,7 @@ let test_interp_rec_var_def _ =
   assert_equal
     (Some
        [
-         Interpreter.TopLevelEvaluationResult.RecDefn
+         Interpreter_common.TopLevelEvaluationResult.RecDefn
            ( ( Ast.ObjIdentifier.of_string_and_index "pow" Ast.DeBruijnIndex.none,
                Ast.Typ.TFun
                  (Ast.Typ.TInt, Ast.Typ.TFun (Ast.Typ.TInt, Ast.Typ.TInt)) ),
@@ -100,9 +107,13 @@ let test_interp_rec_var_def _ =
                                  Ast.Expr.Identifier
                                    (Ast.ObjIdentifier.of_string_and_index "x"
                                       (create_debruijn_exn 0)) ) ) ) ) ),
+             None,
              None );
-         Interpreter.TopLevelEvaluationResult.ExprValue
-           (Ast.Typ.TInt, Ast.Value.Constant (Ast.Constant.Integer 9), None);
+         Interpreter_common.TopLevelEvaluationResult.ExprValue
+           ( Ast.Typ.TInt,
+             Ast.Value.Constant (Ast.Constant.Integer 9),
+             None,
+             None );
        ])
     res_opt
 
@@ -112,8 +123,11 @@ let test_interp_expr _ =
   assert_equal
     (Some
        [
-         Interpreter.TopLevelEvaluationResult.ExprValue
-           (Ast.Typ.TInt, Ast.Value.Constant (Ast.Constant.Integer 10), None);
+         Interpreter_common.TopLevelEvaluationResult.ExprValue
+           ( Ast.Typ.TInt,
+             Ast.Value.Constant (Ast.Constant.Integer 10),
+             None,
+             None );
        ])
     res_opt
 
@@ -130,7 +144,7 @@ let test_staging_pow _ =
   assert_equal
     (Some
        [
-         Interpreter.TopLevelEvaluationResult.RecDefn
+         Interpreter_common.TopLevelEvaluationResult.RecDefn
            ( ( Ast.ObjIdentifier.of_string_and_index "pow" Ast.DeBruijnIndex.none,
                Ast.Typ.TFun
                  ( Ast.Typ.TInt,
@@ -176,8 +190,9 @@ let test_staging_pow _ =
                                          (Ast.ObjIdentifier.of_string_and_index
                                             "b" (create_debruijn_exn 0));
                                      ] ) ) ) ) ) ),
+             None,
              None );
-         Interpreter.TopLevelEvaluationResult.ExprValue
+         Interpreter_common.TopLevelEvaluationResult.ExprValue
            ( Ast.Typ.TBox
                ( [ (Ast.ObjIdentifier.of_string "b", Ast.Typ.TInt) ],
                  Ast.Typ.TInt ),
@@ -194,9 +209,13 @@ let test_staging_pow _ =
                            (Ast.ObjIdentifier.of_string_and_index "b"
                               (create_debruijn_exn 0)),
                          Ast.Expr.Constant (Ast.Constant.Integer 1) ) ) ),
+             None,
              None );
-         Interpreter.TopLevelEvaluationResult.ExprValue
-           (Ast.Typ.TInt, Ast.Value.Constant (Ast.Constant.Integer 9), None);
+         Interpreter_common.TopLevelEvaluationResult.ExprValue
+           ( Ast.Typ.TInt,
+             Ast.Value.Constant (Ast.Constant.Integer 9),
+             None,
+             None );
        ])
     res_opt
 
@@ -216,8 +235,11 @@ let test_datatype_matching _ =
   | Some results ->
       assert_equal
         (Some
-           (Interpreter.TopLevelEvaluationResult.ExprValue
-              (Ast.Typ.TInt, Ast.Value.Constant (Ast.Constant.Integer 8), None)))
+           (Interpreter_common.TopLevelEvaluationResult.ExprValue
+              ( Ast.Typ.TInt,
+                Ast.Value.Constant (Ast.Constant.Integer 8),
+                None,
+                None )))
         (List.last results)
 
 let test_matching_n_ary_product _ =
@@ -232,13 +254,14 @@ let test_matching_n_ary_product _ =
   | Some results ->
       assert_equal
         (Some
-           (Interpreter.TopLevelEvaluationResult.ExprValue
+           (Interpreter_common.TopLevelEvaluationResult.ExprValue
               ( Ast.Typ.TProd [ Ast.Typ.TUnit; Ast.Typ.TInt ],
                 Ast.Value.Prod
                   [
                     Ast.Value.Constant Ast.Constant.Unit;
                     Ast.Value.Constant (Ast.Constant.Integer 2);
                   ],
+                None,
                 None )))
         (List.last results)
 
@@ -257,10 +280,16 @@ let test_matching_inl_inr _ =
   | Some results ->
       assert_equal
         [
-          Interpreter.TopLevelEvaluationResult.ExprValue
-            (Ast.Typ.TInt, Ast.Value.Constant (Ast.Constant.Integer 10), None);
-          Interpreter.TopLevelEvaluationResult.ExprValue
-            (Ast.Typ.TInt, Ast.Value.Constant (Ast.Constant.Integer 0), None);
+          Interpreter_common.TopLevelEvaluationResult.ExprValue
+            ( Ast.Typ.TInt,
+              Ast.Value.Constant (Ast.Constant.Integer 10),
+              None,
+              None );
+          Interpreter_common.TopLevelEvaluationResult.ExprValue
+            ( Ast.Typ.TInt,
+              Ast.Value.Constant (Ast.Constant.Integer 0),
+              None,
+              None );
         ]
         results
 
@@ -281,8 +310,11 @@ let test_match_wildcard _ =
   | Some results ->
       assert_equal
         (Some
-           (Interpreter.TopLevelEvaluationResult.ExprValue
-              (Ast.Typ.TInt, Ast.Value.Constant (Ast.Constant.Integer 0), None)))
+           (Interpreter_common.TopLevelEvaluationResult.ExprValue
+              ( Ast.Typ.TInt,
+                Ast.Value.Constant (Ast.Constant.Integer 0),
+                None,
+                None )))
         (List.last results)
 
 let test_match_identifier _ =
@@ -302,9 +334,10 @@ let test_match_identifier _ =
   | Some results ->
       assert_equal
         (Some
-           (Interpreter.TopLevelEvaluationResult.ExprValue
+           (Interpreter_common.TopLevelEvaluationResult.ExprValue
               ( Ast.Typ.TIdentifier (Ast.TypeIdentifier.of_string "sometype"),
                 Ast.Value.Constr (Ast.Constructor.of_string "Con2", None),
+                None,
                 None )))
         (List.last results)
 
@@ -316,9 +349,10 @@ let test_lift_primitive _ =
   | Some results ->
       assert_equal
         (Some
-           (Interpreter.TopLevelEvaluationResult.ExprValue
+           (Interpreter_common.TopLevelEvaluationResult.ExprValue
               ( Ast.Typ.TBox ([], Ast.Typ.TInt),
                 Ast.Value.Box ([], Ast.Expr.Constant (Ast.Constant.Integer 1)),
+                None,
                 None )))
         (List.last results)
 
@@ -334,7 +368,7 @@ let test_lift_non_primitive _ =
   | Some results ->
       assert_equal
         (Some
-           (Interpreter.TopLevelEvaluationResult.ExprValue
+           (Interpreter_common.TopLevelEvaluationResult.ExprValue
               ( Ast.Typ.TBox
                   ([], Ast.Typ.TIdentifier (Ast.TypeIdentifier.of_string "tree")),
                 Ast.Value.Box
@@ -362,6 +396,7 @@ let test_lift_non_primitive _ =
                                               None );
                                         ]) );
                              ]) ) ),
+                None,
                 None )))
         (List.last results)
 
@@ -405,7 +440,7 @@ let test_intlist_map _ =
   | Some results ->
       assert_equal
         (Some
-           (Interpreter.TopLevelEvaluationResult.ExprValue
+           (Interpreter_common.TopLevelEvaluationResult.ExprValue
               ( Ast.Typ.TIdentifier (Ast.TypeIdentifier.of_string "intlist"),
                 Ast.Value.Constr
                   ( Ast.Constructor.of_string "Cons",
@@ -434,6 +469,7 @@ let test_intlist_map _ =
                                                ]) );
                                     ]) );
                          ]) ),
+                None,
                 None )))
         (List.last results)
 
