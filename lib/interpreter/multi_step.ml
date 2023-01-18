@@ -1,7 +1,5 @@
 open Lys_ast
 open Core
-open Lys_utils
-open Lys_typing
 open Interpreter_common
 
 let rec multi_step_reduce_with_step_count ~top_level_context
@@ -999,7 +997,7 @@ let rec multi_step_reduce ~top_level_context ~type_constr_context ~expr =
 
 let evaluate_top_level_defn ?(top_level_context = EvaluationContext.empty)
     ?(type_constr_context = TypeConstrContext.empty) ?(time_exec = false)
-     top_level_defn =
+    top_level_defn =
   let open Or_error.Monad_infix in
   let time_elapsed_opt current_time time_exec =
     if time_exec then
