@@ -197,6 +197,8 @@ and Expr : sig
     obj_offset:int ->
     meta_offset:int ->
     t Or_error.t
+
+  val to_val: t -> Value.t option
 end
 
 and Value : sig
