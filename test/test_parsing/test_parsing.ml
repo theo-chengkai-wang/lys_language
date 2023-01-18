@@ -290,7 +290,7 @@ let test_binop_and _ =
           ( Past.BinaryOperator.AND,
             Past.Expr.Identifier "a",
             Past.Expr.Identifier "b" )))
-    (parse_expression (Lexing.from_string "a and b;;"))
+    (parse_expression (Lexing.from_string "a && b;;"))
 
 let test_binop_or _ =
   assert_equal
@@ -299,12 +299,12 @@ let test_binop_or _ =
           ( Past.BinaryOperator.OR,
             Past.Expr.Identifier "a",
             Past.Expr.Identifier "b" )))
-    (parse_expression (Lexing.from_string "a or b;;"))
+    (parse_expression (Lexing.from_string "a || b;;"))
 
 let test_unop_not _ =
   assert_equal
     (Some (Past.Expr.UnaryOp (Past.UnaryOperator.NOT, Past.Expr.Identifier "a")))
-    (parse_expression (Lexing.from_string "not a;;"))
+    (parse_expression (Lexing.from_string "!a;;"))
 
 let test_binop_neg _ =
   assert_equal
@@ -343,7 +343,7 @@ let test_precedence_arith_bool _ =
                     Past.Expr.UnaryOp
                       (Past.UnaryOperator.NEG, Past.Expr.Identifier "x") ) ) )))
     (parse_expression
-       (Lexing.from_string "a+b = -c and not d or e <= 2 or f > 10/-x;;"))
+       (Lexing.from_string "a+b = -c && !d || e <= 2 || f > 10/-x;;"))
 
 let test_comment _ =
   assert_equal (Some (Past.Expr.Identifier "a"))

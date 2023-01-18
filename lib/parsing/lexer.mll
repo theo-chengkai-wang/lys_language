@@ -45,9 +45,9 @@ rule read =
     | "int" {INT_typ}
     | "char" {CHAR_typ}
     | "unit" {UNIT_typ}
-    | "not" {NOT}
-    | "and" {AND}
-    | "or" {OR}
+    | "!" {NOT}
+    | "&&" {AND}
+    | "||" {OR}
     | "lift" {LIFT}
     | "+" {PLUS}
     | "-" {MINUS}
