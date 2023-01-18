@@ -50,7 +50,7 @@ let main_loop interpreter pre_load_opt () =
   let evaluation_context = ref Interpreter_common.EvaluationContext.empty in
   let typ_context = ref Interpreter_common.TypeConstrContext.empty in
   print_endline ("Using Interpreter " ^ Interpreter.show interpreter);
-  match pre_load_opt with
+  (match pre_load_opt with
   | None -> ()
   | Some pre_load_file ->
       print_endline ("PRELOADING FILE " ^ pre_load_file);
@@ -62,27 +62,27 @@ let main_loop interpreter pre_load_opt () =
                  !evaluation_context !typ_context)
           in
           print_endline "-------------------";
-          print_exec_result res continue evaluation_context typ_context);
+          print_exec_result res continue evaluation_context typ_context));
+  print_endline "-------------------";
+  print_string "# ";
+  while !continue do
+    let line = read_line () in
+    accumulated_program := !accumulated_program ^ line;
+    if String.is_suffix line ~suffix:";;" then (
+      (*execute*)
+      let res =
+        Or_error.try_with
+          (loop interpreter
+             (!accumulated_program |> Lexing.from_string)
+             !evaluation_context !typ_context)
+      in
       print_endline "-------------------";
-      print_string "# ";
-      while !continue do
-        let line = read_line () in
-        accumulated_program := !accumulated_program ^ line;
-        if String.is_suffix line ~suffix:";;" then (
-          (*execute*)
-          let res =
-            Or_error.try_with
-              (loop interpreter
-                 (!accumulated_program |> Lexing.from_string)
-                 !evaluation_context !typ_context)
-          in
-          print_endline "-------------------";
-          print_exec_result res continue evaluation_context typ_context;
-          accumulated_program := "";
-          print_endline "-------------------";
-          print_string "# ")
-        else ()
-      done
+      print_exec_result res continue evaluation_context typ_context;
+      accumulated_program := "";
+      print_endline "-------------------";
+      print_string "# ")
+    else ()
+  done
 
 let () =
   Command.basic_spec
