@@ -520,7 +520,7 @@ let evaluate_top_level_defn_with_step_count
       in
       Ok
         ( TopLevelEvaluationResult.Defn
-            ((id, typ), v, elapsed, reduction_count_opt),
+            ((id, typ), v, elapsed, reduction_count_opt, None),
           new_context,
           type_constr_context )
   | Ast.TypedTopLevelDefn.RecursiveDefinition (typ, (id, _), e) ->
@@ -541,7 +541,7 @@ let evaluate_top_level_defn_with_step_count
       in
       Ok
         ( TopLevelEvaluationResult.RecDefn
-            ((id, typ), v, elapsed, reduction_count_opt),
+            ((id, typ), v, elapsed, reduction_count_opt, None),
           new_context,
           type_constr_context )
   | Ast.TypedTopLevelDefn.Expression (typ, e) ->
@@ -555,7 +555,7 @@ let evaluate_top_level_defn_with_step_count
       in
       Ok
         ( TopLevelEvaluationResult.ExprValue
-            (typ, v, elapsed, reduction_count_opt),
+            (typ, v, elapsed, reduction_count_opt, None),
           top_level_context,
           type_constr_context )
   | Ast.TypedTopLevelDefn.Directive d -> (
@@ -1019,7 +1019,7 @@ let evaluate_top_level_defn ?(top_level_context = EvaluationContext.empty)
       let elapsed = time_elapsed_opt current_time time_exec in
 
       Ok
-        ( TopLevelEvaluationResult.Defn ((id, typ), v, elapsed, None),
+        ( TopLevelEvaluationResult.Defn ((id, typ), v, elapsed, None, None),
           new_context,
           type_constr_context )
   | Ast.TypedTopLevelDefn.RecursiveDefinition (typ, (id, _), e) ->
@@ -1035,7 +1035,7 @@ let evaluate_top_level_defn ?(top_level_context = EvaluationContext.empty)
       in
       let elapsed = time_elapsed_opt current_time time_exec in
       Ok
-        ( TopLevelEvaluationResult.RecDefn ((id, typ), v, elapsed, None),
+        ( TopLevelEvaluationResult.RecDefn ((id, typ), v, elapsed, None, None),
           new_context,
           type_constr_context )
   | Ast.TypedTopLevelDefn.Expression (typ, e) ->
@@ -1044,7 +1044,7 @@ let evaluate_top_level_defn ?(top_level_context = EvaluationContext.empty)
       >>= fun v ->
       let elapsed = time_elapsed_opt current_time time_exec in
       Ok
-        ( TopLevelEvaluationResult.ExprValue (typ, v, elapsed, None),
+        ( TopLevelEvaluationResult.ExprValue (typ, v, elapsed, None, None),
           top_level_context,
           type_constr_context )
   | Ast.TypedTopLevelDefn.Directive d -> (

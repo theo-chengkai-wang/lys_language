@@ -1,0 +1,129 @@
+datatype regexp =
+Empty
+| Plus of (regexp * regexp)
+| Times of (regexp * regexp)
+| Star of regexp
+| Const of char
+;;
+
+datatype charlist = Nil | Cons of (char * charlist);;
+
+let regexp_to_test:regexp = 
+(*Times (
+    Plus (
+        Times (
+            Const ('1'), 
+            Times (Const ('2'), Empty)
+        ), 
+        Empty
+    ), 
+    Const ('3')
+);;*)
+(*Plus (Const ('1'), Const ('2'));;*)
+Times (Const ('0'), Star (Times (Star (Const ('a')), Const('b'))));;
+(*Star (Star (Const ('1')));;*)
+
+let rec acc2:(regexp -> [cont: [str:charlist, loop: charlist -> bool]bool][str: charlist, loop: charlist -> bool]bool) = 
+fun (exp: regexp) ->    
+    match exp with
+    | Empty -> 
+        box (cont: [str:charlist, loop: charlist -> bool]bool |- 
+            cont
+        )
+    | Plus (e1, e2) -> 
+        let box res1 = acc2 e1 in
+        let box res2 = acc2 e2 in
+        box (cont: [str:charlist, loop: charlist -> bool]bool |-
+            let box unboxed_res1 = (res1 with (cont)) in
+            let box unboxed_res2 = (res2 with (cont)) in
+            box (str: charlist, loop: charlist -> bool |- 
+                (unboxed_res1 with (str, loop)) || (unboxed_res2 with (str, loop))
+            )
+        )
+    | Times (e1, e2) ->
+        let box res1 = acc2 e1 in
+        let box res2 = acc2 e2 in
+        box (cont: [str:charlist, loop: charlist -> bool]bool |-
+            res1 with (res2 with (cont))
+        ) 
+    | Const (c) ->
+        let box lifted_unboxed_c = lift[char] c in
+        box (cont: [str:charlist, loop: charlist -> bool]bool |- 
+            let box unboxed_cont = cont in
+            box (str: charlist, loop: charlist -> bool |- 
+                match str with
+                | Nil -> false
+                | Cons (x, xs) -> 
+                    (x = (lifted_unboxed_c with ())) &&
+                    (unboxed_cont with (xs, loop))
+            )
+        )
+    | Star (e) -> 
+    (*Doesn't work here: infinite loop, cf https://www.cs.cmu.edu/~rwh/students/nanevski.pdf for a solution*)
+        (*
+        let box res = acc2 e in
+        let box res_star = acc (Star (e))
+        in
+        box (cont: [str:charlist]bool |- 
+            let box unboxed_cont = cont in
+            let box res_star_cont = res_star with (cont) in
+            box (str:charlist |- 
+                let box lifted_unboxed_str = lift[charlist] str in
+                let contstar: [str:charlist]bool = box (str:charlist |- 
+                    if str = (lifted_unboxed_str with ()) then false
+                    else res_star_cont with (str)
+                ) in
+                let box unboxed_res_contstar = res with (contstar) in
+                unboxed_cont with (str) || (unboxed_res_contstar with (str))
+            )
+        )
+        *)
+    (*Trick = introduce a spurious redex to stop beta reduction*)
+        let box res = acc2 e in 
+        box (cont: [str: charlist, loop: charlist -> bool]bool |- 
+            let box unboxed_cont = cont in
+            box (str: charlist, loop: charlist -> bool |- 
+                (*Construct cont*)
+                let box lifted_unboxed_old_str = lift[charlist] str in
+                let new_cont: [str: charlist, loop: charlist -> bool]bool = box (str: charlist, loop: charlist -> bool |- 
+                    if str = (lifted_unboxed_old_str with ()) then false
+                    else loop str
+                )
+                in
+                let box unboxed_acc2_e_new_cont = res with (new_cont) in
+                let rec star_loop: charlist -> bool = 
+                    fun (s: charlist) ->
+                        unboxed_cont with (s, fun (x:charlist) -> true) (*Place-holder in order to avoid influencing any result*)
+                        || (unboxed_acc2_e_new_cont with (s, star_loop))
+                in
+                star_loop str
+            )
+        )
+;;
+
+
+
+let accept2:(regexp->[str:charlist]bool) = 
+fun (exp:regexp) ->
+    let null:[str:charlist, loop: charlist -> bool]bool = 
+        box (str: charlist, loop: charlist -> bool |- 
+            match str with
+            | Nil -> true
+            | _ -> false
+        )
+    in
+    let box place_holder = box (|-fun (x:charlist) -> false) in
+    let box unboxed_acc2_exp = acc2 exp in
+    let box unboxed_acc_exp_null = unboxed_acc2_exp with (null) in
+    box (str: charlist |- 
+        unboxed_acc_exp_null with (str, place_holder with ())
+    )
+;;
+
+let compiled_regexp: [str:charlist]bool = accept2 regexp_to_test;;
+let box u = compiled_regexp in
+    u with (Cons ('0', Nil))
+;;
+let box u = compiled_regexp in
+    u with (Cons ('0', Cons ('a', Cons ('b', Nil))))
+;;

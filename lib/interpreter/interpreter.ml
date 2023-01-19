@@ -30,9 +30,9 @@ let rec evaluate_top_level_defns ?(top_level_context = EvaluationContext.empty)
       | MultiStep { show_time } ->
           Multi_step.evaluate_top_level_defn ~top_level_context
             ~type_constr_context ~time_exec:show_time top
-      | SingleStep { show_step_count; _ } ->
+      | SingleStep { show_step_count; verbose } ->
           Single_step.evaluate_top_level_defn top ~top_level_context
-            ~type_constr_context ~show_step_count (* //TODO Implement verbose *))
+            ~type_constr_context ~show_step_count ~verbose)
       >>= fun (top_level_result, new_context, new_typ_context) ->
       match top_level_result with
       | TopLevelEvaluationResult.Directive (Ast.Directive.Quit, _) ->

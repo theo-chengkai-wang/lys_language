@@ -171,10 +171,24 @@ module TypeConstrContext : TypeConstrContext_type = struct
 end
 
 module TopLevelEvaluationResult = struct
+  type verbose = { steps : Ast.Expr.t list }
+  [@@deriving sexp, compare, equal, show]
+
   type t =
-    | ExprValue of Ast.Typ.t * Ast.Value.t * float option * int option
-    | Defn of Ast.IdentifierDefn.t * Ast.Value.t * float option * int option
-    | RecDefn of Ast.IdentifierDefn.t * Ast.Value.t * float option * int option
+    | ExprValue of
+        Ast.Typ.t * Ast.Value.t * float option * int option * verbose option
+    | Defn of
+        Ast.IdentifierDefn.t
+        * Ast.Value.t
+        * float option
+        * int option
+        * verbose option
+    | RecDefn of
+        Ast.IdentifierDefn.t
+        * Ast.Value.t
+        * float option
+        * int option
+        * verbose option
     | Directive of Ast.Directive.t * string
     | DatatypeDecl of
         Ast.TypeIdentifier.t * (Ast.Constructor.t * Ast.Typ.t option) list
@@ -184,7 +198,7 @@ module TopLevelEvaluationResult = struct
     Printf.sprintf "------------------------------\n"
     ^
     match res with
-    | ExprValue (typ, v, time_elapsed_opt, reduction_steps_opt) ->
+    | ExprValue (typ, v, time_elapsed_opt, reduction_steps_opt, verbose_opt) ->
         let time_preface =
           match time_elapsed_opt with
           | None -> ""
@@ -195,9 +209,18 @@ module TopLevelEvaluationResult = struct
           | None -> ""
           | Some steps -> Printf.sprintf "Reduction steps (#): %d\n" steps
         in
-        Printf.sprintf "%s%sval:\n\t%s \n=\n\t %s" time_preface
+        let reduction_steps_postface =
+          match verbose_opt with
+          | None -> ""
+          | Some v ->
+              "------------------STEPS----------------\n" ^ show_verbose v
+              ^ "\n"
+        in
+
+        Printf.sprintf "%s%sval:\n\t%s \n=\n\t %s\n%s" time_preface
           reduction_steps_preface (Ast.Typ.show typ) (Ast.Value.show v)
-    | Defn ((id, typ), v, time_elapsed_opt, reduction_steps_opt) ->
+          reduction_steps_postface
+    | Defn ((id, typ), v, time_elapsed_opt, reduction_steps_opt, verbose_opt) ->
         let time_preface =
           match time_elapsed_opt with
           | None -> ""
@@ -208,11 +231,19 @@ module TopLevelEvaluationResult = struct
           | None -> ""
           | Some steps -> Printf.sprintf "Reduction steps (#): %d\n" steps
         in
-        Printf.sprintf "%s%sval %s :\n\t%s \n=\n\t %s" time_preface
+        let reduction_steps_postface =
+          match verbose_opt with
+          | None -> ""
+          | Some v ->
+              "------------------STEPS----------------\n" ^ show_verbose v
+              ^ "\n"
+        in
+        Printf.sprintf "%s%sval %s :\n\t%s \n=\n\t %s\n%s" time_preface
           reduction_steps_preface
           (Ast.ObjIdentifier.get_name id)
-          (Ast.Typ.show typ) (Ast.Value.show v)
-    | RecDefn ((id, typ), v, time_elapsed_opt, reduction_steps_opt) ->
+          (Ast.Typ.show typ) (Ast.Value.show v) reduction_steps_postface
+    | RecDefn ((id, typ), v, time_elapsed_opt, reduction_steps_opt, verbose_opt)
+      ->
         let time_preface =
           match time_elapsed_opt with
           | None -> ""
@@ -223,10 +254,17 @@ module TopLevelEvaluationResult = struct
           | None -> ""
           | Some steps -> Printf.sprintf "Reduction steps (#): %d\n" steps
         in
-        Printf.sprintf "%s%sval rec %s:\n\t %s \n=\n\t %s" time_preface
+        let reduction_steps_postface =
+          match verbose_opt with
+          | None -> ""
+          | Some v ->
+              "------------------STEPS----------------\n" ^ show_verbose v
+              ^ "\n"
+        in
+        Printf.sprintf "%s%sval rec %s:\n\t %s \n=\n\t %s\n%s" time_preface
           reduction_steps_preface
           (Ast.ObjIdentifier.get_name id)
-          (Ast.Typ.show typ) (Ast.Value.show v)
+          (Ast.Typ.show typ) (Ast.Value.show v) reduction_steps_postface
     | Directive (d, message) ->
         Printf.sprintf
           "Executed directive %s\n\tMessage from the directive:\n\t %s"

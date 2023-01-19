@@ -50,10 +50,11 @@ end
 module TypeConstrContext : TypeConstrContext_type
 
 module TopLevelEvaluationResult : sig
+  type verbose = {steps: Ast.Expr.t list} [@@deriving sexp, compare, equal, show]
     type t =
-      | ExprValue of Ast.Typ.t * Ast.Value.t * float option * int option
-      | Defn of Ast.IdentifierDefn.t * Ast.Value.t * float option * int option
-      | RecDefn of Ast.IdentifierDefn.t * Ast.Value.t * float option * int option
+      | ExprValue of Ast.Typ.t * Ast.Value.t * float option * int option * verbose option
+      | Defn of Ast.IdentifierDefn.t * Ast.Value.t * float option * int option * verbose option
+      | RecDefn of Ast.IdentifierDefn.t * Ast.Value.t * float option * int option * verbose option
       | Directive of Ast.Directive.t * string
       | DatatypeDecl of
           Ast.TypeIdentifier.t * (Ast.Constructor.t * Ast.Typ.t option) list

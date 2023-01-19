@@ -27,6 +27,7 @@ let test_interp_int _ =
            ( Ast.Typ.TInt,
              Ast.Value.Constant (Ast.Constant.Integer 1),
              None,
+             None,
              None );
        ])
     res_opt
@@ -43,10 +44,12 @@ let test_interp_var_def _ =
                Ast.Typ.TInt ),
              Ast.Value.Constant (Ast.Constant.Integer 0),
              None,
+             None,
              None );
          Interpreter_common.TopLevelEvaluationResult.ExprValue
            ( Ast.Typ.TInt,
              Ast.Value.Constant (Ast.Constant.Integer 0),
+             None,
              None,
              None );
        ])
@@ -108,10 +111,12 @@ let test_interp_rec_var_def _ =
                                    (Ast.ObjIdentifier.of_string_and_index "x"
                                       (create_debruijn_exn 0)) ) ) ) ) ),
              None,
+             None,
              None );
          Interpreter_common.TopLevelEvaluationResult.ExprValue
            ( Ast.Typ.TInt,
              Ast.Value.Constant (Ast.Constant.Integer 9),
+             None,
              None,
              None );
        ])
@@ -126,6 +131,7 @@ let test_interp_expr _ =
          Interpreter_common.TopLevelEvaluationResult.ExprValue
            ( Ast.Typ.TInt,
              Ast.Value.Constant (Ast.Constant.Integer 10),
+             None,
              None,
              None );
        ])
@@ -191,6 +197,7 @@ let test_staging_pow _ =
                                             "b" (create_debruijn_exn 0));
                                      ] ) ) ) ) ) ),
              None,
+             None,
              None );
          Interpreter_common.TopLevelEvaluationResult.ExprValue
            ( Ast.Typ.TBox
@@ -210,10 +217,12 @@ let test_staging_pow _ =
                               (create_debruijn_exn 0)),
                          Ast.Expr.Constant (Ast.Constant.Integer 1) ) ) ),
              None,
+             None,
              None );
          Interpreter_common.TopLevelEvaluationResult.ExprValue
            ( Ast.Typ.TInt,
              Ast.Value.Constant (Ast.Constant.Integer 9),
+             None,
              None,
              None );
        ])
@@ -239,6 +248,7 @@ let test_datatype_matching _ =
               ( Ast.Typ.TInt,
                 Ast.Value.Constant (Ast.Constant.Integer 8),
                 None,
+                None,
                 None )))
         (List.last results)
 
@@ -262,6 +272,7 @@ let test_matching_n_ary_product _ =
                     Ast.Value.Constant (Ast.Constant.Integer 2);
                   ],
                 None,
+                None,
                 None )))
         (List.last results)
 
@@ -284,10 +295,12 @@ let test_matching_inl_inr _ =
             ( Ast.Typ.TInt,
               Ast.Value.Constant (Ast.Constant.Integer 10),
               None,
+              None,
               None );
           Interpreter_common.TopLevelEvaluationResult.ExprValue
             ( Ast.Typ.TInt,
               Ast.Value.Constant (Ast.Constant.Integer 0),
+              None,
               None,
               None );
         ]
@@ -314,6 +327,7 @@ let test_match_wildcard _ =
               ( Ast.Typ.TInt,
                 Ast.Value.Constant (Ast.Constant.Integer 0),
                 None,
+                None,
                 None )))
         (List.last results)
 
@@ -338,6 +352,7 @@ let test_match_identifier _ =
               ( Ast.Typ.TIdentifier (Ast.TypeIdentifier.of_string "sometype"),
                 Ast.Value.Constr (Ast.Constructor.of_string "Con2", None),
                 None,
+                None,
                 None )))
         (List.last results)
 
@@ -352,6 +367,7 @@ let test_lift_primitive _ =
            (Interpreter_common.TopLevelEvaluationResult.ExprValue
               ( Ast.Typ.TBox ([], Ast.Typ.TInt),
                 Ast.Value.Box ([], Ast.Expr.Constant (Ast.Constant.Integer 1)),
+                None,
                 None,
                 None )))
         (List.last results)
@@ -396,6 +412,7 @@ let test_lift_non_primitive _ =
                                               None );
                                         ]) );
                              ]) ) ),
+                None,
                 None,
                 None )))
         (List.last results)
@@ -469,6 +486,7 @@ let test_intlist_map _ =
                                                ]) );
                                     ]) );
                          ]) ),
+                None,
                 None,
                 None )))
         (List.last results)

@@ -30,3 +30,5 @@ _opam/
 
 # Jupyter notebook
 .ipynb_checkpoints
+
+traces/

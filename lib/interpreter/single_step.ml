@@ -568,60 +568,96 @@ let rec reduce ~top_level_context ~type_constr_context expr =
                   res_expr_or_error >>= fun res_expr ->
                   Ok (ReduceResult.ReducedToExpr res_expr)))
 
-let multi_step_reduce ~top_level_context ~type_constr_context expr =
-  let rec multi_step_reduce_aux ~top_level_context ~type_constr_context ~count
-      expr =
-    let open Or_error.Monad_infix in
-    reduce ~top_level_context ~type_constr_context expr >>= fun res ->
-    match res with
-    | ReduceResult.NotReduced v -> Ok (v, count)
-    | ReduceResult.ReducedToExpr e ->
-        multi_step_reduce_aux ~top_level_context ~type_constr_context
-          ~count:(count + 1) e
-    | ReduceResult.ReducedToVal v -> Ok (v, count + 1)
-  in
-  multi_step_reduce_aux ~top_level_context ~type_constr_context ~count:0 expr
+let multi_step_reduce ~top_level_context ~type_constr_context ?(verbose = false)
+    expr =
+  let open Or_error.Monad_infix in
+  if verbose then
+    let rec multi_step_reduce_aux ~top_level_context ~type_constr_context
+        ~steps_reversed expr =
+      reduce ~top_level_context ~type_constr_context expr >>= fun res ->
+      match res with
+      | ReduceResult.NotReduced v -> Ok (v, steps_reversed)
+      | ReduceResult.ReducedToExpr e ->
+          multi_step_reduce_aux ~top_level_context ~type_constr_context
+            ~steps_reversed:(e :: steps_reversed) e
+      | ReduceResult.ReducedToVal v ->
+          Ok (v, Ast.Value.to_expr v :: steps_reversed)
+    in
+    multi_step_reduce_aux ~top_level_context ~type_constr_context
+      ~steps_reversed:[ expr ] expr
+    >>= fun (v, expr_list) ->
+    Ok (v, (List.length expr_list) - 1, Some (List.rev expr_list))
+  else
+    let rec multi_step_reduce_aux ~top_level_context ~type_constr_context ~count
+        expr =
+      reduce ~top_level_context ~type_constr_context expr >>= fun res ->
+      match res with
+      | ReduceResult.NotReduced v -> Ok (v, count)
+      | ReduceResult.ReducedToExpr e ->
+          multi_step_reduce_aux ~top_level_context ~type_constr_context
+            ~count:(count + 1) e
+      | ReduceResult.ReducedToVal v -> Ok (v, count + 1)
+    in
+    multi_step_reduce_aux ~top_level_context ~type_constr_context ~count:0 expr
+    >>= fun (v, c) -> Ok (v, c, None)
 
 let evaluate_top_level_defn ?(top_level_context = EvaluationContext.empty)
-    ?(type_constr_context = TypeConstrContext.empty) ?(show_step_count = false)
+    ?(type_constr_context = TypeConstrContext.empty) ?(show_step_count = false) ?(verbose=false)
     top_level_defn =
   let open Or_error.Monad_infix in
   match top_level_defn with
   | Ast.TypedTopLevelDefn.Definition (typ, (id, _), e) ->
-      multi_step_reduce ~top_level_context ~type_constr_context e
-      >>= fun (v, count) ->
+      multi_step_reduce ~top_level_context ~type_constr_context ~verbose e
+      >>= fun (v, count, steps_opt) ->
       let new_context =
         EvaluationContext.set top_level_context
           ~key:(Ast.ObjIdentifier.get_name id)
           ~data:{ is_rec = false; typ; value = v }
       in
       let count_opt = if show_step_count then Some count else None in
+      let verbose_opt =
+        let open Option.Monad_infix in
+        steps_opt >>= fun steps ->
+        Some { Interpreter_common.TopLevelEvaluationResult.steps }
+      in
       Ok
-        ( TopLevelEvaluationResult.Defn ((id, typ), v, None, count_opt),
+        ( TopLevelEvaluationResult.Defn
+            ((id, typ), v, None, count_opt, verbose_opt),
           new_context,
           type_constr_context )
   | Ast.TypedTopLevelDefn.RecursiveDefinition (typ, (id, _), e) ->
-      multi_step_reduce ~top_level_context ~type_constr_context e
-      >>= fun (v, count) ->
+      multi_step_reduce ~top_level_context ~type_constr_context ~verbose e
+      >>= fun (v, count, steps_opt) ->
       let new_entry : EvaluationContext.single_record =
         { is_rec = true; typ; value = v }
       in
       let count_opt = if show_step_count then Some count else None in
+      let verbose_opt =
+        let open Option.Monad_infix in
+        steps_opt >>= fun steps ->
+        Some { Interpreter_common.TopLevelEvaluationResult.steps }
+      in
       let key = Ast.ObjIdentifier.get_name id in
       let new_context =
         EvaluationContext.set top_level_context ~key ~data:new_entry
       in
       Ok
-        ( TopLevelEvaluationResult.RecDefn ((id, typ), v, None, count_opt),
+        ( TopLevelEvaluationResult.RecDefn
+            ((id, typ), v, None, count_opt, verbose_opt),
           new_context,
           type_constr_context )
   | Ast.TypedTopLevelDefn.Expression (typ, e) ->
-      multi_step_reduce ~top_level_context ~type_constr_context e
-      >>= fun (v, count) ->
+      multi_step_reduce ~top_level_context ~type_constr_context ~verbose e
+      >>= fun (v, count, steps_opt) ->
       let count_opt = if show_step_count then Some count else None in
-
+      let verbose_opt =
+        let open Option.Monad_infix in
+        steps_opt >>= fun steps ->
+        Some { Interpreter_common.TopLevelEvaluationResult.steps }
+      in
       Ok
-        ( TopLevelEvaluationResult.ExprValue (typ, v, None, count_opt),
+        ( TopLevelEvaluationResult.ExprValue
+            (typ, v, None, count_opt, verbose_opt),
           top_level_context,
           type_constr_context )
   | Ast.TypedTopLevelDefn.Directive d -> (

@@ -23,15 +23,18 @@ val reduce :
   Ast.Expr.t ->
   ReduceResult.t Or_error.t
 
-val multi_step_reduce: top_level_context:EvaluationContext.t ->
+val multi_step_reduce :
+  top_level_context:EvaluationContext.t ->
   type_constr_context:TypeConstrContext.t ->
+  ?verbose:bool ->
   Ast.Expr.t ->
-  (Ast.Value.t * int) Or_error.t
+  (Ast.Value.t * int * Ast.Expr.t list option) Or_error.t
 
 val evaluate_top_level_defn :
   ?top_level_context:EvaluationContext.t ->
   ?type_constr_context:TypeConstrContext.t ->
   ?show_step_count:bool ->
+  ?verbose:bool ->
   Ast.TypedTopLevelDefn.t ->
   (TopLevelEvaluationResult.t * EvaluationContext.t * TypeConstrContext.t)
   Base.Or_error.t
