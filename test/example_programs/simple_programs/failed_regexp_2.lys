@@ -8,6 +8,31 @@ Empty
 
 datatype charlist = Nil | Cons of (char * charlist);;
 
+let rec acc1:(regexp -> (charlist -> bool) -> charlist -> bool) = 
+fun (exp: regexp) -> fun (cont:(charlist -> bool)) -> fun (str: charlist) ->
+    match exp with
+    | Empty -> cont str
+    | Plus (e1, e2) -> (acc1 e1 cont str) || (acc1 e2 cont str)
+    | Times (e1, e2) -> 
+        let cnt2:(charlist -> bool) = acc1 e2 cont in
+        acc1 e1 cnt2 str
+    | Star (e) ->
+        (cont str) || (acc1 e (fun (str2: charlist) -> 
+            if str = str2 then false else acc1 (Star e) cont str2
+        )) str
+    | Const (c) -> 
+        match str with
+        | Nil -> false
+        | Cons (x, xs) -> (x = c) && (cont xs);;
+
+let null:charlist -> bool = fun (str: charlist) -> 
+    match str with
+    | Nil -> true
+    | _ -> false;;
+
+let accept1:regexp -> charlist -> bool = fun (exp:regexp) -> fun (str: charlist) -> 
+    acc1 exp null str;;
+
 let regexp_to_test:regexp = 
 (*Times (
     Plus (
@@ -22,6 +47,18 @@ let regexp_to_test:regexp =
 (*Plus (Const ('1'), Const ('2'));;*)
 Times (Const ('0'), Star (Times (Star (Const ('a')), Const('b'))));;
 (*Star (Star (Const ('1')));;*)
+
+accept1 (regexp_to_test) (Cons ('1', Cons ('1', Cons ('1', Nil))));;
+
+accept1 (regexp_to_test) (Cons ('1', Cons ('2', Cons ('3', Nil))));;
+
+accept1 (regexp_to_test) (Cons ('0', Cons ('a', Cons ('b', (Cons ('a', Cons ('a', Cons ('b', Nil))))))));;
+
+accept1 (regexp_to_test) (Cons ('3', Nil));;
+
+accept1 (regexp_to_test) (Cons ('f', Nil));;
+
+accept1 (regexp_to_test) (Nil);;
 
 let rec acc2:(regexp -> [cont: [str:charlist, loop: charlist -> bool]bool][str: charlist, loop: charlist -> bool]bool) = 
 fun (exp: regexp) ->    
@@ -93,7 +130,7 @@ fun (exp: regexp) ->
                 let box unboxed_acc2_e_new_cont = res with (new_cont) in
                 let rec star_loop: charlist -> bool = 
                     fun (s: charlist) ->
-                        unboxed_cont with (s, loop)
+                        unboxed_cont with (s, fun (x:charlist) -> true) (*Place-holder in order to avoid influencing any result*)
                         || (unboxed_acc2_e_new_cont with (s, star_loop))
                 in
                 star_loop str
@@ -121,12 +158,24 @@ fun (exp:regexp) ->
 ;;
 
 let compiled_regexp: [str:charlist]bool = accept2 regexp_to_test;;
+
+let box u = compiled_regexp in
+    u with ((Cons ('1', Cons ('1', Cons ('1', Nil)))))
+;;
+
+let box u = compiled_regexp in
+    u with (Cons ('0', Cons ('a', Cons ('b', (Cons ('a', Cons ('a', Cons ('b', Nil))))))))
+;;
+
+
+let box u = compiled_regexp in
+    u with (Cons ('3', Nil))
+;;
+
 let box u = compiled_regexp in
     u with (Cons ('0', Nil))
 ;;
+
 let box u = compiled_regexp in
-    u with (Cons ('0', Cons ('a', Cons ('b', Cons ('b', Cons ('a', Nil))))))
-;;
-let box u = compiled_regexp in
-    u with (Cons ('0', Cons ('a', Cons ('b', Nil))))
+    u with (Nil)
 ;;

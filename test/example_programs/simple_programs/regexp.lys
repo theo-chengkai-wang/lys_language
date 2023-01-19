@@ -50,13 +50,13 @@ Times (Const ('0'), Star (Times (Star (Const ('a')), Const('b'))));;
 
 accept1 (regexp_to_test) (Cons ('1', Cons ('1', Cons ('1', Nil))));;
 
-accept1 (regexp_to_test) (Cons ('1', Cons ('2', Cons ('3', Nil))));;
-
 accept1 (regexp_to_test) (Cons ('0', Cons ('a', Cons ('b', (Cons ('a', Cons ('a', Cons ('b', Nil))))))));;
 
-accept1 (regexp_to_test) (Cons ('3', Nil));;
+accept1 (regexp_to_test) (Cons ('0', Cons ('a', Cons ('b', (Cons ('a', Cons ('b', Cons ('0', Nil))))))));;
 
-accept1 (regexp_to_test) (Cons ('f', Nil));;
+accept1 (regexp_to_test) (Cons ('0', Cons ('a', Cons ('b', Cons ('b', Cons ('a', Nil))))));;
+
+accept1 (regexp_to_test) (Cons ('0', Nil));;
 
 accept1 (regexp_to_test) (Nil);;
 
@@ -130,7 +130,7 @@ fun (exp: regexp) ->
                 let box unboxed_acc2_e_new_cont = res with (new_cont) in
                 let rec star_loop: charlist -> bool = 
                     fun (s: charlist) ->
-                        unboxed_cont with (s, fun (x:charlist) -> true) (*Place-holder in order to avoid influencing any result*)
+                        unboxed_cont with (s, loop)
                         || (unboxed_acc2_e_new_cont with (s, star_loop))
                 in
                 star_loop str
@@ -159,23 +159,41 @@ fun (exp:regexp) ->
 
 let compiled_regexp: [str:charlist]bool = accept2 regexp_to_test;;
 
+(*false*)
+
 let box u = compiled_regexp in
     u with ((Cons ('1', Cons ('1', Cons ('1', Nil)))))
 ;;
+
+(*true*)
+
 
 let box u = compiled_regexp in
     u with (Cons ('0', Cons ('a', Cons ('b', (Cons ('a', Cons ('a', Cons ('b', Nil))))))))
 ;;
 
+(*false*)
 
 let box u = compiled_regexp in
-    u with (Cons ('3', Nil))
+    u with (Cons ('0', Cons ('a', Cons ('b', (Cons ('a', Cons ('b', Cons ('0', Nil))))))))
 ;;
+
+(*false*)
+
+let box u = compiled_regexp in
+    u with (Cons ('0', Cons ('a', Cons ('b', Cons ('b', Cons ('a', Nil))))))
+;;
+
+(*true*)
+
 
 let box u = compiled_regexp in
     u with (Cons ('0', Nil))
 ;;
 
+(*false*)
+
 let box u = compiled_regexp in
     u with (Nil)
 ;;
+
