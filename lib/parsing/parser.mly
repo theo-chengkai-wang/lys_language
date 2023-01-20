@@ -30,6 +30,7 @@ let list_to_tuple l =
 %token <char> CHAR
 %token BOOL_typ
 %token INT_typ
+%token AND_WORD "and"
 %token CHAR_typ
 %token UNIT_typ
 %token UNIT
@@ -143,10 +144,16 @@ prog:
 
 datatype_decl_clause: c = CONSTR OF t = typ  {(c, Some t)} | c = CONSTR {(c, None)}
 
+single_rec: decl = id_typ_declaration EQ e1 = expr {(decl, e1)}
+
+mutual_rec:
+    | LET REC r = single_rec "and" l=separated_nonempty_list("and", single_rec) {r::l}
+
 top_level:
     | d = directive {TopLevelDefn.Directive d}
     | LET decl = id_typ_declaration EQ e1 = expr {TopLevelDefn.Definition (decl, e1)}
-    | LET REC decl = id_typ_declaration EQ e1 = expr {TopLevelDefn.RecursiveDefinition (decl, e1)}
+    | LET REC r = single_rec {let (decl, e1) = r in TopLevelDefn.RecursiveDefinition (decl, e1)}
+    | m = mutual_rec {TopLevelDefn.MutualRecursiveDefinition (m)}
     | e = expr {TopLevelDefn.Expression e}
     | DATATYPE i = identifier EQ l = separated_nonempty_list ("|", datatype_decl_clause) {TopLevelDefn.DatatypeDecl (i, l)}
     | DATATYPE i = identifier {TopLevelDefn.DatatypeDecl (i,[])}
@@ -201,7 +208,8 @@ expr:
     | INR LEFT_BRACKET t1=typ COMMA t2=typ RIGHT_BRACKET e = expr {Expr.Right (t1, t2, e)}
     | CASE e1 = simple_expr OF INL id_decl1 = id_typ_declaration "->" e2 = expr "|" INR id_decl2 = id_typ_declaration "->" e3 = expr {Expr.Case (e1, id_decl1, e2, id_decl2, e3)}
     | LET decl = id_typ_declaration EQ e1 = expr IN e2 = expr %prec DEFN_EQ {Expr.LetBinding (decl, e1, e2)}
-    | LET REC decl = id_typ_declaration EQ e1 = expr IN e2 = expr %prec DEFN_EQ {Expr.LetRec (decl, e1, e2)}
+    | LET REC r = single_rec IN e2 = expr %prec DEFN_EQ {let (decl, e1) = r in Expr.LetRec (decl, e1, e2)}
+    | m = mutual_rec IN e2 = expr %prec DEFN_EQ {Expr.LetRecMutual (m, e2)}
     | BOX LEFT_PAREN decl_list = separated_list(COMMA, id_typ_declaration) TURNSTILE e = expr RIGHT_PAREN {Expr.Box (decl_list, e)}
     | LET BOX u = identifier EQ e1 = expr IN e2 = expr {Expr.LetBox (u, e1, e2)}
     | MATCH e = simple_expr WITH option("|") pattern_list = separated_nonempty_list("|", pattern_expr) {Expr.Match (e, pattern_list)};

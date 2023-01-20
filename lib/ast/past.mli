@@ -76,7 +76,7 @@ and Expr : sig
     | BinaryOp of BinaryOperator.t * t * t (*e op e'*)
     | Prod of t list (*(e, e')*)
     (*| Fst of t (*fst e*)
-    | Snd of t (*snd e*)*)
+      | Snd of t (*snd e*)*)
     | Nth of (t * int)
     | Left of Typ.t * Typ.t * t (*L[A,B] e*)
     | Right of Typ.t * Typ.t * t (*R[A,B] e*)
@@ -88,8 +88,9 @@ and Expr : sig
     | IfThenElse of t * t * t (*if e then e' else e''*)
     | LetBinding of IdentifierDefn.t * t * t (*let x: A = e in e'*)
     | LetRec of IdentifierDefn.t * t * t
-      (*let rec f: A->B =
-        e[f] in e'*)
+    (*let rec f: A->B =
+      e[f] in e'*)
+    | LetRecMutual of (IdentifierDefn.t * t) list * t
     | Box of Context.t * t (*box (x:A, y:B |- e)*)
     | LetBox of Identifier.t * t * t (*let box u = e in e'*)
     | Closure of Identifier.t * t list (*u with (e1, e2, e3, ...)*)
@@ -107,6 +108,7 @@ and TopLevelDefn : sig
   type t =
     | Definition of IdentifierDefn.t * Expr.t
     | RecursiveDefinition of IdentifierDefn.t * Expr.t
+    | MutualRecursiveDefinition of (IdentifierDefn.t * Expr.t) list
     | Expression of Expr.t
     | Directive of Directive.t
     | DatatypeDecl of Identifier.t * (Constructor.t * Typ.t option) list
