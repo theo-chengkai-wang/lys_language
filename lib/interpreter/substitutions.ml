@@ -103,6 +103,14 @@ let rec substitute_aux expr_subst_for id_str current_depth expr_subst_in =
       substitute_aux expr_subst_for id_str (current_depth + 1) e >>= fun e ->
       substitute_aux expr_subst_for id_str (current_depth + 1) e2 >>= fun e2 ->
       Ok (Ast.Expr.LetRec (iddef, e, e2))
+  | Ast.Expr.LetRecMutual (iddef_e_list, e2) ->
+      List.map iddef_e_list ~f:(fun (iddef, e) ->
+          substitute_aux expr_subst_for id_str (current_depth + 1) e
+          >>= fun e -> Ok (iddef, e))
+      |> Or_error.combine_errors
+      >>= fun iddef_e_list ->
+      substitute_aux expr_subst_for id_str (current_depth + 1) e2 >>= fun e2 ->
+      Ok (Ast.Expr.LetRecMutual (iddef_e_list, e2))
   | Ast.Expr.Box (ctx, e) -> Ok (Ast.Expr.Box (ctx, e))
   | Ast.Expr.LetBox (metaid, e, e2) ->
       substitute_aux expr_subst_for id_str current_depth e >>= fun e ->
@@ -224,6 +232,14 @@ let rec sim_substitute_aux zipped_exprs_ids current_depth expr_subst_in =
       sim_substitute_aux zipped_exprs_ids (current_depth + 1) e >>= fun e ->
       sim_substitute_aux zipped_exprs_ids (current_depth + 1) e2 >>= fun e2 ->
       Ok (Ast.Expr.LetRec (iddef, e, e2))
+  | Ast.Expr.LetRecMutual (iddef_e_list, e2) ->
+      List.map iddef_e_list ~f:(fun (iddef, e) ->
+          sim_substitute_aux zipped_exprs_ids (current_depth + 1) e >>= fun e ->
+          Ok (iddef, e))
+      |> Or_error.combine_errors
+      >>= fun iddef_e_list ->
+      sim_substitute_aux zipped_exprs_ids (current_depth + 1) e2 >>= fun e2 ->
+      Ok (Ast.Expr.LetRecMutual (iddef_e_list, e2))
   | Ast.Expr.Box (ctx, e) -> Ok (Ast.Expr.Box (ctx, e))
   | Ast.Expr.LetBox (metaid, e, e2) ->
       sim_substitute_aux zipped_exprs_ids current_depth e >>= fun e ->
@@ -358,6 +374,15 @@ let rec meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth
       >>= fun e ->
       meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth e2
       >>= fun e2 -> Ok (Ast.Expr.LetRec (iddef, e, e2))
+  | Ast.Expr.LetRecMutual (iddef_e_list, e2) ->
+      List.map iddef_e_list ~f:(fun (iddef, e) ->
+          meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth
+            e
+          >>= fun e -> Ok (iddef, e))
+      |> Or_error.combine_errors
+      >>= fun iddef_e_list ->
+      meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth e2
+      >>= fun e2 -> Ok (Ast.Expr.LetRecMutual (iddef_e_list, e2))
   | Ast.Expr.Box (ctx2, e) ->
       meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth e
       >>= fun e -> Ok (Ast.Expr.Box (ctx2, e))

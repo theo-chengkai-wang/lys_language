@@ -852,6 +852,16 @@ end = struct
         shift_indices e2 ~obj_depth:(obj_depth + 1) ~meta_depth ~obj_offset
           ~meta_offset
         >>= fun e2 -> Ok (LetRec (iddef, e, e2))
+    | LetRecMutual (iddef_e_list, e2) ->
+        List.map iddef_e_list ~f:(fun (iddef, e) ->
+            shift_indices e ~obj_depth:(obj_depth + 1) ~meta_depth ~obj_offset
+              ~meta_offset
+            >>= fun e -> Ok (iddef, e))
+        |> Or_error.combine_errors
+        >>= fun iddef_e_list ->
+        shift_indices e2 ~obj_depth:(obj_depth + 1) ~meta_depth ~obj_offset
+          ~meta_offset
+        >>= fun e2 -> Ok (LetRecMutual (iddef_e_list, e2))
     | Box (ctx, e) ->
         (*Can only shift meta indices*)
         shift_indices e ~obj_depth:(obj_depth + 1) ~meta_depth ~obj_offset
@@ -1067,6 +1077,21 @@ end = struct
           ~current_identifiers:new_current_identifiers ~current_meta_ast_level:0
           ~current_meta_identifiers:String_map.empty
         >>= fun expr -> Ok (RecursiveDefinition (typ, (id, typ2), expr))
+    | MutualRecursiveDefinition typ_iddef_e_list ->
+        let new_current_identifiers =
+          List.fold typ_iddef_e_list ~init:String_map.empty
+            ~f:(fun acc (_, (id, _), _) ->
+              String_map.set acc ~key:(ObjIdentifier.get_name id) ~data:0)
+        in
+        List.map typ_iddef_e_list ~f:(fun (typ, iddef, e) ->
+            Expr.populate_index e ~current_ast_level:1
+              ~current_identifiers:new_current_identifiers
+              ~current_meta_ast_level:0
+              ~current_meta_identifiers:String_map.empty
+            >>= fun e -> Ok (typ, iddef, e))
+        |> Or_error.combine_errors
+        >>= fun typ_iddef_e_list ->
+        Ok (MutualRecursiveDefinition typ_iddef_e_list)
     | Expression (typ, expr) ->
         Expr.populate_index expr ~current_ast_level:0
           ~current_identifiers:String_map.empty ~current_meta_ast_level:0
@@ -1080,6 +1105,9 @@ end = struct
     | TopLevelDefn.Definition (iddef, e) -> Definition (Typ.TUnit, iddef, e)
     | TopLevelDefn.RecursiveDefinition (iddef, e) ->
         RecursiveDefinition (Typ.TUnit, iddef, e)
+    | TopLevelDefn.MutualRecursiveDefinition iddef_e_list ->
+        MutualRecursiveDefinition
+          (List.map ~f:(fun (iddef, e) -> (Typ.TUnit, iddef, e)) iddef_e_list)
     | TopLevelDefn.Expression e -> Expression (Typ.TUnit, e)
     | TopLevelDefn.Directive d -> Directive d
     | TopLevelDefn.DatatypeDecl (id, constr_typ_list) ->
