@@ -410,8 +410,9 @@ and Expr : sig
     | IfThenElse of t * t * t (*if e then e' else e''*)
     | LetBinding of IdentifierDefn.t * t * t (*let x: A = e in e'*)
     | LetRec of IdentifierDefn.t * t * t
-      (*let rec f: A->B =
-        e[f] in e'*)
+    (*let rec f: A->B =
+      e[f] in e'*)
+    | LetRecMutual of (IdentifierDefn.t * t) list * t
     | Box of Context.t * t (*box (x:A, y:B |- e)*)
     | LetBox of MetaIdentifier.t * t * t (*let box u = e in e'*)
     | Closure of MetaIdentifier.t * t list (*u with (e1, e2, e3, ...)*)
@@ -459,8 +460,9 @@ end = struct
     | IfThenElse of t * t * t (*if e then e' else e''*)
     | LetBinding of IdentifierDefn.t * t * t (*let x: A = e in e'*)
     | LetRec of IdentifierDefn.t * t * t
-      (*let rec f: A->B =
-        e[f] in e'*)
+    (*let rec f: A->B =
+      e[f] in e'*)
+    | LetRecMutual of (IdentifierDefn.t * t) list * t
     | Box of Context.t * t (*box (x:A, y:B |- e)*)
     | LetBox of MetaIdentifier.t * t * t (*let box u = e in e'*)
     | Closure of MetaIdentifier.t * t list (*u with (e1, e2, e3, ...)*)
@@ -949,6 +951,7 @@ and TopLevelDefn : sig
   type t =
     | Definition of IdentifierDefn.t * Expr.t
     | RecursiveDefinition of IdentifierDefn.t * Expr.t
+    | MutualRecursiveDefinition of (IdentifierDefn.t * Expr.t) list
     | Expression of Expr.t
     | Directive of Directive.t
     | DatatypeDecl of TypeIdentifier.t * (Constructor.t * Typ.t option) list
@@ -960,6 +963,7 @@ end = struct
   type t =
     | Definition of IdentifierDefn.t * Expr.t
     | RecursiveDefinition of IdentifierDefn.t * Expr.t
+    | MutualRecursiveDefinition of (IdentifierDefn.t * Expr.t) list
     | Expression of Expr.t
     | Directive of Directive.t
     | DatatypeDecl of TypeIdentifier.t * (Constructor.t * Typ.t option) list
@@ -996,6 +1000,7 @@ module TypedTopLevelDefn : sig
   type t =
     | Definition of Typ.t * IdentifierDefn.t * Expr.t
     | RecursiveDefinition of Typ.t * IdentifierDefn.t * Expr.t
+    | MutualRecursiveDefinition of (Typ.t * IdentifierDefn.t * Expr.t) list
     | Expression of Typ.t * Expr.t
     | Directive of Directive.t
     | DatatypeDecl of TypeIdentifier.t * (Constructor.t * Typ.t option) list
@@ -1008,12 +1013,11 @@ end = struct
   type t =
     | Definition of Typ.t * IdentifierDefn.t * Expr.t
     | RecursiveDefinition of Typ.t * IdentifierDefn.t * Expr.t
+    | MutualRecursiveDefinition of (Typ.t * IdentifierDefn.t * Expr.t) list
     | Expression of Typ.t * Expr.t
     | Directive of Directive.t
     | DatatypeDecl of TypeIdentifier.t * (Constructor.t * Typ.t option) list
   [@@deriving sexp, show, compare, equal]
-
-  
 
   let populate_index typed_defn =
     let open Or_error.Monad_infix in
