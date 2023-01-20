@@ -504,6 +504,11 @@ end = struct
         LetBinding (IdentifierDefn.of_past iddef, of_past e, of_past e2)
     | Past.Expr.LetRec (iddef, e, e2) ->
         LetRec (IdentifierDefn.of_past iddef, of_past e, of_past e2)
+    | Past.Expr.LetRecMutual (iddef_e_list, e2) ->
+        LetRecMutual
+          ( List.map iddef_e_list ~f:(fun (iddef, e) ->
+                (IdentifierDefn.of_past iddef, of_past e)),
+            of_past e2 )
     | Past.Expr.Box (ctx, e) -> Box (Context.of_past ctx, of_past e)
     | Past.Expr.LetBox (metaid, e, e2) ->
         LetBox (MetaIdentifier.of_past metaid, of_past e, of_past e2)
@@ -974,6 +979,10 @@ end = struct
         Definition (IdentifierDefn.of_past iddef, Expr.of_past e)
     | Past.TopLevelDefn.RecursiveDefinition (iddef, e) ->
         RecursiveDefinition (IdentifierDefn.of_past iddef, Expr.of_past e)
+    | Past.TopLevelDefn.MutualRecursiveDefinition iddef_e_list ->
+        MutualRecursiveDefinition
+          (List.map iddef_e_list ~f:(fun (iddef, e) ->
+               (IdentifierDefn.of_past iddef, Expr.of_past e)))
     | Past.TopLevelDefn.Expression e -> Expression (Expr.of_past e)
     | Past.TopLevelDefn.Directive d -> Directive (Directive.of_past d)
     | Past.TopLevelDefn.DatatypeDecl (id, constr_typ_list) ->
