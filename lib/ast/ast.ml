@@ -663,6 +663,27 @@ end = struct
           ~current_identifiers:new_current_identifiers ~current_meta_ast_level
           ~current_meta_identifiers
         >>= fun e2 -> Ok (LetRec (iddef, e, e2))
+    | LetRecMutual (iddef_e_list, e2) ->
+        (*First add all the defns in the current identifiers, at current level*)
+        let new_current_identifiers =
+          List.fold iddef_e_list ~init:current_identifiers
+            ~f:(fun acc ((id, _), _) ->
+              String_map.set acc
+                ~key:(ObjIdentifier.get_name id)
+                ~data:current_ast_level)
+        in
+        let new_level = current_ast_level + 1 in
+        List.map iddef_e_list ~f:(fun (iddef, e) ->
+            populate_index e ~current_ast_level:new_level
+              ~current_identifiers:new_current_identifiers
+              ~current_meta_ast_level ~current_meta_identifiers
+            >>= fun e -> Ok (iddef, e))
+        |> Or_error.combine_errors
+        >>= fun iddef_e_list ->
+        populate_index e2 ~current_ast_level:new_level
+          ~current_identifiers:new_current_identifiers ~current_meta_ast_level
+          ~current_meta_identifiers
+        >>= fun e2 -> Ok (LetRecMutual (iddef_e_list, e2))
     | Box (ctx, e) ->
         (*
           Explanation: ctx is a list of iddefn so no need to populate indices; we create a fresh context with nothing in it like for a closure, and
