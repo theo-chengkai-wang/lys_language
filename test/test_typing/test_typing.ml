@@ -145,6 +145,32 @@ let test_let_rec _ =
     (Or_error.ok (type_infer_from_str "let rec x:int = x in ();;"))
     None
 
+let test_let_rec_mut _ =
+  assert_equal (Some Ast.Typ.TBool)
+    (Or_error.ok
+       (type_infer_from_str
+          "let rec even: int -> bool = \n\
+          \      fun (n:int) ->\n\
+          \          if (n = 0) then true else odd (n - 1)\n\
+          \  and\n\
+          \  odd: int -> bool =\n\
+          \      fun (n:int) -> if (n=0) then false else even (n-1)\n\
+          \  in\n\
+          \  even (1);;"))
+
+let test_rec_mut_fails _ =
+  assert_equal None
+    (Or_error.ok
+       (type_infer_from_str
+          "let rec even: int -> int = \n\
+          \    fun (n:int) ->\n\
+          \        if (n = 0) then true else odd (n - 1)\n\
+           and\n\
+           odd: int -> bool =\n\
+          \    fun (n:int) -> if (n=0) then false else even (n-1)\n\
+           in\n\
+           even (1);;"))
+
 let test_bound_identifier _ =
   assert_equal
     (Or_error.ok
@@ -174,6 +200,8 @@ let standard_suite =
          "test_application_only_functions" >:: test_application_only_functions;
          "test_if_then_else" >:: test_if_then_else;
          "test_let_rec" >:: test_let_rec;
+         "test_let_rec_mut" >:: test_let_rec_mut;
+         "test_rec_mut_fails" >:: test_rec_mut_fails;
          "test_bound_identifier" >:: test_bound_identifier;
          "test_unbound_identifier" >:: test_unbound_identifier;
        ]
@@ -219,7 +247,9 @@ let test_closure_unmatched_context_wrt_arguments _ =
     None
 
 let test_lift_primitive _ =
-  assert_equal (Some (Ast.Typ.TBox ([], Ast.Typ.TInt))) (Or_error.ok (type_infer_from_str "lift[int] 1;;"))
+  assert_equal
+    (Some (Ast.Typ.TBox ([], Ast.Typ.TInt)))
+    (Or_error.ok (type_infer_from_str "lift[int] 1;;"))
 
 let test_lift_non_primitive _ =
   let program =

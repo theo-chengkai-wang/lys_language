@@ -533,11 +533,11 @@ let test_lift _ =
 
 let test_mutual_recursion_defn _ =
   let program =
-    "let rec even: int -> int = \n\
+    "let rec even: int -> bool = \n\
     \      fun (n:int) ->\n\
     \          if (n = 0) then true else odd (n - 1)\n\
     \  and\n\
-    \  odd: int -> int =\n\
+    \  odd: int -> bool =\n\
     \      fun (n:int) -> if (n=0) then false else even (n-1)\n\
     \  ;;\n\
     \  "
@@ -546,7 +546,7 @@ let test_mutual_recursion_defn _ =
     [
       Past.TopLevelDefn.MutualRecursiveDefinition
         [
-          ( ("even", Past.Typ.TFun (Past.Typ.TInt, Past.Typ.TInt)),
+          ( ("even", Past.Typ.TFun (Past.Typ.TInt, Past.Typ.TBool)),
             Past.Expr.Lambda
               ( ("n", Past.Typ.TInt),
                 Past.Expr.IfThenElse
@@ -562,7 +562,7 @@ let test_mutual_recursion_defn _ =
                             Past.Expr.Identifier "n",
                             Past.Expr.Constant (Past.Constant.Integer 1) ) ) )
               ) );
-          ( ("odd", Past.Typ.TFun (Past.Typ.TInt, Past.Typ.TInt)),
+          ( ("odd", Past.Typ.TFun (Past.Typ.TInt, Past.Typ.TBool)),
             Past.Expr.Lambda
               ( ("n", Past.Typ.TInt),
                 Past.Expr.IfThenElse
@@ -584,11 +584,11 @@ let test_mutual_recursion_defn _ =
 
 let test_mutual_recursion_expr _ =
   let program =
-    "let rec even: int -> int = \n\
+    "let rec even: int -> bool = \n\
     \          fun (n:int) ->\n\
     \              if (n = 0) then true else odd (n - 1)\n\
     \      and\n\
-    \      odd: int -> int =\n\
+    \      odd: int -> bool =\n\
     \          fun (n:int) -> if (n=0) then false else even (n-1)\n\
     \      in\n\
     \      even (1);;\n\
@@ -599,7 +599,7 @@ let test_mutual_recursion_expr _ =
       Past.TopLevelDefn.Expression
         (Past.Expr.LetRecMutual
            ( [
-               ( ("even", Past.Typ.TFun (Past.Typ.TInt, Past.Typ.TInt)),
+               ( ("even", Past.Typ.TFun (Past.Typ.TInt, Past.Typ.TBool)),
                  Past.Expr.Lambda
                    ( ("n", Past.Typ.TInt),
                      Past.Expr.IfThenElse
@@ -615,7 +615,7 @@ let test_mutual_recursion_expr _ =
                                  Past.Expr.Identifier "n",
                                  Past.Expr.Constant (Past.Constant.Integer 1) )
                            ) ) ) );
-               ( ("odd", Past.Typ.TFun (Past.Typ.TInt, Past.Typ.TInt)),
+               ( ("odd", Past.Typ.TFun (Past.Typ.TInt, Past.Typ.TBool)),
                  Past.Expr.Lambda
                    ( ("n", Past.Typ.TInt),
                      Past.Expr.IfThenElse

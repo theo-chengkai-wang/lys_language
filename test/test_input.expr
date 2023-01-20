@@ -1,8 +1,8 @@
-let rec even: int -> int = 
+let rec even: int -> bool = 
     fun (n:int) ->
         if (n = 0) then true else odd (n - 1)
 and
-odd: int -> int =
+odd: int -> bool =
     fun (n:int) -> if (n=0) then false else even (n-1)
 in
 even (1);;
