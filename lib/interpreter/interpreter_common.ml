@@ -189,6 +189,7 @@ module TopLevelEvaluationResult = struct
         * float option
         * int option
         * verbose option
+    (* | MutRecDefn of (Ast.IdentifierDefn.t * Ast.Value.t * float option * int option * verbose option) list *)
     | Directive of Ast.Directive.t * string
     | DatatypeDecl of
         Ast.TypeIdentifier.t * (Ast.Constructor.t * Ast.Typ.t option) list
