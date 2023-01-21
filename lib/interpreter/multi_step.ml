@@ -20,12 +20,12 @@ let rec multi_step_reduce_with_step_count ~top_level_context
       else
         let id_str = Ast.ObjIdentifier.get_name id in
         EvaluationContext.find_or_error top_level_context id_str
-        >>= fun { typ; is_rec; value } ->
-        if not is_rec then
+        >>= fun { typ; rec_preface ; value } ->
+        if EvaluationContext.is_not_rec { typ; rec_preface ; value } then
           (*Substitution -- no need to worry about De Bruijn indices as there is no way they can go wrong*)
           Ok (value, 1)
         else
-          (* Recursion: handle once together. *)
+          (* Recursion: handle once together. *) (*TODO: Change this to right definition*)
           Ast.DeBruijnIndex.create 0 >>= fun debruijn_index ->
           multi_step_reduce_with_step_count ~top_level_context
             ~type_constr_context
