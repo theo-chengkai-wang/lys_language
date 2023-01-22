@@ -3,6 +3,5 @@ let rec even: int -> bool =
         if (n = 0) then true else odd (n - 1)
 and
 odd: int -> bool =
-    fun (n:int) -> if (n=0) then false else even (n-1)
-in
-even (1);;
+    fun (n:int) -> if (n=0) then false else even (n-1);;
+even (100);;

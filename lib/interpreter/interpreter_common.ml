@@ -15,6 +15,7 @@ module EvaluationContext : sig
   type t = single_record String_map.t [@@deriving sexp, compare, equal]
 
   val set : t -> key:string -> data:single_record -> t
+  val set_all: t -> (string * single_record) list -> t
   val find_or_error : t -> string -> single_record Or_error.t
   val empty : t
   val show : t -> string
@@ -33,6 +34,7 @@ end = struct
   type t = single_record String_map.t [@@deriving sexp, compare, equal]
 
   let set = String_map.set
+  let set_all m kvs = List.fold kvs ~init:m ~f:(fun acc -> fun (key, data) -> String_map.set acc ~key ~data)
 
   let find_or_error map key =
     match String_map.find map key with

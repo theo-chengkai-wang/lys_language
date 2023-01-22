@@ -417,6 +417,129 @@ let test_lift_non_primitive _ =
                 None )))
         (List.last results)
 
+let test_mutual_recursive_expr _ =
+  let program =
+    "let rec even: int -> bool = \n\
+    \      fun (n:int) ->\n\
+    \          if (n = 0) then true else odd (n - 1)\n\
+    \  and\n\
+    \  odd: int -> bool =\n\
+    \      fun (n:int) -> if (n=0) then false else even (n-1)\n\
+    \ in even (8);;\n\
+    \      "
+  in
+  let res_opt = exec_program program in
+  match res_opt with
+  | None -> assert_string "Program Execution Failed"
+  | Some results ->
+      assert_equal
+        (Some
+           (Interpreter_common.TopLevelEvaluationResult.ExprValue
+              ( Ast.Typ.TBool,
+                Ast.Value.Constant (Ast.Constant.Boolean true),
+                None,
+                None,
+                None )))
+        (List.last results)
+
+let test_mutual_recursive_function_defn_then_exec _ =
+  let program =
+    "let rec even: int -> bool = \n\
+    \      fun (n:int) ->\n\
+    \          if (n = 0) then true else odd (n - 1)\n\
+    \  and\n\
+    \  odd: int -> bool =\n\
+    \      fun (n:int) -> if (n=0) then false else even (n-1);;\n\
+    \ even (8);;\n\
+    \      "
+  in
+  let res_opt = exec_program program in
+  match res_opt with
+  | None -> assert_string "Program Execution Failed"
+  | Some results ->
+      assert_equal
+        (Some
+           (Interpreter_common.TopLevelEvaluationResult.ExprValue
+              ( Ast.Typ.TBool,
+                Ast.Value.Constant (Ast.Constant.Boolean true),
+                None,
+                None,
+                None )))
+        (List.last results)
+
+let test_mutual_recursion_defn _ =
+  let program =
+    "let rec even: int -> bool = \n\
+    \      fun (n:int) ->\n\
+    \          if (n = 0) then true else odd (n - 1)\n\
+    \  and\n\
+    \  odd: int -> bool =\n\
+    \      fun (n:int) -> if (n=0) then false else even (n-1);;\n\
+    \  "
+  in
+  let res_opt = exec_program program in
+  match res_opt with
+  | None -> assert_string "Program Execution Failed"
+  | Some results ->
+      assert_equal
+        (Some
+           (Interpreter_common.TopLevelEvaluationResult.MutRecDefn
+              [
+                ( ( Ast.ObjIdentifier.of_string "even",
+                    Ast.Typ.TFun (Ast.Typ.TInt, Ast.Typ.TBool) ),
+                  Ast.Value.Lambda
+                    ( (Ast.ObjIdentifier.of_string "n", Ast.Typ.TInt),
+                      Ast.Expr.IfThenElse
+                        ( Ast.Expr.BinaryOp
+                            ( Ast.BinaryOperator.EQ,
+                              Ast.Expr.Identifier
+                                (Ast.ObjIdentifier.of_string_and_index "n"
+                                   (create_debruijn_exn 0)),
+                              Ast.Expr.Constant (Ast.Constant.Integer 0) ),
+                          Ast.Expr.Constant (Ast.Constant.Boolean true),
+                          Ast.Expr.Application
+                            ( Ast.Expr.Identifier
+                                (Ast.ObjIdentifier.of_string_and_index "odd"
+                                   (create_debruijn_exn 1)),
+                              Ast.Expr.BinaryOp
+                                ( Ast.BinaryOperator.SUB,
+                                  Ast.Expr.Identifier
+                                    (Ast.ObjIdentifier.of_string_and_index "n"
+                                       (create_debruijn_exn 0)),
+                                  Ast.Expr.Constant (Ast.Constant.Integer 1) )
+                            ) ) ),
+                  None,
+                  None,
+                  None );
+                ( ( Ast.ObjIdentifier.of_string "odd",
+                    Ast.Typ.TFun (Ast.Typ.TInt, Ast.Typ.TBool) ),
+                  Ast.Value.Lambda
+                    ( (Ast.ObjIdentifier.of_string "n", Ast.Typ.TInt),
+                      Ast.Expr.IfThenElse
+                        ( Ast.Expr.BinaryOp
+                            ( Ast.BinaryOperator.EQ,
+                              Ast.Expr.Identifier
+                                (Ast.ObjIdentifier.of_string_and_index "n"
+                                   (create_debruijn_exn 0)),
+                              Ast.Expr.Constant (Ast.Constant.Integer 0) ),
+                          Ast.Expr.Constant (Ast.Constant.Boolean false),
+                          Ast.Expr.Application
+                            ( Ast.Expr.Identifier
+                                (Ast.ObjIdentifier.of_string_and_index "even"
+                                   (create_debruijn_exn 1)),
+                              Ast.Expr.BinaryOp
+                                ( Ast.BinaryOperator.SUB,
+                                  Ast.Expr.Identifier
+                                    (Ast.ObjIdentifier.of_string_and_index "n"
+                                       (create_debruijn_exn 0)),
+                                  Ast.Expr.Constant (Ast.Constant.Integer 1) )
+                            ) ) ),
+                  None,
+                  None,
+                  None );
+              ]))
+        (List.last results)
+
 let interpreter_suite =
   "interpreter_main_suite"
   >::: [
@@ -432,6 +555,10 @@ let interpreter_suite =
          "test_match_identifier" >:: test_match_identifier;
          "test_lift_primitive" >:: test_lift_primitive;
          "test_lift_non_primitive" >:: test_lift_non_primitive;
+         "test_mutual_recursive_expr" >:: test_mutual_recursive_expr;
+         "test_mutual_recursive_function_defn_then_exec"
+         >:: test_mutual_recursive_function_defn_then_exec;
+         "test_mutual_recursion_defn" >:: test_mutual_recursion_defn;
        ]
 
 let test_intlist_map _ =
