@@ -90,6 +90,7 @@ rule read =
     | "ENV" {DIR_ENV}
     | "QUIT" {DIR_QUIT}
     | "datatype" {DATATYPE}
+    | "and" {AND_WORD}
     | "_" {UNDERSCORE}
     | nat   { INT (int_of_string (Lexing.lexeme lexbuf)) }
     | id    {ID (Lexing.lexeme lexbuf)}

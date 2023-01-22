@@ -410,8 +410,9 @@ and Expr : sig
     | IfThenElse of t * t * t (*if e then e' else e''*)
     | LetBinding of IdentifierDefn.t * t * t (*let x: A = e in e'*)
     | LetRec of IdentifierDefn.t * t * t
-      (*let rec f: A->B =
-        e[f] in e'*)
+    (*let rec f: A->B =
+      e[f] in e'*)
+    | LetRecMutual of (IdentifierDefn.t * t) list * t
     | Box of Context.t * t (*box (x:A, y:B |- e)*)
     | LetBox of MetaIdentifier.t * t * t (*let box u = e in e'*)
     | Closure of MetaIdentifier.t * t list (*u with (e1, e2, e3, ...)*)
@@ -459,8 +460,9 @@ end = struct
     | IfThenElse of t * t * t (*if e then e' else e''*)
     | LetBinding of IdentifierDefn.t * t * t (*let x: A = e in e'*)
     | LetRec of IdentifierDefn.t * t * t
-      (*let rec f: A->B =
-        e[f] in e'*)
+    (*let rec f: A->B =
+      e[f] in e'*)
+    | LetRecMutual of (IdentifierDefn.t * t) list * t
     | Box of Context.t * t (*box (x:A, y:B |- e)*)
     | LetBox of MetaIdentifier.t * t * t (*let box u = e in e'*)
     | Closure of MetaIdentifier.t * t list (*u with (e1, e2, e3, ...)*)
@@ -502,6 +504,11 @@ end = struct
         LetBinding (IdentifierDefn.of_past iddef, of_past e, of_past e2)
     | Past.Expr.LetRec (iddef, e, e2) ->
         LetRec (IdentifierDefn.of_past iddef, of_past e, of_past e2)
+    | Past.Expr.LetRecMutual (iddef_e_list, e2) ->
+        LetRecMutual
+          ( List.map iddef_e_list ~f:(fun (iddef, e) ->
+                (IdentifierDefn.of_past iddef, of_past e)),
+            of_past e2 )
     | Past.Expr.Box (ctx, e) -> Box (Context.of_past ctx, of_past e)
     | Past.Expr.LetBox (metaid, e, e2) ->
         LetBox (MetaIdentifier.of_past metaid, of_past e, of_past e2)
@@ -656,6 +663,27 @@ end = struct
           ~current_identifiers:new_current_identifiers ~current_meta_ast_level
           ~current_meta_identifiers
         >>= fun e2 -> Ok (LetRec (iddef, e, e2))
+    | LetRecMutual (iddef_e_list, e2) ->
+        (*First add all the defns in the current identifiers, at current level*)
+        let new_current_identifiers =
+          List.fold iddef_e_list ~init:current_identifiers
+            ~f:(fun acc ((id, _), _) ->
+              String_map.set acc
+                ~key:(ObjIdentifier.get_name id)
+                ~data:current_ast_level)
+        in
+        let new_level = current_ast_level + 1 in
+        List.map iddef_e_list ~f:(fun (iddef, e) ->
+            populate_index e ~current_ast_level:new_level
+              ~current_identifiers:new_current_identifiers
+              ~current_meta_ast_level ~current_meta_identifiers
+            >>= fun e -> Ok (iddef, e))
+        |> Or_error.combine_errors
+        >>= fun iddef_e_list ->
+        populate_index e2 ~current_ast_level:new_level
+          ~current_identifiers:new_current_identifiers ~current_meta_ast_level
+          ~current_meta_identifiers
+        >>= fun e2 -> Ok (LetRecMutual (iddef_e_list, e2))
     | Box (ctx, e) ->
         (*
           Explanation: ctx is a list of iddefn so no need to populate indices; we create a fresh context with nothing in it like for a closure, and
@@ -824,6 +852,16 @@ end = struct
         shift_indices e2 ~obj_depth:(obj_depth + 1) ~meta_depth ~obj_offset
           ~meta_offset
         >>= fun e2 -> Ok (LetRec (iddef, e, e2))
+    | LetRecMutual (iddef_e_list, e2) ->
+        List.map iddef_e_list ~f:(fun (iddef, e) ->
+            shift_indices e ~obj_depth:(obj_depth + 1) ~meta_depth ~obj_offset
+              ~meta_offset
+            >>= fun e -> Ok (iddef, e))
+        |> Or_error.combine_errors
+        >>= fun iddef_e_list ->
+        shift_indices e2 ~obj_depth:(obj_depth + 1) ~meta_depth ~obj_offset
+          ~meta_offset
+        >>= fun e2 -> Ok (LetRecMutual (iddef_e_list, e2))
     | Box (ctx, e) ->
         (*Can only shift meta indices*)
         shift_indices e ~obj_depth:(obj_depth + 1) ~meta_depth ~obj_offset
@@ -949,6 +987,7 @@ and TopLevelDefn : sig
   type t =
     | Definition of IdentifierDefn.t * Expr.t
     | RecursiveDefinition of IdentifierDefn.t * Expr.t
+    | MutualRecursiveDefinition of (IdentifierDefn.t * Expr.t) list
     | Expression of Expr.t
     | Directive of Directive.t
     | DatatypeDecl of TypeIdentifier.t * (Constructor.t * Typ.t option) list
@@ -960,6 +999,7 @@ end = struct
   type t =
     | Definition of IdentifierDefn.t * Expr.t
     | RecursiveDefinition of IdentifierDefn.t * Expr.t
+    | MutualRecursiveDefinition of (IdentifierDefn.t * Expr.t) list
     | Expression of Expr.t
     | Directive of Directive.t
     | DatatypeDecl of TypeIdentifier.t * (Constructor.t * Typ.t option) list
@@ -970,6 +1010,10 @@ end = struct
         Definition (IdentifierDefn.of_past iddef, Expr.of_past e)
     | Past.TopLevelDefn.RecursiveDefinition (iddef, e) ->
         RecursiveDefinition (IdentifierDefn.of_past iddef, Expr.of_past e)
+    | Past.TopLevelDefn.MutualRecursiveDefinition iddef_e_list ->
+        MutualRecursiveDefinition
+          (List.map iddef_e_list ~f:(fun (iddef, e) ->
+               (IdentifierDefn.of_past iddef, Expr.of_past e)))
     | Past.TopLevelDefn.Expression e -> Expression (Expr.of_past e)
     | Past.TopLevelDefn.Directive d -> Directive (Directive.of_past d)
     | Past.TopLevelDefn.DatatypeDecl (id, constr_typ_list) ->
@@ -996,6 +1040,7 @@ module TypedTopLevelDefn : sig
   type t =
     | Definition of Typ.t * IdentifierDefn.t * Expr.t
     | RecursiveDefinition of Typ.t * IdentifierDefn.t * Expr.t
+    | MutualRecursiveDefinition of (Typ.t * IdentifierDefn.t * Expr.t) list
     | Expression of Typ.t * Expr.t
     | Directive of Directive.t
     | DatatypeDecl of TypeIdentifier.t * (Constructor.t * Typ.t option) list
@@ -1008,12 +1053,11 @@ end = struct
   type t =
     | Definition of Typ.t * IdentifierDefn.t * Expr.t
     | RecursiveDefinition of Typ.t * IdentifierDefn.t * Expr.t
+    | MutualRecursiveDefinition of (Typ.t * IdentifierDefn.t * Expr.t) list
     | Expression of Typ.t * Expr.t
     | Directive of Directive.t
     | DatatypeDecl of TypeIdentifier.t * (Constructor.t * Typ.t option) list
   [@@deriving sexp, show, compare, equal]
-
-  
 
   let populate_index typed_defn =
     let open Or_error.Monad_infix in
@@ -1033,6 +1077,21 @@ end = struct
           ~current_identifiers:new_current_identifiers ~current_meta_ast_level:0
           ~current_meta_identifiers:String_map.empty
         >>= fun expr -> Ok (RecursiveDefinition (typ, (id, typ2), expr))
+    | MutualRecursiveDefinition typ_iddef_e_list ->
+        let new_current_identifiers =
+          List.fold typ_iddef_e_list ~init:String_map.empty
+            ~f:(fun acc (_, (id, _), _) ->
+              String_map.set acc ~key:(ObjIdentifier.get_name id) ~data:0)
+        in
+        List.map typ_iddef_e_list ~f:(fun (typ, iddef, e) ->
+            Expr.populate_index e ~current_ast_level:1
+              ~current_identifiers:new_current_identifiers
+              ~current_meta_ast_level:0
+              ~current_meta_identifiers:String_map.empty
+            >>= fun e -> Ok (typ, iddef, e))
+        |> Or_error.combine_errors
+        >>= fun typ_iddef_e_list ->
+        Ok (MutualRecursiveDefinition typ_iddef_e_list)
     | Expression (typ, expr) ->
         Expr.populate_index expr ~current_ast_level:0
           ~current_identifiers:String_map.empty ~current_meta_ast_level:0
@@ -1046,6 +1105,9 @@ end = struct
     | TopLevelDefn.Definition (iddef, e) -> Definition (Typ.TUnit, iddef, e)
     | TopLevelDefn.RecursiveDefinition (iddef, e) ->
         RecursiveDefinition (Typ.TUnit, iddef, e)
+    | TopLevelDefn.MutualRecursiveDefinition iddef_e_list ->
+        MutualRecursiveDefinition
+          (List.map ~f:(fun (iddef, e) -> (Typ.TUnit, iddef, e)) iddef_e_list)
     | TopLevelDefn.Expression e -> Expression (Typ.TUnit, e)
     | TopLevelDefn.Directive d -> Directive d
     | TopLevelDefn.DatatypeDecl (id, constr_typ_list) ->

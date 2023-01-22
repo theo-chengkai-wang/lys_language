@@ -7,7 +7,7 @@ let rec multi_step_reduce_with_step_count ~top_level_context
     ~type_constr_context ~expr =
   let open Or_error.Monad_infix in
   match expr with
-  | Ast.Expr.Identifier id ->
+  | Ast.Expr.Identifier id -> (
       (*No error if we're dealing with sth at top level context, otherwise error*)
       let index = Ast.ObjIdentifier.get_debruijn_index id in
       if not (Ast.DeBruijnIndex.equal index Ast.DeBruijnIndex.top_level) then
@@ -20,22 +20,47 @@ let rec multi_step_reduce_with_step_count ~top_level_context
       else
         let id_str = Ast.ObjIdentifier.get_name id in
         EvaluationContext.find_or_error top_level_context id_str
-        >>= fun { typ; is_rec; value } ->
-        if not is_rec then
-          (*Substitution -- no need to worry about De Bruijn indices as there is no way they can go wrong*)
-          Ok (value, 1)
-        else
-          (* Recursion: handle once together. *)
-          Ast.DeBruijnIndex.create 0 >>= fun debruijn_index ->
-          multi_step_reduce_with_step_count ~top_level_context
-            ~type_constr_context
-            ~expr:
-              (Ast.Expr.LetRec
-                 ( (Ast.ObjIdentifier.of_string id_str, typ),
-                   Ast.Value.to_expr value,
-                   Ast.Expr.Identifier
-                     (Ast.ObjIdentifier.of_string_and_index id_str
-                        debruijn_index) ))
+        >>= fun { rec_preface; value; _ } ->
+        Ast.DeBruijnIndex.create 0 >>= fun debruijn_index ->
+        match rec_preface with
+        | [] -> Ok (value, 1)
+        | [ (iddef, ev) ] ->
+            multi_step_reduce_with_step_count ~top_level_context
+              ~type_constr_context
+              ~expr:
+                (Ast.Expr.LetRec
+                   ( iddef,
+                     ev,
+                     Ast.Expr.Identifier
+                       (Ast.ObjIdentifier.of_string_and_index id_str
+                          debruijn_index) ))
+            >>= fun (v, cnt) -> Ok (v, cnt + 1)
+        | iddef_ev_list ->
+            multi_step_reduce_with_step_count ~top_level_context
+              ~type_constr_context
+              ~expr:
+                (Ast.Expr.LetRecMutual
+                   ( iddef_ev_list,
+                     Ast.Expr.Identifier
+                       (Ast.ObjIdentifier.of_string_and_index id_str
+                          debruijn_index) ))
+            >>= fun (v, cnt) -> Ok (v, cnt + 1)
+        (* if EvaluationContext.is_not_rec { typ; rec_preface ; value } then
+             (*Substitution -- no need to worry about De Bruijn indices as there is no way they can go wrong*)
+             Ok (value, 1)
+           else
+             (* Recursion: handle once together. *) (*TODO: Change this to right definition*)
+             Ast.DeBruijnIndex.create 0 >>= fun debruijn_index ->
+             multi_step_reduce_with_step_count ~top_level_context
+               ~type_constr_context
+               ~expr:
+                 (Ast.Expr.LetRec
+                    ( (Ast.ObjIdentifier.of_string id_str, typ),
+                      Ast.Value.to_expr value,
+                      Ast.Expr.Identifier
+                        (Ast.ObjIdentifier.of_string_and_index id_str
+                           debruijn_index) ))
+             >>= fun e -> *))
   | Ast.Expr.Constant c -> Ok (Ast.Value.Constant c, 0)
   | Ast.Expr.UnaryOp (op, expr) -> (
       multi_step_reduce_with_step_count ~top_level_context ~type_constr_context
@@ -306,6 +331,47 @@ let rec multi_step_reduce_with_step_count ~top_level_context
         ~expr:ev2
       >>= fun (v, reduction_count2) ->
       Ok (v, reduction_count1 + 1 + reduction_count2)
+  | Ast.Expr.LetRecMutual (iddef_e_list, e2) ->
+      (*
+         TODO: Check if this is right
+         Explanation: exactly the same thing as LetRec case, but with ALL the defns with it.
+         let rec f = v and g = v2 in e  ~~~~~> [([(let rec f = v and g = v2 in f)/f; (let rec f = v and g = v2 in g)/g]v)/f; (...v2)/g]e
+      *)
+      Ast.DeBruijnIndex.create 0 >>= fun debruijn_index_0 ->
+      (* First reduce everything and get a preface: the iddef_e_list in LetRecMutual (iddef_e_list) *)
+      List.fold iddef_e_list
+        ~init:(Ok ([], 0))
+        ~f:(fun acc ((id, typ), e) ->
+          acc >>= fun (acc_iddef_e_list, acc_step_count) ->
+          multi_step_reduce_with_step_count ~top_level_context
+            ~type_constr_context ~expr:e
+          >>= fun (v, step_count) ->
+          Ok
+            ( ((id, typ), Ast.Value.to_expr v) :: acc_iddef_e_list,
+              step_count + acc_step_count ))
+      >>= fun (new_iddef_e_list, step_count) ->
+      let new_iddef_e_list = List.rev new_iddef_e_list in
+      (* Put it back in the right order *)
+      let iddefs, exprs =
+        List.map new_iddef_e_list ~f:(fun ((id, typ), _) ->
+            ( (id, typ),
+              Ast.Expr.LetRecMutual
+                ( new_iddef_e_list,
+                  Ast.Expr.Identifier
+                    (Ast.ObjIdentifier.of_string_and_index
+                       (Ast.ObjIdentifier.get_name id)
+                       debruijn_index_0) ) ))
+        |> List.unzip
+      in
+      List.map new_iddef_e_list ~f:(fun (_, e) ->
+          Substitutions.sim_substitute exprs iddefs e)
+      |> Or_error.combine_errors
+      >>= fun substituted_expr_list ->
+      Substitutions.sim_substitute substituted_expr_list iddefs e2
+      >>= fun ev2 ->
+      multi_step_reduce_with_step_count ~top_level_context ~type_constr_context
+        ~expr:ev2
+      >>= fun (v, step_count_2) -> Ok (v, step_count + 1 + step_count_2)
   | Ast.Expr.Box (ctx, e) -> Ok (Ast.Value.Box (ctx, e), 0)
   | Ast.Expr.LetBox (metaid, e, e2) -> (
       multi_step_reduce_with_step_count ~top_level_context ~type_constr_context
@@ -512,7 +578,7 @@ let evaluate_top_level_defn_with_step_count
       let new_context =
         EvaluationContext.set top_level_context
           ~key:(Ast.ObjIdentifier.get_name id)
-          ~data:{ is_rec = false; typ; value = v }
+          ~data:{ rec_preface = []; typ; value = v }
       in
       let elapsed = time_elapsed_opt current_time time_exec in
       let reduction_count_opt =
@@ -529,7 +595,7 @@ let evaluate_top_level_defn_with_step_count
         ~expr:e
       >>= fun (v, reduction_count) ->
       let new_entry : EvaluationContext.single_record =
-        { is_rec = true; typ; value = v }
+        { rec_preface = [ ((id, typ), Ast.Value.to_expr v) ]; typ; value = v }
       in
       let key = Ast.ObjIdentifier.get_name id in
       let new_context =
@@ -542,6 +608,40 @@ let evaluate_top_level_defn_with_step_count
       Ok
         ( TopLevelEvaluationResult.RecDefn
             ((id, typ), v, elapsed, reduction_count_opt, None),
+          new_context,
+          type_constr_context )
+  | Ast.TypedTopLevelDefn.MutualRecursiveDefinition iddef_e_list ->
+      List.map iddef_e_list ~f:(fun (_, iddef, e) ->
+          let current_time = Mtime_clock.now () in
+          multi_step_reduce_with_step_count ~top_level_context
+            ~type_constr_context ~expr:e
+          >>= fun (v, cnt) ->
+          let elapsed = time_elapsed_opt current_time time_exec in
+          let reduction_count_opt =
+            if show_reduction_steps then Some cnt else None
+          in
+          Ok (iddef, v, elapsed, reduction_count_opt, None))
+      |> Or_error.combine_errors
+      (*Get final result*)
+      >>= fun iddef_v_stats_list ->
+      (* Add to context *)
+      let iddef_v_list =
+        List.map iddef_v_stats_list ~f:(fun (iddef, v, _, _, _) -> (iddef, v))
+      in
+      let rec_preface =
+        List.map iddef_v_list ~f:(fun (iddef, v) ->
+            (iddef, Ast.Value.to_expr v))
+      in
+      let kv_pairs =
+        List.map iddef_v_list ~f:(fun ((id, typ), v) ->
+            let new_entry : EvaluationContext.single_record =
+              { rec_preface; typ; value = v }
+            in
+            (Ast.ObjIdentifier.get_name id, new_entry))
+      in
+      let new_context = EvaluationContext.set_all top_level_context kv_pairs in
+      Ok
+        ( TopLevelEvaluationResult.MutRecDefn iddef_v_stats_list,
           new_context,
           type_constr_context )
   | Ast.TypedTopLevelDefn.Expression (typ, e) ->
@@ -602,7 +702,7 @@ let evaluate_top_level_defn_with_step_count
 let rec multi_step_reduce ~top_level_context ~type_constr_context ~expr =
   let open Or_error.Monad_infix in
   match expr with
-  | Ast.Expr.Identifier id ->
+  | Ast.Expr.Identifier id -> (
       (*No error if we're dealing with sth at top level context, otherwise error*)
       let index = Ast.ObjIdentifier.get_debruijn_index id in
       if not (Ast.DeBruijnIndex.equal index Ast.DeBruijnIndex.top_level) then
@@ -615,21 +715,44 @@ let rec multi_step_reduce ~top_level_context ~type_constr_context ~expr =
       else
         let id_str = Ast.ObjIdentifier.get_name id in
         EvaluationContext.find_or_error top_level_context id_str
-        >>= fun { typ; is_rec; value } ->
-        if not is_rec then
-          (*Substitution -- no need to worry about De Bruijn indices as there is no way they can go wrong*)
-          Ok value
-        else
-          (* Recursion: handle once together. *)
-          Ast.DeBruijnIndex.create 0 >>= fun debruijn_index ->
-          multi_step_reduce ~top_level_context ~type_constr_context
-            ~expr:
-              (Ast.Expr.LetRec
-                 ( (Ast.ObjIdentifier.of_string id_str, typ),
-                   Ast.Value.to_expr value,
-                   Ast.Expr.Identifier
-                     (Ast.ObjIdentifier.of_string_and_index id_str
-                        debruijn_index) ))
+        >>= fun { rec_preface; value; _ } ->
+        Ast.DeBruijnIndex.create 0 >>= fun debruijn_index_0 ->
+        match rec_preface with
+        | [] -> Ok value
+        | [ (iddef, ev) ] ->
+            (* Rec *)
+            multi_step_reduce ~top_level_context ~type_constr_context
+              ~expr:
+                (Ast.Expr.LetRec
+                   ( iddef,
+                     ev,
+                     Ast.Expr.Identifier
+                       (Ast.ObjIdentifier.of_string_and_index id_str
+                          debruijn_index_0) ))
+            >>= fun v -> Ok v
+        | iddef_ev_list ->
+            (* Mutual Rec *)
+            multi_step_reduce ~top_level_context ~type_constr_context
+              ~expr:
+                (Ast.Expr.LetRecMutual
+                   ( iddef_ev_list,
+                     Ast.Expr.Identifier
+                       (Ast.ObjIdentifier.of_string_and_index id_str
+                          debruijn_index_0) ))
+        (* if EvaluationContext.is_not_rec { typ; rec_preface; value } then
+             (*Substitution -- no need to worry about De Bruijn indices as there is no way they can go wrong*)
+             Ok value
+           else
+             (* Recursion: handle once together. *)
+             Ast.DeBruijnIndex.create 0 >>= fun debruijn_index ->
+             multi_step_reduce ~top_level_context ~type_constr_context
+               ~expr:
+                 (Ast.Expr.LetRec
+                    ( (Ast.ObjIdentifier.of_string id_str, typ),
+                      Ast.Value.to_expr value,
+                      Ast.Expr.Identifier
+                        (Ast.ObjIdentifier.of_string_and_index id_str
+                           debruijn_index) )) *))
   | Ast.Expr.Constant c -> Ok (Ast.Value.Constant c)
   | Ast.Expr.UnaryOp (op, expr) -> (
       multi_step_reduce ~top_level_context ~type_constr_context ~expr
@@ -841,6 +964,40 @@ let rec multi_step_reduce ~top_level_context ~type_constr_context ~expr =
       (*[v1/f]e*)
       Substitutions.substitute ev1 id e2 >>= fun ev2 ->
       multi_step_reduce ~top_level_context ~type_constr_context ~expr:ev2
+  | Ast.Expr.LetRecMutual (iddef_e_list, e2) ->
+      (*
+           Explanation: exactly the same thing as LetRec case, but with ALL the defns with it.
+           let rec f = v and g = v2 in e2  ~~~~~> [([(let rec f = v and g = v2 in f)/f; (let rec f = v and g = v2 in g)/g]v)/f; (...v2)/g]e2
+        *)
+      Ast.DeBruijnIndex.create 0 >>= fun debruijn_index_0 ->
+      (* First reduce everything and get a preface: the iddef_e_list in LetRecMutual (iddef_e_list) *)
+      List.map iddef_e_list ~f:(fun ((id, typ), e) ->
+          multi_step_reduce ~top_level_context ~type_constr_context ~expr:e
+          >>= fun v -> Ok ((id, typ), Ast.Value.to_expr v))
+      |> Or_error.combine_errors
+      >>= fun new_iddef_e_list ->
+      (* Put it back in the right order *)
+      let new_iddef_e_list = List.rev new_iddef_e_list in
+      (* \foreach v. [(let rec f = v and g = v2 in f)/f; (let rec f = v and g = v2 in g)/g]v *)
+      let iddefs, exprs =
+        List.map new_iddef_e_list ~f:(fun ((id, typ), _) ->
+            ( (id, typ),
+              Ast.Expr.LetRecMutual
+                ( new_iddef_e_list,
+                  Ast.Expr.Identifier
+                    (Ast.ObjIdentifier.of_string_and_index
+                       (Ast.ObjIdentifier.get_name id)
+                       debruijn_index_0) ) ))
+        |> List.unzip
+      in
+      List.map new_iddef_e_list ~f:(fun (_, e) ->
+          Substitutions.sim_substitute exprs iddefs e)
+      |> Or_error.combine_errors
+      >>= fun substituted_expr_list ->
+      (* [substituted_v/f; substituted_v2/g]e2 *)
+      Substitutions.sim_substitute substituted_expr_list iddefs e2
+      >>= fun ev2 ->
+      multi_step_reduce ~top_level_context ~type_constr_context ~expr:ev2
   | Ast.Expr.Box (ctx, e) -> Ok (Ast.Value.Box (ctx, e))
   | Ast.Expr.LetBox (metaid, e, e2) -> (
       multi_step_reduce ~top_level_context ~type_constr_context ~expr:e
@@ -1014,7 +1171,7 @@ let evaluate_top_level_defn ?(top_level_context = EvaluationContext.empty)
       let new_context =
         EvaluationContext.set top_level_context
           ~key:(Ast.ObjIdentifier.get_name id)
-          ~data:{ is_rec = false; typ; value = v }
+          ~data:{ rec_preface = []; typ; value = v }
       in
       let elapsed = time_elapsed_opt current_time time_exec in
 
@@ -1027,7 +1184,7 @@ let evaluate_top_level_defn ?(top_level_context = EvaluationContext.empty)
       multi_step_reduce ~top_level_context ~type_constr_context ~expr:e
       >>= fun v ->
       let new_entry : EvaluationContext.single_record =
-        { is_rec = true; typ; value = v }
+        { rec_preface = [ ((id, typ), e) ]; typ; value = v }
       in
       let key = Ast.ObjIdentifier.get_name id in
       let new_context =
@@ -1036,6 +1193,36 @@ let evaluate_top_level_defn ?(top_level_context = EvaluationContext.empty)
       let elapsed = time_elapsed_opt current_time time_exec in
       Ok
         ( TopLevelEvaluationResult.RecDefn ((id, typ), v, elapsed, None, None),
+          new_context,
+          type_constr_context )
+  | Ast.TypedTopLevelDefn.MutualRecursiveDefinition iddef_e_list ->
+      List.map iddef_e_list ~f:(fun (_, iddef, e) ->
+          let current_time = Mtime_clock.now () in
+          multi_step_reduce ~top_level_context ~type_constr_context ~expr:e
+          >>= fun v ->
+          let elapsed = time_elapsed_opt current_time time_exec in
+          Ok (iddef, v, elapsed, None, None))
+      |> Or_error.combine_errors
+      (*Get final result*)
+      >>= fun iddef_v_stats_list ->
+      (* Add to context *)
+      let iddef_v_list =
+        List.map iddef_v_stats_list ~f:(fun (iddef, v, _, _, _) -> (iddef, v))
+      in
+      let rec_preface =
+        List.map iddef_v_list ~f:(fun (iddef, v) ->
+            (iddef, Ast.Value.to_expr v))
+      in
+      let kv_pairs =
+        List.map iddef_v_list ~f:(fun ((id, typ), v) ->
+            let new_entry : EvaluationContext.single_record =
+              { rec_preface; typ; value = v }
+            in
+            (Ast.ObjIdentifier.get_name id, new_entry))
+      in
+      let new_context = EvaluationContext.set_all top_level_context kv_pairs in
+      Ok
+        ( TopLevelEvaluationResult.MutRecDefn iddef_v_stats_list,
           new_context,
           type_constr_context )
   | Ast.TypedTopLevelDefn.Expression (typ, e) ->

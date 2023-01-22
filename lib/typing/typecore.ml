@@ -306,6 +306,37 @@ and type_inference_expression meta_ctx ctx type_ctx e =
              (Ast.ObjIdentifier.show id)
              (Ast.Typ.show typ))
       >>= fun () -> type_inference_expression meta_ctx new_ctx type_ctx e2
+  | Ast.Expr.LetRecMutual (idddef_e_list, e2) ->
+      (* First get the types *)
+      let iddefs, _ = List.unzip idddef_e_list in
+      (* Then check the types are functional *)
+      List.map iddefs ~f:(fun (_, typ) ->
+          match typ with
+          | Ast.Typ.TFun (_, _) -> Ok ()
+          | _ ->
+              error
+                "TypeInferenceError: let rec declaration must have function \
+                 type."
+                () [%sexp_of: unit])
+      |> Or_error.combine_errors_unit
+      >>= fun () ->
+      let new_ctx =
+        Typing_context.ObjTypingContext.add_all_mappings ctx iddefs
+      in
+      List.map idddef_e_list ~f:(fun ((id, typ), e) ->
+          type_check_expression meta_ctx new_ctx type_ctx e typ
+          |> Or_error.tag
+               ~tag:
+                 (Printf.sprintf
+                    "TypeInferenceError: recursive variable %s is declared of \
+                     type %s but bound to an expression of a different type"
+                    (Ast.ObjIdentifier.show id)
+                    (Ast.Typ.show typ)))
+      |> Or_error.combine_errors_unit
+      |> Or_error.tag
+           ~tag:
+             "TypeInferenceError: Type error at mutually recursive declaration"
+      >>= fun () -> type_inference_expression meta_ctx new_ctx type_ctx e2
   | Ast.Expr.Box (context, e) ->
       (if box_context_contains_duplicates context then
        error
@@ -592,6 +623,25 @@ let process_top_level meta_ctx ctx type_ctx = function
           meta_ctx,
           new_ctx,
           type_ctx )
+  | Ast.TopLevelDefn.MutualRecursiveDefinition iddef_e_list ->
+      let open Or_error.Monad_infix in
+      type_check_expression meta_ctx ctx type_ctx
+        (Ast.Expr.LetRecMutual
+           (iddef_e_list, Ast.Expr.Constant Ast.Constant.Unit))
+        Ast.Typ.TUnit
+      |> Or_error.tag
+           ~tag:
+             (Printf.sprintf
+                "TypeCheckError: Type Mismatch at Mutual recursive definition \
+                 of variables [%s]"
+                (List.fold_left iddef_e_list ~init:"" ~f:(fun acc (iddef, e) ->
+                     acc ^ Ast.IdentifierDefn.show iddef ^ "; ")))
+      >>= fun () ->
+      let new_ctx = Typing_context.ObjTypingContext.add_all_mappings ctx (List.map iddef_e_list ~f:(fun (iddef, _) -> iddef))
+      in
+      Ok
+        (Ast.TypedTopLevelDefn.MutualRecursiveDefinition
+           (List.map iddef_e_list ~f:(fun ((id, typ), e) -> (typ, (id, typ), e))), meta_ctx, new_ctx, type_ctx)
   | Ast.TopLevelDefn.Directive d ->
       let new_ctx =
         if Ast.Directive.equal d Ast.Directive.Reset then

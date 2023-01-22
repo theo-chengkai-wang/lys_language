@@ -5,23 +5,36 @@ open Lys_typing
 
 (* Top level evaluation context *)
 module EvaluationContext : sig
-  type single_record = { typ : Ast.Typ.t; is_rec : bool; value : Ast.Value.t }
+  type single_record = {
+    typ : Ast.Typ.t;
+    rec_preface : (Ast.IdentifierDefn.t * Ast.Expr.t) list;
+    value : Ast.Value.t;
+  }
   [@@deriving show, sexp, compare, equal]
 
   type t = single_record String_map.t [@@deriving sexp, compare, equal]
 
   val set : t -> key:string -> data:single_record -> t
+  val set_all: t -> (string * single_record) list -> t
   val find_or_error : t -> string -> single_record Or_error.t
   val empty : t
   val show : t -> string
   val to_typing_obj_context : t -> Ast.Typ.t Typing_context.ObjTypingContext.t
+  val is_not_rec : single_record -> bool
+  val is_single_rec : single_record -> bool
+  val is_mut_rec : single_record -> bool
 end = struct
-  type single_record = { typ : Ast.Typ.t; is_rec : bool; value : Ast.Value.t }
+  type single_record = {
+    typ : Ast.Typ.t;
+    rec_preface : (Ast.IdentifierDefn.t * Ast.Expr.t) list;
+    value : Ast.Value.t;
+  }
   [@@deriving show, sexp, compare, equal]
 
   type t = single_record String_map.t [@@deriving sexp, compare, equal]
 
   let set = String_map.set
+  let set_all m kvs = List.fold kvs ~init:m ~f:(fun acc -> fun (key, data) -> String_map.set acc ~key ~data)
 
   let find_or_error map key =
     match String_map.find map key with
@@ -43,6 +56,10 @@ end = struct
            (Ast.ObjIdentifier.of_string id, record.typ))
     |> Typing_context.ObjTypingContext.add_all_mappings
          (Typing_context.ObjTypingContext.create_empty_context ())
+
+  let is_not_rec s = List.is_empty s.rec_preface
+  let is_single_rec s = 1 = List.length s.rec_preface
+  let is_mut_rec s = 1 < List.length s.rec_preface
 end
 
 module type TypeConstrContext_type = sig
@@ -189,6 +206,13 @@ module TopLevelEvaluationResult = struct
         * float option
         * int option
         * verbose option
+    | MutRecDefn of
+        (Ast.IdentifierDefn.t
+        * Ast.Value.t
+        * float option
+        * int option
+        * verbose option)
+        list
     | Directive of Ast.Directive.t * string
     | DatatypeDecl of
         Ast.TypeIdentifier.t * (Ast.Constructor.t * Ast.Typ.t option) list
@@ -265,6 +289,33 @@ module TopLevelEvaluationResult = struct
           reduction_steps_preface
           (Ast.ObjIdentifier.get_name id)
           (Ast.Typ.show typ) (Ast.Value.show v) reduction_steps_postface
+    | MutRecDefn iddef_v_time_red_verbose_list ->
+        let process_1
+            ((id, typ), v, time_elapsed_opt, reduction_steps_opt, verbose_opt) =
+          let time_preface =
+            match time_elapsed_opt with
+            | None -> ""
+            | Some time -> Printf.sprintf "Time elapsed (ns): %f\n" time
+          in
+          let reduction_steps_preface =
+            match reduction_steps_opt with
+            | None -> ""
+            | Some steps -> Printf.sprintf "Reduction steps (#): %d\n" steps
+          in
+          let reduction_steps_postface =
+            match verbose_opt with
+            | None -> ""
+            | Some v ->
+                "------------------STEPS----------------\n" ^ show_verbose v
+                ^ "\n"
+          in
+          Printf.sprintf "%s%sval rec %s:\n\t %s \n=\n\t %s\n%s" time_preface
+            reduction_steps_preface
+            (Ast.ObjIdentifier.get_name id)
+            (Ast.Typ.show typ) (Ast.Value.show v) reduction_steps_postface
+        in
+        let processed = List.map ~f:process_1 iddef_v_time_red_verbose_list in
+        String.concat ~sep:"-------------------------\nand\n" processed
     | Directive (d, message) ->
         Printf.sprintf
           "Executed directive %s\n\tMessage from the directive:\n\t %s"

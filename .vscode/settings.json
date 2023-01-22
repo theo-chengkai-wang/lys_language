@@ -1,3 +1,7 @@
 {
-    "todo-tree.tree.scanMode": "workspace only"
+    "todo-tree.tree.scanMode": "workspace only",
+    "ocaml.sandbox": {
+        "kind": "opam",
+        "switch": "4.14.0"
+    }
 }

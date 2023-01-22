@@ -9,7 +9,7 @@ type t =
 (*Show Steps and Verbose*)
 [@@deriving show, sexp]
 
-val arg_type: t Command.Arg_type.t
+val arg_type : t Command.Arg_type.t
 
 val evaluate_top_level_defns :
   ?top_level_context:EvaluationContext.t ->

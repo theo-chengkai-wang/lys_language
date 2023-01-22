@@ -531,6 +531,113 @@ let test_lift _ =
     ]
     (program |> Lexing.from_string |> parse_program)
 
+let test_mutual_recursion_defn _ =
+  let program =
+    "let rec even: int -> bool = \n\
+    \      fun (n:int) ->\n\
+    \          if (n = 0) then true else odd (n - 1)\n\
+    \  and\n\
+    \  odd: int -> bool =\n\
+    \      fun (n:int) -> if (n=0) then false else even (n-1)\n\
+    \  ;;\n\
+    \  "
+  in
+  assert_equal
+    [
+      Past.TopLevelDefn.MutualRecursiveDefinition
+        [
+          ( ("even", Past.Typ.TFun (Past.Typ.TInt, Past.Typ.TBool)),
+            Past.Expr.Lambda
+              ( ("n", Past.Typ.TInt),
+                Past.Expr.IfThenElse
+                  ( Past.Expr.BinaryOp
+                      ( Past.BinaryOperator.EQ,
+                        Past.Expr.Identifier "n",
+                        Past.Expr.Constant (Past.Constant.Integer 0) ),
+                    Past.Expr.Constant (Past.Constant.Boolean true),
+                    Past.Expr.Application
+                      ( Past.Expr.Identifier "odd",
+                        Past.Expr.BinaryOp
+                          ( Past.BinaryOperator.SUB,
+                            Past.Expr.Identifier "n",
+                            Past.Expr.Constant (Past.Constant.Integer 1) ) ) )
+              ) );
+          ( ("odd", Past.Typ.TFun (Past.Typ.TInt, Past.Typ.TBool)),
+            Past.Expr.Lambda
+              ( ("n", Past.Typ.TInt),
+                Past.Expr.IfThenElse
+                  ( Past.Expr.BinaryOp
+                      ( Past.BinaryOperator.EQ,
+                        Past.Expr.Identifier "n",
+                        Past.Expr.Constant (Past.Constant.Integer 0) ),
+                    Past.Expr.Constant (Past.Constant.Boolean false),
+                    Past.Expr.Application
+                      ( Past.Expr.Identifier "even",
+                        Past.Expr.BinaryOp
+                          ( Past.BinaryOperator.SUB,
+                            Past.Expr.Identifier "n",
+                            Past.Expr.Constant (Past.Constant.Integer 1) ) ) )
+              ) );
+        ];
+    ]
+    (program |> Lexing.from_string |> parse_program)
+
+let test_mutual_recursion_expr _ =
+  let program =
+    "let rec even: int -> bool = \n\
+    \          fun (n:int) ->\n\
+    \              if (n = 0) then true else odd (n - 1)\n\
+    \      and\n\
+    \      odd: int -> bool =\n\
+    \          fun (n:int) -> if (n=0) then false else even (n-1)\n\
+    \      in\n\
+    \      even (1);;\n\
+    \      "
+  in
+  assert_equal
+    [
+      Past.TopLevelDefn.Expression
+        (Past.Expr.LetRecMutual
+           ( [
+               ( ("even", Past.Typ.TFun (Past.Typ.TInt, Past.Typ.TBool)),
+                 Past.Expr.Lambda
+                   ( ("n", Past.Typ.TInt),
+                     Past.Expr.IfThenElse
+                       ( Past.Expr.BinaryOp
+                           ( Past.BinaryOperator.EQ,
+                             Past.Expr.Identifier "n",
+                             Past.Expr.Constant (Past.Constant.Integer 0) ),
+                         Past.Expr.Constant (Past.Constant.Boolean true),
+                         Past.Expr.Application
+                           ( Past.Expr.Identifier "odd",
+                             Past.Expr.BinaryOp
+                               ( Past.BinaryOperator.SUB,
+                                 Past.Expr.Identifier "n",
+                                 Past.Expr.Constant (Past.Constant.Integer 1) )
+                           ) ) ) );
+               ( ("odd", Past.Typ.TFun (Past.Typ.TInt, Past.Typ.TBool)),
+                 Past.Expr.Lambda
+                   ( ("n", Past.Typ.TInt),
+                     Past.Expr.IfThenElse
+                       ( Past.Expr.BinaryOp
+                           ( Past.BinaryOperator.EQ,
+                             Past.Expr.Identifier "n",
+                             Past.Expr.Constant (Past.Constant.Integer 0) ),
+                         Past.Expr.Constant (Past.Constant.Boolean false),
+                         Past.Expr.Application
+                           ( Past.Expr.Identifier "even",
+                             Past.Expr.BinaryOp
+                               ( Past.BinaryOperator.SUB,
+                                 Past.Expr.Identifier "n",
+                                 Past.Expr.Constant (Past.Constant.Integer 1) )
+                           ) ) ) );
+             ],
+             Past.Expr.Application
+               ( Past.Expr.Identifier "even",
+                 Past.Expr.Constant (Past.Constant.Integer 1) ) ));
+    ]
+    (program |> Lexing.from_string |> parse_program)
+
 (* Name the test cases and group them together *)
 let suite =
   "parsing_suite"
@@ -581,4 +688,6 @@ let suite =
          "test_datatype_definition" >:: test_datatype_definition;
          "test_match_clause" >:: test_match_clause;
          "test_lift" >:: test_lift;
+         "test_mutual_recursion_defn" >:: test_mutual_recursion_defn;
+         "test_mutual_recursion_expr" >:: test_mutual_recursion_expr;
        ]
