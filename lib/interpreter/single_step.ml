@@ -415,18 +415,54 @@ let rec reduce ~top_level_context ~type_constr_context expr =
         *)
           Ast.DeBruijnIndex.create 0 >>= fun debruijn_index_0 ->
           let iddefs, exprs = List.unzip iddef_e_list in
-          process_exprs exprs >>=
-          fun (new_es, new_vs) ->
-            if not (List.is_empty new_es) then 
-              (match List.zip iddefs new_es with
-              | List.Or_unequal_lengths.Ok zipped -> Ok (ReduceResult.ReducedToExpr (Ast.Expr.LetRecMutual (zipped, e2)))
-              | List.Or_unequal_lengths.Unequal_lengths -> Or_error.error "SingleStepReductionError: [FATAL]: at LetRecMutual, the 
-              length of the list of processed expressions is not equal to that of the id definitions, which implies a BUG in process_expr." (Ast.Expr.LetRecMutual (iddef_e_list, e2)) [%sexp_of: Ast.Expr.t]
-                )
-          else 
+          process_exprs exprs >>= fun (new_es, new_vs) ->
+          if not (List.is_empty new_es) then
+            match List.zip iddefs new_es with
+            | List.Or_unequal_lengths.Ok zipped ->
+                Ok
+                  (ReduceResult.ReducedToExpr
+                     (Ast.Expr.LetRecMutual (zipped, e2)))
+            | List.Or_unequal_lengths.Unequal_lengths ->
+                Or_error.error
+                  "SingleStepReductionError: [FATAL]: at LetRecMutual, the \n\
+                  \              length of the list of processed expressions \
+                   is not equal to that of the id definitions, which implies a \
+                   BUG in process_expr."
+                  (Ast.Expr.LetRecMutual (iddef_e_list, e2))
+                  [%sexp_of: Ast.Expr.t]
+          else
             (* in this case we get a list of values (NOT REDUCED) *)
-            new_vs |> List.map ~f:Ast.Value.to_expr |> (*TODO: finish*)
-          Or_error.unimplemented "Not implemented"
+            new_vs |> List.map ~f:Ast.Value.to_expr |> List.zip iddefs
+            |> fun iddef_e_list_or_unequal_lengths ->
+            (match iddef_e_list_or_unequal_lengths with
+            | List.Or_unequal_lengths.Unequal_lengths ->
+                Or_error.error
+                  "SingleStepReductionError: [FATAL]: at LetRecMutual, the \n\
+                  \              length of the list of processed expressions \
+                   is not equal to that of the id definitions, which implies a \
+                   BUG in process_expr."
+                  (Ast.Expr.LetRecMutual (iddef_e_list, e2))
+                  [%sexp_of: Ast.Expr.t]
+            | List.Or_unequal_lengths.Ok new_iddef_e_list -> Ok new_iddef_e_list)
+            >>= fun new_iddef_e_list ->
+            let iddefs, exprs =
+              List.map new_iddef_e_list ~f:(fun ((id, typ), _) ->
+                  ( (id, typ),
+                    Ast.Expr.LetRecMutual
+                      ( new_iddef_e_list,
+                        Ast.Expr.Identifier
+                          (Ast.ObjIdentifier.of_string_and_index
+                             (Ast.ObjIdentifier.get_name id)
+                             debruijn_index_0) ) ))
+              |> List.unzip
+            in
+            List.map new_iddef_e_list ~f:(fun (_, e) ->
+                Substitutions.sim_substitute exprs iddefs e)
+            |> Or_error.combine_errors
+            >>= fun substituted_expr_list ->
+            (* [substituted_v/f; substituted_v2/g]e2 *)
+            Substitutions.sim_substitute substituted_expr_list iddefs e2
+            >>= fun ev2 -> Ok (ReduceResult.ReducedToExpr ev2)
       | Ast.Expr.Box (ctx, e) ->
           Ok (ReduceResult.NotReduced (Ast.Value.Box (ctx, e)))
       | Ast.Expr.LetBox (metaid, e, e2) ->
@@ -705,6 +741,40 @@ let evaluate_top_level_defn ?(top_level_context = EvaluationContext.empty)
         ( TopLevelEvaluationResult.ExprValue
             (typ, v, None, count_opt, verbose_opt),
           top_level_context,
+          type_constr_context )
+  | Ast.TypedTopLevelDefn.MutualRecursiveDefinition iddef_e_list ->
+      List.map iddef_e_list ~f:(fun (_, iddef, e) ->
+          multi_step_reduce ~top_level_context ~type_constr_context ~verbose e
+          >>= fun (v, count, verbose_opt) ->
+            let count_opt = if show_step_count then Some count else None in
+            let verbose_opt =
+              let open Option.Monad_infix in
+              verbose_opt >>= fun steps ->
+              Some { Interpreter_common.TopLevelEvaluationResult.steps }
+              in
+            Ok (iddef, v, None, count_opt, verbose_opt))
+      |> Or_error.combine_errors
+      (*Get final result*)
+      >>= fun iddef_v_stats_list ->
+      (* Add to context *)
+      let iddef_v_list =
+        List.map iddef_v_stats_list ~f:(fun (iddef, v, _, _, _) -> (iddef, v))
+      in
+      let rec_preface =
+        List.map iddef_v_list ~f:(fun (iddef, v) ->
+            (iddef, Ast.Value.to_expr v))
+      in
+      let kv_pairs =
+        List.map iddef_v_list ~f:(fun ((id, typ), v) ->
+            let new_entry : EvaluationContext.single_record =
+              { rec_preface; typ; value = v }
+            in
+            (Ast.ObjIdentifier.get_name id, new_entry))
+      in
+      let new_context = EvaluationContext.set_all top_level_context kv_pairs in
+      Ok
+        ( TopLevelEvaluationResult.MutRecDefn iddef_v_stats_list,
+          new_context,
           type_constr_context )
   | Ast.TypedTopLevelDefn.Directive d -> (
       match d with
