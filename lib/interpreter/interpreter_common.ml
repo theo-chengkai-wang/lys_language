@@ -15,7 +15,7 @@ module EvaluationContext : sig
   type t = single_record String_map.t [@@deriving sexp, compare, equal]
 
   val set : t -> key:string -> data:single_record -> t
-  val set_all: t -> (string * single_record) list -> t
+  val set_all : t -> (string * single_record) list -> t
   val find_or_error : t -> string -> single_record Or_error.t
   val empty : t
   val show : t -> string
@@ -34,7 +34,10 @@ end = struct
   type t = single_record String_map.t [@@deriving sexp, compare, equal]
 
   let set = String_map.set
-  let set_all m kvs = List.fold kvs ~init:m ~f:(fun acc -> fun (key, data) -> String_map.set acc ~key ~data)
+
+  let set_all m kvs =
+    List.fold kvs ~init:m ~f:(fun acc (key, data) ->
+        String_map.set acc ~key ~data)
 
   let find_or_error map key =
     match String_map.find map key with
@@ -215,7 +218,8 @@ module TopLevelEvaluationResult = struct
         list
     | Directive of Ast.Directive.t * string
     | DatatypeDecl of
-        Ast.TypeIdentifier.t * (Ast.Constructor.t * Ast.Typ.t option) list
+        (Ast.TypeIdentifier.t * (Ast.Constructor.t * Ast.Typ.t option) list)
+        list
   [@@deriving sexp, compare, equal, show]
 
   let get_str_output res =
@@ -320,18 +324,24 @@ module TopLevelEvaluationResult = struct
         Printf.sprintf
           "Executed directive %s\n\tMessage from the directive:\n\t %s"
           (Ast.Directive.show d) message
-    | DatatypeDecl (tid, constr_typ_list) ->
-        let init =
-          Printf.sprintf "datatype %s = \n" (Ast.TypeIdentifier.get_name tid)
+    | DatatypeDecl id_constr_typ_list_list ->
+        let process_single_decl (tid, constr_typ_list) =
+          let init =
+            Printf.sprintf "datatype %s = \n" (Ast.TypeIdentifier.get_name tid)
+          in
+          List.fold constr_typ_list ~init ~f:(fun acc (constr, typ_opt) ->
+              acc
+              ^
+              match typ_opt with
+              | None ->
+                  Printf.sprintf "\t| %s\n" (Ast.Constructor.get_name constr)
+              | Some typ ->
+                  Printf.sprintf "\t| %s of\n\t\t%s\n"
+                    (Ast.Constructor.get_name constr)
+                    (Ast.Typ.show typ))
         in
-        List.fold constr_typ_list ~init ~f:(fun acc (constr, typ_opt) ->
-            acc
-            ^
-            match typ_opt with
-            | None ->
-                Printf.sprintf "\t| %s\n" (Ast.Constructor.get_name constr)
-            | Some typ ->
-                Printf.sprintf "\t| %s of\n\t\t%s\n"
-                  (Ast.Constructor.get_name constr)
-                  (Ast.Typ.show typ))
+        List.fold id_constr_typ_list_list ~init:""
+          ~f:(fun acc (tid, constr_typ_list) ->
+            let single_str = process_single_decl (tid, constr_typ_list) in
+            acc ^ "and " ^ single_str)
 end

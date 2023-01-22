@@ -550,6 +550,34 @@ let generate_tests_for_interpreter interpreter =
                 ]))
           (List.last results)
   in
+  let test_datatype_mutually_recursive _ =
+    let program =
+      "datatype sometype = A of int | B of sometype | C of (othertype)\n\
+      \      and othertype = D | E of (sometype);;      \n\
+      \      E (C (D));;\n\
+      \      "
+    in
+    let res_opt = exec_program interpreter program in
+    match res_opt with
+    | None -> assert_string "Program Execution Failed"
+    | Some results ->
+        assert_equal
+          (Some
+             (Interpreter_common.TopLevelEvaluationResult.ExprValue
+                ( Ast.Typ.TIdentifier (Ast.TypeIdentifier.of_string "othertype"),
+                  Ast.Value.Constr
+                    ( Ast.Constructor.of_string "E",
+                      Some
+                        (Ast.Value.Constr
+                           ( Ast.Constructor.of_string "C",
+                             Some
+                               (Ast.Value.Constr
+                                  (Ast.Constructor.of_string "D", None)) )) ),
+                  None,
+                  None,
+                  None )))
+          (List.last results)
+  in
   let interpreter_suite =
     "interpreter_main_suite"
     >::: [
@@ -569,6 +597,7 @@ let generate_tests_for_interpreter interpreter =
            "test_mutual_recursive_function_defn_then_exec"
            >:: test_mutual_recursive_function_defn_then_exec;
            "test_mutual_recursion_defn" >:: test_mutual_recursion_defn;
+           "test_datatype_mutually_recursive" >:: test_datatype_mutually_recursive;
          ]
   in
   let test_intlist_map _ =

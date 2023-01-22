@@ -149,14 +149,17 @@ single_rec: decl = id_typ_declaration EQ e1 = expr {(decl, e1)}
 mutual_rec:
     | LET REC r = single_rec "and" l=separated_nonempty_list("and", single_rec) {r::l}
 
+datatype_decl:
+    | i = identifier EQ l = separated_nonempty_list ("|", datatype_decl_clause) {(i, l)}
+    | i = identifier {(i,[])}
+
 top_level:
     | d = directive {TopLevelDefn.Directive d}
     | LET decl = id_typ_declaration EQ e1 = expr {TopLevelDefn.Definition (decl, e1)}
     | LET REC r = single_rec {let (decl, e1) = r in TopLevelDefn.RecursiveDefinition (decl, e1)}
     | m = mutual_rec {TopLevelDefn.MutualRecursiveDefinition (m)}
     | e = expr {TopLevelDefn.Expression e}
-    | DATATYPE i = identifier EQ l = separated_nonempty_list ("|", datatype_decl_clause) {TopLevelDefn.DatatypeDecl (i, l)}
-    | DATATYPE i = identifier {TopLevelDefn.DatatypeDecl (i,[])}
+    | DATATYPE decl_list = separated_nonempty_list("and", datatype_decl) {TopLevelDefn.DatatypeDecl (decl_list)}
 
 directive:
     | DIR_ENV {Directive.Env}

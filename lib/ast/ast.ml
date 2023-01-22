@@ -990,7 +990,8 @@ and TopLevelDefn : sig
     | MutualRecursiveDefinition of (IdentifierDefn.t * Expr.t) list
     | Expression of Expr.t
     | Directive of Directive.t
-    | DatatypeDecl of TypeIdentifier.t * (Constructor.t * Typ.t option) list
+    | DatatypeDecl of
+        (TypeIdentifier.t * (Constructor.t * Typ.t option) list) list
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.TopLevelDefn.t -> t
@@ -1002,7 +1003,8 @@ end = struct
     | MutualRecursiveDefinition of (IdentifierDefn.t * Expr.t) list
     | Expression of Expr.t
     | Directive of Directive.t
-    | DatatypeDecl of TypeIdentifier.t * (Constructor.t * Typ.t option) list
+    | DatatypeDecl of
+        (TypeIdentifier.t * (Constructor.t * Typ.t option) list) list
   [@@deriving sexp, show, compare, equal]
 
   let of_past = function
@@ -1016,14 +1018,17 @@ end = struct
                (IdentifierDefn.of_past iddef, Expr.of_past e)))
     | Past.TopLevelDefn.Expression e -> Expression (Expr.of_past e)
     | Past.TopLevelDefn.Directive d -> Directive (Directive.of_past d)
-    | Past.TopLevelDefn.DatatypeDecl (id, constr_typ_list) ->
-        DatatypeDecl
-          ( TypeIdentifier.of_past id,
-            List.map constr_typ_list ~f:(fun (constr, typ) ->
-                match typ with
-                | None -> (Constructor.of_past constr, None)
-                | Some typ ->
-                    (Constructor.of_past constr, Some (Typ.of_past typ))) )
+    | Past.TopLevelDefn.DatatypeDecl id_constr_typ_list_list ->
+        let new_id_contr_typ_list_list =
+          List.map id_constr_typ_list_list ~f:(fun (id, constr_typ_list) ->
+              ( TypeIdentifier.of_past id,
+                List.map constr_typ_list ~f:(fun (constr, typ) ->
+                    match typ with
+                    | None -> (Constructor.of_past constr, None)
+                    | Some typ ->
+                        (Constructor.of_past constr, Some (Typ.of_past typ))) ))
+        in
+        DatatypeDecl new_id_contr_typ_list_list
 end
 
 and Program : sig
@@ -1043,7 +1048,8 @@ module TypedTopLevelDefn : sig
     | MutualRecursiveDefinition of (Typ.t * IdentifierDefn.t * Expr.t) list
     | Expression of Typ.t * Expr.t
     | Directive of Directive.t
-    | DatatypeDecl of TypeIdentifier.t * (Constructor.t * Typ.t option) list
+    | DatatypeDecl of
+        (TypeIdentifier.t * (Constructor.t * Typ.t option) list) list
   [@@deriving sexp, show, compare, equal]
 
   val populate_index : t -> t Or_error.t
@@ -1056,7 +1062,8 @@ end = struct
     | MutualRecursiveDefinition of (Typ.t * IdentifierDefn.t * Expr.t) list
     | Expression of Typ.t * Expr.t
     | Directive of Directive.t
-    | DatatypeDecl of TypeIdentifier.t * (Constructor.t * Typ.t option) list
+    | DatatypeDecl of
+        (TypeIdentifier.t * (Constructor.t * Typ.t option) list) list
   [@@deriving sexp, show, compare, equal]
 
   let populate_index typed_defn =
@@ -1098,8 +1105,8 @@ end = struct
           ~current_meta_identifiers:String_map.empty
         >>= fun expr -> Ok (Expression (typ, expr))
     | Directive d -> Ok (Directive d)
-    | DatatypeDecl (tid, constr_typ_list) ->
-        Ok (DatatypeDecl (tid, constr_typ_list))
+    | DatatypeDecl id_constr_typ_list_list ->
+        Ok (DatatypeDecl id_constr_typ_list_list)
 
   let convert_from_untyped_without_typecheck = function
     | TopLevelDefn.Definition (iddef, e) -> Definition (Typ.TUnit, iddef, e)
@@ -1110,8 +1117,8 @@ end = struct
           (List.map ~f:(fun (iddef, e) -> (Typ.TUnit, iddef, e)) iddef_e_list)
     | TopLevelDefn.Expression e -> Expression (Typ.TUnit, e)
     | TopLevelDefn.Directive d -> Directive d
-    | TopLevelDefn.DatatypeDecl (id, constr_typ_list) ->
-        DatatypeDecl (id, constr_typ_list)
+    | TopLevelDefn.DatatypeDecl id_constr_typ_list_list ->
+        DatatypeDecl id_constr_typ_list_list
 end
 
 module TypedProgram : sig

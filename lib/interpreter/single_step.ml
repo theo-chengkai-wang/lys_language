@@ -746,13 +746,13 @@ let evaluate_top_level_defn ?(top_level_context = EvaluationContext.empty)
       List.map iddef_e_list ~f:(fun (_, iddef, e) ->
           multi_step_reduce ~top_level_context ~type_constr_context ~verbose e
           >>= fun (v, count, verbose_opt) ->
-            let count_opt = if show_step_count then Some count else None in
-            let verbose_opt =
-              let open Option.Monad_infix in
-              verbose_opt >>= fun steps ->
-              Some { Interpreter_common.TopLevelEvaluationResult.steps }
-              in
-            Ok (iddef, v, None, count_opt, verbose_opt))
+          let count_opt = if show_step_count then Some count else None in
+          let verbose_opt =
+            let open Option.Monad_infix in
+            verbose_opt >>= fun steps ->
+            Some { Interpreter_common.TopLevelEvaluationResult.steps }
+          in
+          Ok (iddef, v, None, count_opt, verbose_opt))
       |> Or_error.combine_errors
       (*Get final result*)
       >>= fun iddef_v_stats_list ->
@@ -808,11 +808,14 @@ let evaluate_top_level_defn ?(top_level_context = EvaluationContext.empty)
             ( TopLevelEvaluationResult.Directive (d, message),
               new_env,
               type_constr_context ))
-  | Ast.TypedTopLevelDefn.DatatypeDecl (tid, constructor_type_list) ->
-      TypeConstrContext.add_typ_from_decl type_constr_context
-        (tid, constructor_type_list)
+  | Ast.TypedTopLevelDefn.DatatypeDecl id_constr_typ_list_list ->
+      List.fold id_constr_typ_list_list ~init:(Ok type_constr_context)
+        ~f:(fun acc (tid, constructor_type_list) ->
+          acc >>= fun new_typ_ctx ->
+          TypeConstrContext.add_typ_from_decl new_typ_ctx
+            (tid, constructor_type_list))
       >>= fun new_typ_context ->
       Ok
-        ( TopLevelEvaluationResult.DatatypeDecl (tid, constructor_type_list),
+        ( TopLevelEvaluationResult.DatatypeDecl id_constr_typ_list_list,
           top_level_context,
           new_typ_context )

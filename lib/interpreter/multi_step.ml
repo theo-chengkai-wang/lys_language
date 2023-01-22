@@ -690,12 +690,15 @@ let evaluate_top_level_defn_with_step_count
             ( TopLevelEvaluationResult.Directive (d, message),
               new_env,
               type_constr_context ))
-  | Ast.TypedTopLevelDefn.DatatypeDecl (tid, constructor_type_list) ->
-      TypeConstrContext.add_typ_from_decl type_constr_context
-        (tid, constructor_type_list)
+  | Ast.TypedTopLevelDefn.DatatypeDecl id_constr_typ_list_list ->
+      List.fold id_constr_typ_list_list ~init:(Ok type_constr_context)
+        ~f:(fun acc (tid, constructor_type_list) ->
+          acc >>= fun new_typ_ctx ->
+          TypeConstrContext.add_typ_from_decl new_typ_ctx
+            (tid, constructor_type_list))
       >>= fun new_typ_context ->
       Ok
-        ( TopLevelEvaluationResult.DatatypeDecl (tid, constructor_type_list),
+        ( TopLevelEvaluationResult.DatatypeDecl id_constr_typ_list_list,
           top_level_context,
           new_typ_context )
 
@@ -1266,11 +1269,14 @@ let evaluate_top_level_defn ?(top_level_context = EvaluationContext.empty)
             ( TopLevelEvaluationResult.Directive (d, message),
               new_env,
               type_constr_context ))
-  | Ast.TypedTopLevelDefn.DatatypeDecl (tid, constructor_type_list) ->
-      TypeConstrContext.add_typ_from_decl type_constr_context
-        (tid, constructor_type_list)
+  | Ast.TypedTopLevelDefn.DatatypeDecl id_constr_typ_list_list ->
+      List.fold id_constr_typ_list_list ~init:(Ok type_constr_context)
+        ~f:(fun acc (tid, constructor_type_list) ->
+          acc >>= fun new_typ_ctx ->
+          TypeConstrContext.add_typ_from_decl new_typ_ctx
+            (tid, constructor_type_list))
       >>= fun new_typ_context ->
       Ok
-        ( TopLevelEvaluationResult.DatatypeDecl (tid, constructor_type_list),
+        ( TopLevelEvaluationResult.DatatypeDecl id_constr_typ_list_list,
           top_level_context,
           new_typ_context )
