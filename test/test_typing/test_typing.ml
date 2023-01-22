@@ -300,7 +300,24 @@ let test_datatypes _ =
   assert_bool "Type check hasn't failed"
     (Option.is_some (type_check_program_from_str program))
 
-let adt_suite = "adt_suite" >::: [ "test_datatypes" >:: test_datatypes ]
+let test_datatypes_mutually_recursive _ =
+  let program =
+    "datatype sometype = A of int | B of sometype | C of (othertype)\n\
+    \  and othertype = D | E of (sometype);;\n\
+    \  \n\
+    \  A (1);;\n\
+    \  \n\
+    \  B (A (1));;\n\
+    \  \n\
+    \  C (D);;\n\
+    \  \n\
+    \  E (C (D));;\n\
+    \  "
+  in
+  assert_bool "Type check hasn't failed"
+    (Option.is_some (type_check_program_from_str program))
+
+let adt_suite = "adt_suite" >::: [ "test_datatypes" >:: test_datatypes; "test_datatypes_mutually_recursive" >:: test_datatypes_mutually_recursive ]
 
 let suite =
   "typing_suite"

@@ -202,7 +202,7 @@ and TopLevelDefn : sig
     | MutualRecursiveDefinition of (IdentifierDefn.t * Expr.t) list
     | Expression of Expr.t
     | Directive of Directive.t
-    | DatatypeDecl of Identifier.t * (Constructor.t * Typ.t option) list
+    | DatatypeDecl of (Identifier.t * (Constructor.t * Typ.t option) list) list
   [@@deriving sexp, show, equal, compare]
 end = struct
   type t =
@@ -211,7 +211,7 @@ end = struct
     | MutualRecursiveDefinition of (IdentifierDefn.t * Expr.t) list
     | Expression of Expr.t
     | Directive of Directive.t
-    | DatatypeDecl of Identifier.t * (Constructor.t * Typ.t option) list
+    | DatatypeDecl of (Identifier.t * (Constructor.t * Typ.t option) list) list
   [@@deriving sexp, show, equal, compare]
 end
 

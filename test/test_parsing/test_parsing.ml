@@ -463,15 +463,17 @@ let test_datatype_def _ =
   assert_equal
     [
       Past.TopLevelDefn.DatatypeDecl
-        ( "sometype",
-          [
-            ("Con1", Some Past.Typ.TInt);
-            ("Con3", Some Past.Typ.TUnit);
-            ( "Con4",
-              Some
-                (Past.Typ.TProd
-                   [ Past.Typ.TInt; Past.Typ.TIdentifier "sometype" ]) );
-          ] );
+        [
+          ( "sometype",
+            [
+              ("Con1", Some Past.Typ.TInt);
+              ("Con3", Some Past.Typ.TUnit);
+              ( "Con4",
+                Some
+                  (Past.Typ.TProd
+                     [ Past.Typ.TInt; Past.Typ.TIdentifier "sometype" ]) );
+            ] );
+        ];
     ]
     (parse_program
        (Lexing.from_string
@@ -637,6 +639,26 @@ let test_mutual_recursion_expr _ =
                  Past.Expr.Constant (Past.Constant.Integer 1) ) ));
     ]
     (program |> Lexing.from_string |> parse_program)
+
+let test_mutual_recursive_datatype _ =
+  assert_equal
+    [
+      Past.TopLevelDefn.DatatypeDecl
+        [
+          ( "sometype",
+            [
+              ("A", Some Past.Typ.TInt);
+              ("B", Some (Past.Typ.TIdentifier "sometype"));
+              ("C", Some (Past.Typ.TIdentifier "othertype"));
+            ] );
+          ( "othertype",
+            [ ("D", None); ("E", Some (Past.Typ.TIdentifier "sometype")) ] );
+        ];
+    ]
+    (parse_program
+       (Lexing.from_string
+          "datatype sometype = A of int | B of sometype | C of (othertype)\n\
+          \          and othertype = D | E of (sometype);;"))
 
 (* Name the test cases and group them together *)
 let suite =

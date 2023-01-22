@@ -229,7 +229,7 @@ and TopLevelDefn : sig
     | MutualRecursiveDefinition of (IdentifierDefn.t * Expr.t) list
     | Expression of Expr.t
     | Directive of Directive.t
-    | DatatypeDecl of TypeIdentifier.t * (Constructor.t * Typ.t option) list
+    | DatatypeDecl of (TypeIdentifier.t * (Constructor.t * Typ.t option) list) list
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.TopLevelDefn.t -> t
@@ -248,7 +248,7 @@ module TypedTopLevelDefn : sig
     | MutualRecursiveDefinition of (Typ.t * IdentifierDefn.t * Expr.t) list
     | Expression of Typ.t * Expr.t
     | Directive of Directive.t
-    | DatatypeDecl of TypeIdentifier.t * (Constructor.t * Typ.t option) list
+    | DatatypeDecl of (TypeIdentifier.t * (Constructor.t * Typ.t option) list) list
   [@@deriving sexp, show, compare, equal]
 
   val populate_index : t -> t Or_error.t

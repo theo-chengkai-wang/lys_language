@@ -634,14 +634,20 @@ let process_top_level meta_ctx ctx type_ctx = function
              (Printf.sprintf
                 "TypeCheckError: Type Mismatch at Mutual recursive definition \
                  of variables [%s]"
-                (List.fold_left iddef_e_list ~init:"" ~f:(fun acc (iddef, e) ->
+                (List.fold_left iddef_e_list ~init:"" ~f:(fun acc (iddef, _) ->
                      acc ^ Ast.IdentifierDefn.show iddef ^ "; ")))
       >>= fun () ->
-      let new_ctx = Typing_context.ObjTypingContext.add_all_mappings ctx (List.map iddef_e_list ~f:(fun (iddef, _) -> iddef))
+      let new_ctx =
+        Typing_context.ObjTypingContext.add_all_mappings ctx
+          (List.map iddef_e_list ~f:(fun (iddef, _) -> iddef))
       in
       Ok
-        (Ast.TypedTopLevelDefn.MutualRecursiveDefinition
-           (List.map iddef_e_list ~f:(fun ((id, typ), e) -> (typ, (id, typ), e))), meta_ctx, new_ctx, type_ctx)
+        ( Ast.TypedTopLevelDefn.MutualRecursiveDefinition
+            (List.map iddef_e_list ~f:(fun ((id, typ), e) ->
+                 (typ, (id, typ), e))),
+          meta_ctx,
+          new_ctx,
+          type_ctx )
   | Ast.TopLevelDefn.Directive d ->
       let new_ctx =
         if Ast.Directive.equal d Ast.Directive.Reset then
@@ -653,13 +659,16 @@ let process_top_level meta_ctx ctx type_ctx = function
       let open Or_error.Monad_infix in
       type_inference_expression meta_ctx ctx type_ctx e >>= fun typ ->
       Ok (Ast.TypedTopLevelDefn.Expression (typ, e), meta_ctx, ctx, type_ctx)
-  | Ast.TopLevelDefn.DatatypeDecl (tid, constr_typ_list) ->
+  | Ast.TopLevelDefn.DatatypeDecl id_constr_typ_list_list ->
       let open Or_error.Monad_infix in
-      Typing_context.TypeConstrTypingContext.add_typ_from_decl type_ctx
-        (tid, constr_typ_list)
+      List.fold id_constr_typ_list_list ~init:(Ok type_ctx)
+        ~f:(fun acc (tid, constr_typ_list) ->
+          acc >>= fun running_type_ctx ->
+          Typing_context.TypeConstrTypingContext.add_typ_from_decl
+            running_type_ctx (tid, constr_typ_list))
       >>= fun new_type_ctx ->
       Ok
-        ( Ast.TypedTopLevelDefn.DatatypeDecl (tid, constr_typ_list),
+        ( Ast.TypedTopLevelDefn.DatatypeDecl id_constr_typ_list_list,
           meta_ctx,
           ctx,
           new_type_ctx )

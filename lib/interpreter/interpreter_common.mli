@@ -85,7 +85,8 @@ module TopLevelEvaluationResult : sig
         list
     | Directive of Ast.Directive.t * string
     | DatatypeDecl of
-        Ast.TypeIdentifier.t * (Ast.Constructor.t * Ast.Typ.t option) list
+        (Ast.TypeIdentifier.t * (Ast.Constructor.t * Ast.Typ.t option) list)
+        list
   [@@deriving sexp, compare, equal, show]
 
   val get_str_output : t -> string
