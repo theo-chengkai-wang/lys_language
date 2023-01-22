@@ -35,11 +35,38 @@ end
 
 let rec reduce ~top_level_context ~type_constr_context expr =
   let open Or_error.Monad_infix in
+  let rec process_exprs = function
+    (*
+      Utility function: 
+      Given a list expressions, reduce one by one from left to right.  
+      if reduced, then get a left list of expressions reduced up to the last reduced value; else get the right list of values
+    *)
+    (*Left list = reduced to expr or val;  right list = not reduced*)
+    | [] -> Ok ([], [])
+    | e :: es ->
+        reduce ~top_level_context ~type_constr_context e >>= fun res ->
+        ReduceResult.process res
+          ~reduced:(fun new_e -> Ok (new_e :: es, []))
+          ~not_reduced:(fun new_v ->
+            process_exprs es >>= fun (new_es, new_vs) ->
+            if List.is_empty new_es then Ok ([], new_v :: new_vs)
+            else Ok (Ast.Value.to_expr new_v :: new_es, []))
+  in
+  let rec convert_to_values exprs =
+    (*Utility: Convert list of expressions into values if it's a list of values, if not give None*)
+    match exprs with
+    | [] -> Some []
+    | e :: es ->
+        let open Option.Monad_infix in
+        Ast.Expr.to_val e >>= fun v ->
+        convert_to_values es >>= fun vs -> Some (v :: vs)
+  in
+
   match Ast.Expr.to_val expr with
   | Some v -> Ok (ReduceResult.NotReduced v)
   | None -> (
       match expr with
-      | Ast.Expr.Identifier id ->
+      | Ast.Expr.Identifier id -> (
           (*No error if we're dealing with sth at top level context, otherwise error*)
           let index = Ast.ObjIdentifier.get_debruijn_index id in
           if not (Ast.DeBruijnIndex.equal index Ast.DeBruijnIndex.top_level)
@@ -53,21 +80,41 @@ let rec reduce ~top_level_context ~type_constr_context expr =
           else
             let id_str = Ast.ObjIdentifier.get_name id in
             EvaluationContext.find_or_error top_level_context id_str
-            >>= fun { typ; rec_preface; value } ->
-            if EvaluationContext.is_not_rec { typ; rec_preface; value } then
-              (*Substitution -- no need to worry about De Bruijn indices as there is no way they can go wrong*)
-              Ok (ReduceResult.ReducedToVal value)
-            else
-              (* Recursion: handle once together. *)
-              Ast.DeBruijnIndex.create 0 >>= fun debruijn_index ->
-              Ok
-                (ReduceResult.ReducedToExpr
-                   (Ast.Expr.LetRec
-                      ( (Ast.ObjIdentifier.of_string id_str, typ),
-                        Ast.Value.to_expr value,
-                        Ast.Expr.Identifier
-                          (Ast.ObjIdentifier.of_string_and_index id_str
-                             debruijn_index) )))
+            >>= fun { rec_preface; value; _ } ->
+            (* if EvaluationContext.is_not_rec { typ; rec_preface; value } then
+                 (*Substitution -- no need to worry about De Bruijn indices as there is no way they can go wrong*)
+                 Ok (ReduceResult.ReducedToVal value)
+               else
+                 (* Recursion: handle once together. *)
+                 Ast.DeBruijnIndex.create 0 >>= fun debruijn_index ->
+                 Ok
+                   (ReduceResult.ReducedToExpr
+                      (Ast.Expr.LetRec
+                         ( (Ast.ObjIdentifier.of_string id_str, typ),
+                           Ast.Value.to_expr value,
+                           Ast.Expr.Identifier
+                             (Ast.ObjIdentifier.of_string_and_index id_str
+                                debruijn_index) ))) *)
+            Ast.DeBruijnIndex.create 0 >>= fun debruijn_index_0 ->
+            match rec_preface with
+            | [] -> Ok (ReduceResult.ReducedToVal value)
+            | [ (iddef, ev) ] ->
+                Ok
+                  (ReduceResult.ReducedToExpr
+                     (Ast.Expr.LetRec
+                        ( iddef,
+                          ev,
+                          Ast.Expr.Identifier
+                            (Ast.ObjIdentifier.of_string_and_index id_str
+                               debruijn_index_0) )))
+            | iddef_ev_list ->
+                Ok
+                  (ReducedToExpr
+                     (Ast.Expr.LetRecMutual
+                        ( iddef_ev_list,
+                          Ast.Expr.Identifier
+                            (Ast.ObjIdentifier.of_string_and_index id_str
+                               debruijn_index_0) ))))
       | Ast.Expr.Constant c ->
           (*Constants don't reduce*)
           Ok (ReduceResult.NotReduced (Ast.Value.Constant c))
@@ -198,31 +245,11 @@ let rec reduce ~top_level_context ~type_constr_context expr =
                         (Ast.Expr.BinaryOp (op, expr1, expr2))
                         [%sexp_of: Ast.Expr.t]))
       | Ast.Expr.Prod exprs -> (
-          let rec process_exprs = function
-            (*Left list = reduced to expr;  middle list = reduced to value; right list = not reduced*)
-            | [] -> Ok ([], [])
-            | e :: es ->
-                reduce ~top_level_context ~type_constr_context e >>= fun res ->
-                ReduceResult.process res
-                  ~reduced:(fun new_e -> Ok (new_e :: es, []))
-                  ~not_reduced:(fun new_v ->
-                    process_exprs es >>= fun (new_es, new_vs) ->
-                    if List.is_empty new_es then Ok ([], new_v :: new_vs)
-                    else Ok (Ast.Value.to_expr new_v :: new_es, []))
-          in
           process_exprs exprs >>= fun (new_es, new_vs) ->
           if List.is_empty new_es then
             Ok (ReduceResult.NotReduced (Ast.Value.Prod new_vs))
           else
             (* Check if all are values *)
-            let rec convert_to_values exprs =
-              match exprs with
-              | [] -> Some []
-              | e :: es ->
-                  let open Option.Monad_infix in
-                  Ast.Expr.to_val e >>= fun v ->
-                  convert_to_values es >>= fun vs -> Some (v :: vs)
-            in
             match convert_to_values new_es with
             | None -> Ok (ReduceResult.ReducedToExpr (Ast.Expr.Prod new_es))
             | Some vs -> Ok (ReduceResult.ReducedToVal (Ast.Value.Prod vs)))
@@ -381,6 +408,25 @@ let rec reduce ~top_level_context ~type_constr_context expr =
               (*[v1/f]e*)
               Substitutions.substitute ev1 id e2 >>= fun ev2 ->
               Ok (ReduceResult.ReducedToExpr ev2))
+      | Ast.Expr.LetRecMutual (iddef_e_list, e2) ->
+          (*
+           Explanation: exactly the same thing as LetRec case, but with ALL the defns with it.
+           let rec f = v and g = v2 in e2  ~~~~~> [([(let rec f = v and g = v2 in f)/f; (let rec f = v and g = v2 in g)/g]v)/f; (...v2)/g]e2
+        *)
+          Ast.DeBruijnIndex.create 0 >>= fun debruijn_index_0 ->
+          let iddefs, exprs = List.unzip iddef_e_list in
+          process_exprs exprs >>=
+          fun (new_es, new_vs) ->
+            if not (List.is_empty new_es) then 
+              (match List.zip iddefs new_es with
+              | List.Or_unequal_lengths.Ok zipped -> Ok (ReduceResult.ReducedToExpr (Ast.Expr.LetRecMutual (zipped, e2)))
+              | List.Or_unequal_lengths.Unequal_lengths -> Or_error.error "SingleStepReductionError: [FATAL]: at LetRecMutual, the 
+              length of the list of processed expressions is not equal to that of the id definitions, which implies a BUG in process_expr." (Ast.Expr.LetRecMutual (iddef_e_list, e2)) [%sexp_of: Ast.Expr.t]
+                )
+          else 
+            (* in this case we get a list of values (NOT REDUCED) *)
+            new_vs |> List.map ~f:Ast.Value.to_expr |> (*TODO: finish*)
+          Or_error.unimplemented "Not implemented"
       | Ast.Expr.Box (ctx, e) ->
           Ok (ReduceResult.NotReduced (Ast.Value.Box (ctx, e)))
       | Ast.Expr.LetBox (metaid, e, e2) ->
@@ -586,7 +632,7 @@ let multi_step_reduce ~top_level_context ~type_constr_context ?(verbose = false)
     multi_step_reduce_aux ~top_level_context ~type_constr_context
       ~steps_reversed:[ expr ] expr
     >>= fun (v, expr_list) ->
-    Ok (v, (List.length expr_list) - 1, Some (List.rev expr_list))
+    Ok (v, List.length expr_list - 1, Some (List.rev expr_list))
   else
     let rec multi_step_reduce_aux ~top_level_context ~type_constr_context ~count
         expr =
@@ -602,8 +648,8 @@ let multi_step_reduce ~top_level_context ~type_constr_context ?(verbose = false)
     >>= fun (v, c) -> Ok (v, c, None)
 
 let evaluate_top_level_defn ?(top_level_context = EvaluationContext.empty)
-    ?(type_constr_context = TypeConstrContext.empty) ?(show_step_count = false) ?(verbose=false)
-    top_level_defn =
+    ?(type_constr_context = TypeConstrContext.empty) ?(show_step_count = false)
+    ?(verbose = false) top_level_defn =
   let open Or_error.Monad_infix in
   match top_level_defn with
   | Ast.TypedTopLevelDefn.Definition (typ, (id, _), e) ->
@@ -629,7 +675,7 @@ let evaluate_top_level_defn ?(top_level_context = EvaluationContext.empty)
       multi_step_reduce ~top_level_context ~type_constr_context ~verbose e
       >>= fun (v, count, steps_opt) ->
       let new_entry : EvaluationContext.single_record =
-        { rec_preface = [((id, typ), Ast.Value.to_expr v)]; typ; value = v }
+        { rec_preface = [ ((id, typ), Ast.Value.to_expr v) ]; typ; value = v }
       in
       let count_opt = if show_step_count then Some count else None in
       let verbose_opt =

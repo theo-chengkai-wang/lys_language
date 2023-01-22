@@ -966,7 +966,6 @@ let rec multi_step_reduce ~top_level_context ~type_constr_context ~expr =
       multi_step_reduce ~top_level_context ~type_constr_context ~expr:ev2
   | Ast.Expr.LetRecMutual (iddef_e_list, e2) ->
       (*
-           TODO: Check if this is right
            Explanation: exactly the same thing as LetRec case, but with ALL the defns with it.
            let rec f = v and g = v2 in e2  ~~~~~> [([(let rec f = v and g = v2 in f)/f; (let rec f = v and g = v2 in g)/g]v)/f; (...v2)/g]e2
         *)
