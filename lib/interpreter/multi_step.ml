@@ -512,7 +512,7 @@ let evaluate_top_level_defn_with_step_count
       let new_context =
         EvaluationContext.set top_level_context
           ~key:(Ast.ObjIdentifier.get_name id)
-          ~data:{ is_rec = false; typ; value = v }
+          ~data:{ rec_preface = []; typ; value = v }
       in
       let elapsed = time_elapsed_opt current_time time_exec in
       let reduction_count_opt =
@@ -529,7 +529,7 @@ let evaluate_top_level_defn_with_step_count
         ~expr:e
       >>= fun (v, reduction_count) ->
       let new_entry : EvaluationContext.single_record =
-        { is_rec = true; typ; value = v }
+        { rec_preface = [((id, typ), e)]; typ; value = v }
       in
       let key = Ast.ObjIdentifier.get_name id in
       let new_context =
@@ -615,8 +615,8 @@ let rec multi_step_reduce ~top_level_context ~type_constr_context ~expr =
       else
         let id_str = Ast.ObjIdentifier.get_name id in
         EvaluationContext.find_or_error top_level_context id_str
-        >>= fun { typ; is_rec; value } ->
-        if not is_rec then
+        >>= fun { typ; rec_preface; value } ->
+        if EvaluationContext.is_not_rec {typ; rec_preface; value} then
           (*Substitution -- no need to worry about De Bruijn indices as there is no way they can go wrong*)
           Ok value
         else
@@ -1014,7 +1014,7 @@ let evaluate_top_level_defn ?(top_level_context = EvaluationContext.empty)
       let new_context =
         EvaluationContext.set top_level_context
           ~key:(Ast.ObjIdentifier.get_name id)
-          ~data:{ is_rec = false; typ; value = v }
+          ~data:{ rec_preface = []; typ; value = v }
       in
       let elapsed = time_elapsed_opt current_time time_exec in
 
@@ -1027,7 +1027,7 @@ let evaluate_top_level_defn ?(top_level_context = EvaluationContext.empty)
       multi_step_reduce ~top_level_context ~type_constr_context ~expr:e
       >>= fun v ->
       let new_entry : EvaluationContext.single_record =
-        { is_rec = true; typ; value = v }
+        { rec_preface = [((id, typ), e)]; typ; value = v }
       in
       let key = Ast.ObjIdentifier.get_name id in
       let new_context =

@@ -612,7 +612,7 @@ let evaluate_top_level_defn ?(top_level_context = EvaluationContext.empty)
       let new_context =
         EvaluationContext.set top_level_context
           ~key:(Ast.ObjIdentifier.get_name id)
-          ~data:{ is_rec = false; typ; value = v }
+          ~data:{ rec_preface = []; typ; value = v }
       in
       let count_opt = if show_step_count then Some count else None in
       let verbose_opt =
@@ -629,7 +629,7 @@ let evaluate_top_level_defn ?(top_level_context = EvaluationContext.empty)
       multi_step_reduce ~top_level_context ~type_constr_context ~verbose e
       >>= fun (v, count, steps_opt) ->
       let new_entry : EvaluationContext.single_record =
-        { is_rec = true; typ; value = v }
+        { rec_preface = [((id, typ), e)]; typ; value = v }
       in
       let count_opt = if show_step_count then Some count else None in
       let verbose_opt =
