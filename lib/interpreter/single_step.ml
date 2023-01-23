@@ -237,6 +237,19 @@ let rec reduce ~top_level_context ~type_constr_context expr =
                       Ok
                         (ReduceResult.ReducedToVal
                            (Ast.Value.Constant (Ast.Constant.Boolean (i1 || i2))))
+                  | ( Ast.BinaryOperator.CHARSTRINGCONCAT,
+                      Ast.Value.Constant (Ast.Constant.Character c),
+                      Ast.Value.Constant (Ast.Constant.String s) ) ->
+                      Ok
+                        (ReducedToVal
+                           (Ast.Value.Constant
+                              (Ast.Constant.String (String.of_char c ^ s))))
+                  | ( Ast.BinaryOperator.STRINGCONCAT,
+                      Ast.Value.Constant (Ast.Constant.String s),
+                      Ast.Value.Constant (Ast.Constant.String s2) ) ->
+                      Ok
+                        (ReducedToVal
+                           (Ast.Value.Constant (Ast.Constant.String (s ^ s2))))
                   | _, _, _ ->
                       error
                         "SingleStepReductionError: type mismatch at Binary \
@@ -633,6 +646,26 @@ let rec reduce ~top_level_context ~type_constr_context expr =
                             Substitutions.sim_substitute_from_zipped_list
                               zipped_list expr
                             >>= fun substituted_expr -> Ok substituted_expr)
+                      |> Some
+                | ( Ast.Pattern.String s,
+                    Ast.Value.Constant (Ast.Constant.String s2) ) ->
+                    if String.equal s s2 then Some (Ok expr) else None
+                | ( Ast.Pattern.ConcatCharString (cid, sid),
+                    Ast.Value.Constant (Ast.Constant.String s) ) ->
+                    if String.is_empty s then None
+                    else
+                      let zipped_list =
+                        [
+                          ( Ast.Expr.Constant
+                              (Ast.Constant.Character (String.get s 0)),
+                            Ast.ObjIdentifier.get_name cid );
+                          ( Ast.Expr.Constant
+                              (Ast.Constant.String (String.drop_prefix s 1)),
+                            Ast.ObjIdentifier.get_name sid );
+                        ]
+                      in
+                      Substitutions.sim_substitute_from_zipped_list zipped_list
+                        expr
                       |> Some
                 | _ -> None
               in

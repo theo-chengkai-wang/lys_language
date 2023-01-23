@@ -578,6 +578,39 @@ let generate_tests_for_interpreter interpreter =
                   None )))
           (List.last results)
   in
+  let test_string _ =
+    let program = "let x:string = '1'++\"123\" ^ \"5678\";;" in
+    let res_opt = exec_program interpreter program in
+    match res_opt with
+    | None -> assert_string "Program Execution Failed"
+    | Some results ->
+        assert_equal
+          (Some
+             (Interpreter_common.TopLevelEvaluationResult.Defn
+                ( (Ast.ObjIdentifier.of_string "x", Ast.Typ.TString),
+                  Ast.Value.Constant (Ast.Constant.String "11235678"),
+                  None,
+                  None,
+                  None )))
+          (List.last results)
+  in
+  let test_string_match _ =
+    let program = "match \"x\" with\n| a ++ as -> a\n| \"\" -> 'd';;\n" in
+    let res_opt = exec_program interpreter program in
+    match res_opt with
+    | None -> assert_string "Program Execution Failed"
+    | Some results ->
+        assert_equal
+          (Some
+             (Interpreter_common.TopLevelEvaluationResult.ExprValue
+                ( Ast.Typ.TChar,
+                  Ast.Value.Constant (Ast.Constant.Character 'x'),
+                  None,
+                  None,
+                  None )))
+          (List.last results)
+  in
+
   let interpreter_suite =
     "interpreter_main_suite"
     >::: [
@@ -597,7 +630,10 @@ let generate_tests_for_interpreter interpreter =
            "test_mutual_recursive_function_defn_then_exec"
            >:: test_mutual_recursive_function_defn_then_exec;
            "test_mutual_recursion_defn" >:: test_mutual_recursion_defn;
-           "test_datatype_mutually_recursive" >:: test_datatype_mutually_recursive;
+           "test_datatype_mutually_recursive"
+           >:: test_datatype_mutually_recursive;
+           "test_string" >:: test_string;
+           "test_string_match" >:: test_string_match;
          ]
   in
   let test_intlist_map _ =
