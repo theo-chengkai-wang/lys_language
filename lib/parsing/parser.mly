@@ -117,7 +117,8 @@ let list_to_tuple l =
 %nonassoc ">=" "<=" ">" "<" "=" "!="
 // int
 %left "+" "-" "^"
-%left "*" "/" "%" "++"
+%left "*" "/" "%"
+%right  "++"
 
 %nonassoc UMINUS
 // Want simple expressions to be at the highest priority
