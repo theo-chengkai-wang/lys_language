@@ -80,6 +80,7 @@ and Typ : sig
     | TBool
     | TInt
     | TChar
+    | TString
     | TIdentifier of TypeIdentifier.t
     | TFun of t * t
     | TBox of Context.t * t
@@ -117,6 +118,8 @@ and BinaryOperator : sig
     | LT
     | AND
     | OR
+    | CHARSTRINGCONCAT
+    | STRINGCONCAT
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.BinaryOperator.t -> t
@@ -129,7 +132,7 @@ and UnaryOperator : sig
 end
 
 and Constant : sig
-  type t = Integer of int | Boolean of bool | Unit | Character of char
+  type t = Integer of int | Boolean of bool | Unit | Character of char | String of string
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.Constant.t -> t
@@ -144,6 +147,8 @@ and Pattern : sig
     | Prod of ObjIdentifier.t list
     | Id of ObjIdentifier.t
     | Wildcard
+    | String of string
+    | ConcatCharString of ObjIdentifier.t * ObjIdentifier.t
   [@@deriving sexp, show, equal, compare]
 
   val of_past : Past.Pattern.t -> t
@@ -229,7 +234,8 @@ and TopLevelDefn : sig
     | MutualRecursiveDefinition of (IdentifierDefn.t * Expr.t) list
     | Expression of Expr.t
     | Directive of Directive.t
-    | DatatypeDecl of (TypeIdentifier.t * (Constructor.t * Typ.t option) list) list
+    | DatatypeDecl of
+        (TypeIdentifier.t * (Constructor.t * Typ.t option) list) list
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.TopLevelDefn.t -> t
@@ -248,7 +254,8 @@ module TypedTopLevelDefn : sig
     | MutualRecursiveDefinition of (Typ.t * IdentifierDefn.t * Expr.t) list
     | Expression of Typ.t * Expr.t
     | Directive of Directive.t
-    | DatatypeDecl of (TypeIdentifier.t * (Constructor.t * Typ.t option) list) list
+    | DatatypeDecl of
+        (TypeIdentifier.t * (Constructor.t * Typ.t option) list) list
   [@@deriving sexp, show, compare, equal]
 
   val populate_index : t -> t Or_error.t

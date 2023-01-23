@@ -212,6 +212,7 @@ and Typ : sig
     | TBool
     | TInt
     | TChar
+    | TString
     | TIdentifier of TypeIdentifier.t
     | TFun of t * t
     | TBox of Context.t * t
@@ -226,6 +227,7 @@ end = struct
     | TBool
     | TInt
     | TChar
+    | TString
     | TIdentifier of TypeIdentifier.t
     | TFun of t * t
     | TBox of Context.t * t
@@ -238,6 +240,7 @@ end = struct
     | Past.Typ.TBool -> TBool
     | Past.Typ.TInt -> TInt
     | Past.Typ.TChar -> TChar
+    | Past.Typ.TString -> TString
     | Past.Typ.TIdentifier id -> TIdentifier (TypeIdentifier.of_past id)
     | Past.Typ.TFun (t1, t2) -> TFun (of_past t1, of_past t2)
     | Past.Typ.TBox (ctx, t1) -> TBox (Context.of_past ctx, of_past t1)
@@ -281,6 +284,8 @@ and BinaryOperator : sig
     | LT
     | AND
     | OR
+    | CHARSTRINGCONCAT
+    | STRINGCONCAT
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.BinaryOperator.t -> t
@@ -299,6 +304,8 @@ end = struct
     | LT
     | AND
     | OR
+    | CHARSTRINGCONCAT
+    | STRINGCONCAT
   [@@deriving sexp, show, compare, equal]
 
   let of_past = function
@@ -315,6 +322,8 @@ end = struct
     | Past.BinaryOperator.LT -> LT
     | Past.BinaryOperator.AND -> AND
     | Past.BinaryOperator.OR -> OR
+    | Past.BinaryOperator.CHARSTRINGCONCAT -> CHARSTRINGCONCAT
+    | Past.BinaryOperator.STRINGCONCAT -> STRINGCONCAT
 end
 
 and UnaryOperator : sig
@@ -330,12 +339,22 @@ end = struct
 end
 
 and Constant : sig
-  type t = Integer of int | Boolean of bool | Unit | Character of char
+  type t =
+    | Integer of int
+    | Boolean of bool
+    | Unit
+    | Character of char
+    | String of string
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.Constant.t -> t
 end = struct
-  type t = Integer of int | Boolean of bool | Unit | Character of char
+  type t =
+    | Integer of int
+    | Boolean of bool
+    | Unit
+    | Character of char
+    | String of string
   [@@deriving sexp, show, compare, equal]
 
   let of_past = function
@@ -343,6 +362,7 @@ end = struct
     | Past.Constant.Boolean b -> Boolean b
     | Past.Constant.Unit -> Unit
     | Past.Constant.Character c -> Character c
+    | Past.Constant.String s -> String s
 end
 
 and Pattern : sig
@@ -354,6 +374,8 @@ and Pattern : sig
     | Prod of ObjIdentifier.t list
     | Id of ObjIdentifier.t
     | Wildcard
+    | String of string
+    | ConcatCharString of ObjIdentifier.t * ObjIdentifier.t
   [@@deriving sexp, show, equal, compare]
 
   val of_past : Past.Pattern.t -> t
@@ -367,6 +389,8 @@ end = struct
     | Prod of ObjIdentifier.t list
     | Id of ObjIdentifier.t
     | Wildcard
+    | String of string
+    | ConcatCharString of ObjIdentifier.t * ObjIdentifier.t
   [@@deriving sexp, show, equal, compare]
 
   let of_past = function
@@ -380,6 +404,9 @@ end = struct
         Prod (List.map id_list ~f:ObjIdentifier.of_past)
     | Past.Pattern.Id id -> Id (ObjIdentifier.of_past id)
     | Past.Pattern.Wildcard -> Wildcard
+    | Past.Pattern.String s -> String s
+    | Past.Pattern.ConcatCharString (c, s) ->
+        ConcatCharString (ObjIdentifier.of_past c, ObjIdentifier.of_past s)
 
   let get_binders = function
     | Datatype (_, objid_list) -> objid_list
@@ -388,6 +415,8 @@ end = struct
     | Prod id_list -> id_list
     | Id id -> [ id ]
     | Wildcard -> []
+    | String _ -> []
+    | ConcatCharString (c, s) -> [c; s]
 end
 
 and Expr : sig

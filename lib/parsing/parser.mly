@@ -247,6 +247,7 @@ typ:
     | INT_typ {Typ.TInt}
     | UNIT_typ {Typ.TUnit}
     | CHAR_typ {Typ.TChar}
+    | STRING_typ {Typ.TString}
     | i = ID {Typ.TIdentifier (i)}
     | t1 = typ; "->"; t2 = typ /*%prec typ_FUNCTION_ARROW*/ {Typ.TFun (t1, t2)}
     | LEFT_PAREN t = typ "*" ts = separated_nonempty_list("*", typ) RIGHT_PAREN %prec typ_PRODUCT {Typ.TProd (t::ts)}

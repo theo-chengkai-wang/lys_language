@@ -1,4 +1,4 @@
-'a'++('1'++"12345") ^ "12345\n\t";;
+let x:string = "123";;
 
 match x with
 | a ++ as -> a
