@@ -28,8 +28,10 @@ let list_to_tuple l =
 %token <string> ID
 %token <string> CONSTR
 %token <char> CHAR
+%token <string> STRING
 %token BOOL_typ
 %token INT_typ
+%token STRING_typ
 %token AND_WORD "and"
 %token CHAR_typ
 %token UNIT_typ
@@ -39,6 +41,8 @@ let list_to_tuple l =
 %token NOT
 %token AND
 %token OR
+%token STRING_CONCAT "^"
+%token CHAR_STRING_CONCAT "++"
 %token PLUS "+"
 %token MINUS "-"
 %token TIMES "*"
@@ -112,8 +116,8 @@ let list_to_tuple l =
 // int to bool
 %nonassoc ">=" "<=" ">" "<" "=" "!="
 // int
-%left "+" "-"
-%left "*" "/" "%"
+%left "+" "-" "^"
+%left "*" "/" "%" "++"
 
 %nonassoc UMINUS
 // Want simple expressions to be at the highest priority
@@ -185,6 +189,8 @@ pattern:
     | INL i=identifier {Pattern.Inl (i)}
     | INR i = identifier {Pattern.Inr (i)}
     | LEFT_PAREN i = identifier COMMA is = separated_nonempty_list(COMMA, identifier) RIGHT_PAREN {Pattern.Prod (i::is)} 
+    | c=identifier "++" s=identifier {Pattern.ConcatCharString (c, s)}
+    | s = STRING {Pattern.String (s)}
     // SCRAPED Decision is only to support 2-ary products   
     // | LEFT_PAREN i = identifier COMMA i2 = identifier RIGHT_PAREN {Pattern.Prod ([i; i2])}    
 
@@ -198,6 +204,7 @@ expr:
     | a = application_expr {a}
     | a = arith { a }
     | c = comp { c }
+    | s = string_op { s }
     | b = bool { b }
     | c = CONSTR e = option(simple_expr) {Expr.Constr (c, e)}
     | LIFT LEFT_BRACKET t = typ RIGHT_BRACKET e = simple_expr {Expr.Lift (t, e)}
@@ -223,6 +230,7 @@ constant:
     | FALSE {Constant.Boolean false}
     | LEFT_PAREN RIGHT_PAREN {Constant.Unit}
     | c = CHAR {Constant.Character c}
+    | s = STRING {Constant.String s}
 
 identifier:
     | i = ID {i};
@@ -266,3 +274,7 @@ bool:
     | e1 = expr AND e2 = expr {Expr.BinaryOp (AND, e1, e2)}
     | e1 = expr OR e2 = expr {Expr.BinaryOp (OR, e1, e2)}
     | NOT e = expr {Expr.UnaryOp (NOT, e)};
+
+string_op:
+    | e1 = expr "^" e2 = expr {Expr.BinaryOp (STRINGCONCAT, e1, e2)}
+    | e1 = expr "++" e2 = expr {Expr.BinaryOp (CHARSTRINGCONCAT, e1, e2)}
