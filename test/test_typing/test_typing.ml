@@ -187,6 +187,21 @@ let test_bound_identifier _ =
 let test_unbound_identifier _ =
   assert_equal (Or_error.ok (type_infer_from_str "x;;")) None
 
+let test_strings _ =
+  assert_equal (Some Ast.Typ.TString)
+    (Or_error.ok (type_infer_from_str "\"12345\";;"))
+
+let test_string_match _ =
+  let program =
+    "\n\
+    \    let x:string = \"123\";;\n\
+    \    match x with\n\
+    \    | a ++ as -> a\n\
+    \    | \"\" -> 'd';;"
+  in
+  assert_bool "Type check hasn't failed"
+    (Option.is_some (type_check_program_from_str program))
+
 let standard_suite =
   "standard_suite"
   >::: [
@@ -204,6 +219,8 @@ let standard_suite =
          "test_rec_mut_fails" >:: test_rec_mut_fails;
          "test_bound_identifier" >:: test_bound_identifier;
          "test_unbound_identifier" >:: test_unbound_identifier;
+         "test_strings" >:: test_strings;
+         "test_string_match" >:: test_string_match;
        ]
 
 (* CMTT *)
@@ -317,7 +334,13 @@ let test_datatypes_mutually_recursive _ =
   assert_bool "Type check hasn't failed"
     (Option.is_some (type_check_program_from_str program))
 
-let adt_suite = "adt_suite" >::: [ "test_datatypes" >:: test_datatypes; "test_datatypes_mutually_recursive" >:: test_datatypes_mutually_recursive ]
+let adt_suite =
+  "adt_suite"
+  >::: [
+         "test_datatypes" >:: test_datatypes;
+         "test_datatypes_mutually_recursive"
+         >:: test_datatypes_mutually_recursive;
+       ]
 
 let suite =
   "typing_suite"

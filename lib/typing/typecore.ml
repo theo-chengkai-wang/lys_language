@@ -106,7 +106,8 @@ and type_inference_expression meta_ctx ctx type_ctx e =
       | Ast.Constant.Boolean _ -> Ok Ast.Typ.TBool
       | Ast.Constant.Integer _ -> Ok Ast.Typ.TInt
       | Ast.Constant.Unit -> Ok Ast.Typ.TUnit
-      | Ast.Constant.Character _ -> Ok Ast.Typ.TChar)
+      | Ast.Constant.Character _ -> Ok Ast.Typ.TChar
+      | Ast.Constant.String _ -> Ok Ast.Typ.TString)
   | Ast.Expr.UnaryOp (op, expr) -> (
       match op with
       | Ast.UnaryOperator.NEG ->
@@ -164,7 +165,14 @@ and type_inference_expression meta_ctx ctx type_ctx e =
       | Ast.BinaryOperator.LTE -> check_both Ast.Typ.TInt Ast.Typ.TBool
       | Ast.BinaryOperator.LT -> check_both Ast.Typ.TInt Ast.Typ.TBool
       | Ast.BinaryOperator.AND -> check_both Ast.Typ.TBool Ast.Typ.TBool
-      | Ast.BinaryOperator.OR -> check_both Ast.Typ.TBool Ast.Typ.TBool)
+      | Ast.BinaryOperator.OR -> check_both Ast.Typ.TBool Ast.Typ.TBool
+      | Ast.BinaryOperator.CHARSTRINGCONCAT ->
+          type_check_expression meta_ctx ctx type_ctx expr Ast.Typ.TChar
+          >>= fun () ->
+          type_check_expression meta_ctx ctx type_ctx expr2 Ast.Typ.TString
+          >>= fun () -> Ok Ast.Typ.TString
+      | Ast.BinaryOperator.STRINGCONCAT ->
+          check_both Ast.Typ.TString Ast.Typ.TString)
   | Ast.Expr.Prod exprs ->
       List.map exprs ~f:(type_inference_expression meta_ctx ctx type_ctx)
       |> Or_error.combine_errors
@@ -532,6 +540,30 @@ and type_inference_expression meta_ctx ctx type_ctx e =
                   let new_ctx =
                     Typing_context.ObjTypingContext.add_all_mappings ctx
                       zipped_list
+                  in
+                  type_inference_expression meta_ctx new_ctx type_ctx expr
+              | _ ->
+                  Or_error.error
+                    "TypeInferenceError: Mismatch between type and pattern."
+                    (pattn, inferred_typ) [%sexp_of: Ast.Pattern.t * Ast.Typ.t])
+          |> Or_error.combine_errors
+      | Ast.Typ.TString ->
+          List.map pattn_expr_list ~f:(fun (pattn, expr) ->
+              match pattn with
+              | Ast.Pattern.Id id ->
+                  let new_ctx =
+                    Typing_context.ObjTypingContext.add_mapping ctx id
+                      inferred_typ
+                  in
+                  type_inference_expression meta_ctx new_ctx type_ctx expr
+              | Ast.Pattern.Wildcard ->
+                  type_inference_expression meta_ctx ctx type_ctx expr
+              | Ast.Pattern.String _ ->
+                  type_inference_expression meta_ctx ctx type_ctx expr
+              | Ast.Pattern.ConcatCharString (cid, sid) ->
+                  let new_ctx =
+                    Typing_context.ObjTypingContext.add_all_mappings ctx
+                      [ (cid, Ast.Typ.TChar); (sid, Ast.Typ.TString) ]
                   in
                   type_inference_expression meta_ctx new_ctx type_ctx expr
               | _ ->

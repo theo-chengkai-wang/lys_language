@@ -660,6 +660,49 @@ let test_mutual_recursive_datatype _ =
           "datatype sometype = A of int | B of sometype | C of (othertype)\n\
           \          and othertype = D | E of (sometype);;"))
 
+let test_string _ =
+  assert_equal
+    [
+      Past.TopLevelDefn.Expression
+        (Past.Expr.Constant (Past.Constant.String "123"));
+    ]
+    (parse_program (Lexing.from_string "\"123\";;"))
+
+let test_string_operators _ =
+  assert_equal
+    [
+      Past.TopLevelDefn.Expression
+        (Past.Expr.BinaryOp
+           ( Past.BinaryOperator.STRINGCONCAT,
+             Past.Expr.BinaryOp
+               ( Past.BinaryOperator.CHARSTRINGCONCAT,
+                 Past.Expr.Constant (Past.Constant.Character 'a'),
+                 Past.Expr.BinaryOp
+                   ( Past.BinaryOperator.CHARSTRINGCONCAT,
+                     Past.Expr.Constant (Past.Constant.Character '1'),
+                     Past.Expr.Constant (Past.Constant.String "12345") ) ),
+             Past.Expr.Constant (Past.Constant.String "12345\n\t") ));
+    ]
+    (parse_program
+       (Lexing.from_string "'a'++('1'++\"12345\") ^ \"12345\n\t\";;"))
+
+let test_string_match _ =
+  assert_equal
+    [
+      Past.TopLevelDefn.Expression
+        (Past.Expr.Match
+           ( Past.Expr.Identifier "x",
+             [
+               ( Past.Pattern.ConcatCharString ("a", "as"),
+                 Past.Expr.Identifier "a" );
+               ( Past.Pattern.String "",
+                 Past.Expr.Constant (Past.Constant.Character 'd') );
+             ] ));
+    ]
+    (parse_program
+       (Lexing.from_string
+          "match x with\n    | a ++ as -> a\n    | \"\" -> 'd';;"))
+
 (* Name the test cases and group them together *)
 let suite =
   "parsing_suite"
@@ -712,4 +755,7 @@ let suite =
          "test_lift" >:: test_lift;
          "test_mutual_recursion_defn" >:: test_mutual_recursion_defn;
          "test_mutual_recursion_expr" >:: test_mutual_recursion_expr;
+         "test_string" >:: test_string;
+         "test_string_operators" >:: test_string_operators;
+         "test_string_match" >:: test_string_match;
        ]

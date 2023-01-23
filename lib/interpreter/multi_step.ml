@@ -165,10 +165,22 @@ let rec multi_step_reduce_with_step_count ~top_level_context
           Ok
             ( Ast.Value.Constant (Ast.Constant.Boolean (i1 || i2)),
               new_reduction_count + 1 )
+      | ( Ast.BinaryOperator.CHARSTRINGCONCAT,
+          Ast.Value.Constant (Ast.Constant.Character c),
+          Ast.Value.Constant (Ast.Constant.String s) ) ->
+          Ok
+            ( Ast.Value.Constant (Ast.Constant.String (String.of_char c ^ s)),
+              new_reduction_count + 1 )
+      | ( Ast.BinaryOperator.STRINGCONCAT,
+          Ast.Value.Constant (Ast.Constant.String s),
+          Ast.Value.Constant (Ast.Constant.String s2) ) ->
+          Ok
+            ( Ast.Value.Constant (Ast.Constant.String (s ^ s2)),
+              new_reduction_count + 1 )
       | _, _, _ ->
           error
-            "EvaluationError: type mismatch at Binary operator. [FATAL] should \
-             not happen! Type check should have prevented this."
+            "EvaluationError: type mismatch at s operator. [FATAL] should not \
+             happen! Type check should have prevented this."
             (Ast.Expr.BinaryOp (op, expr1, expr2))
             [%sexp_of: Ast.Expr.t])
   | Ast.Expr.Prod exprs ->
@@ -523,6 +535,30 @@ let rec multi_step_reduce_with_step_count ~top_level_context
                     multi_step_reduce_with_step_count ~top_level_context
                       ~type_constr_context ~expr:substituted_expr)
               |> Some
+        | Ast.Pattern.String s, Ast.Value.Constant (Ast.Constant.String s2) ->
+            if String.equal s s2 then
+              multi_step_reduce_with_step_count ~top_level_context
+                ~type_constr_context ~expr
+              |> Some
+            else None
+        | ( Ast.Pattern.ConcatCharString (cid, sid),
+            Ast.Value.Constant (Ast.Constant.String s) ) ->
+            if String.is_empty s then None
+            else
+              let zipped_list =
+                [
+                  ( Ast.Expr.Constant (Ast.Constant.Character (String.get s 0)),
+                    Ast.ObjIdentifier.get_name cid );
+                  ( Ast.Expr.Constant
+                      (Ast.Constant.String (String.drop_prefix s 1)),
+                    Ast.ObjIdentifier.get_name sid );
+                ]
+              in
+              Substitutions.sim_substitute_from_zipped_list zipped_list expr
+              >>= (fun substituted_expr ->
+                    multi_step_reduce_with_step_count ~top_level_context
+                      ~type_constr_context ~expr:substituted_expr)
+              |> Some
         | _ -> None
       in
       let match_and_exec_result =
@@ -827,6 +863,14 @@ let rec multi_step_reduce ~top_level_context ~type_constr_context ~expr =
           Ast.Value.Constant (Ast.Constant.Boolean i1),
           Ast.Value.Constant (Ast.Constant.Boolean i2) ) ->
           Ok (Ast.Value.Constant (Ast.Constant.Boolean (i1 || i2)))
+      | ( Ast.BinaryOperator.CHARSTRINGCONCAT,
+          Ast.Value.Constant (Ast.Constant.Character c),
+          Ast.Value.Constant (Ast.Constant.String s) ) ->
+          Ok (Ast.Value.Constant (Ast.Constant.String (String.of_char c ^ s)))
+      | ( Ast.BinaryOperator.STRINGCONCAT,
+          Ast.Value.Constant (Ast.Constant.String s),
+          Ast.Value.Constant (Ast.Constant.String s2) ) ->
+          Ok (Ast.Value.Constant (Ast.Constant.String (s ^ s2)))
       | _, _, _ ->
           error
             "EvaluationError: type mismatch at Binary operator. [FATAL] should \
@@ -1140,6 +1184,29 @@ let rec multi_step_reduce ~top_level_context ~type_constr_context ~expr =
                     Substitutions.sim_substitute_from_zipped_list zipped_list
                       expr
                     >>= fun substituted_expr ->
+                    multi_step_reduce ~top_level_context ~type_constr_context
+                      ~expr:substituted_expr)
+              |> Some
+        | Ast.Pattern.String s, Ast.Value.Constant (Ast.Constant.String s2) ->
+            if String.equal s s2 then
+              multi_step_reduce ~top_level_context ~type_constr_context ~expr
+              |> Some
+            else None
+        | ( Ast.Pattern.ConcatCharString (cid, sid),
+            Ast.Value.Constant (Ast.Constant.String s) ) ->
+            if String.is_empty s then None
+            else
+              let zipped_list =
+                [
+                  ( Ast.Expr.Constant (Ast.Constant.Character (String.get s 0)),
+                    Ast.ObjIdentifier.get_name cid );
+                  ( Ast.Expr.Constant
+                      (Ast.Constant.String (String.drop_prefix s 1)),
+                    Ast.ObjIdentifier.get_name sid );
+                ]
+              in
+              Substitutions.sim_substitute_from_zipped_list zipped_list expr
+              >>= (fun substituted_expr ->
                     multi_step_reduce ~top_level_context ~type_constr_context
                       ~expr:substituted_expr)
               |> Some

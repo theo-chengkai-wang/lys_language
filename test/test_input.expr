@@ -1,10 +1,50 @@
-datatype sometype = A of int | B of sometype | C of (othertype)
-and othertype = D | E of (sometype);;
+datatype regexp =
+Empty
+| Plus of (regexp * regexp)
+| Times of (regexp * regexp)
+| Star of regexp
+| Const of char
+;;
 
-A (1);;
+let rec acc1:(regexp -> (string -> bool) -> string -> bool) = 
+fun (exp: regexp) -> fun (cont:(string -> bool)) -> fun (str: string) ->
+    match exp with
+    | Empty -> cont str
+    | Plus (e1, e2) -> (acc1 e1 cont str) || (acc1 e2 cont str)
+    | Times (e1, e2) -> 
+        let cnt2:(string -> bool) = acc1 e2 cont in
+        acc1 e1 cnt2 str
+    | Star (e) ->
+        (cont str) || (acc1 e (fun (str2: string) -> 
+            if str = str2 then false else acc1 (Star e) cont str2
+        )) str
+    | Const (c) -> 
+        match str with
+        | "" -> false
+        | x ++ xs -> (x = c) && (cont xs);;
 
-B (A (1));;
+let null:string -> bool = fun (str: string) -> 
+    match str with
+    | "" -> true
+    | _ -> false;;
 
-C (D);;
+let accept1:regexp -> string -> bool = fun (exp:regexp) -> fun (str: string) -> 
+    acc1 exp null str;;
 
-E (C (D));;
+let regexp_to_test:regexp = 
+(*Times (
+    Plus (
+        Times (
+            Const ('1'), 
+            Times (Const ('2'), Empty)
+        ), 
+        Empty
+    ), 
+    Const ('3')
+);;*)
+(*Plus (Const ('1'), Const ('b'));;*)
+Times (Const ('0'), Star (Times (Star (Const ('a')), Const('b'))));;
+(*Times (Const ('0'), Star (Times (Star (Const ('1')), Const ('2'))));;*)
+
+accept1 (regexp_to_test) "0abaab";;
+

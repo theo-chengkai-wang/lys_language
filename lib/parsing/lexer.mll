@@ -18,6 +18,7 @@ let char_for_backslash = function
   | 'r' -> '\013'
   | 'b' -> '\008'
   | 't' -> '\009'
+  | 'f' -> '\012'
   | c   -> c
 
 }
@@ -30,18 +31,20 @@ let id = ['a'-'z' '_'] ['a'-'z' 'A'-'Z' '0'-'9' '_']* (*Lower case is normal id*
 let constr_id = ['A'-'Z'] ['a'-'z' 'A'-'Z' '0'-'9' '_']* (*Upper case is Constr id*)
 
 let backslash_escapes =
-    ['\\' '\'' '"' 'n' 't' 'b' 'r' ' ']
+    ['\\' '\'' '"' 'n' 't' 'b' 'r' ' ' 'f' '/']
 
 rule read = 
     parse
     | white {read lexbuf}
     | newline  { next_line lexbuf; read lexbuf }
     | "(*" {comment lexbuf}
+    | '"' {read_string (Buffer.create 100) lexbuf }
     | "'" {character lexbuf}
     | ";" {SEMICOLON}
     | "true" {TRUE}
     | "false" {FALSE}
     | "bool" {BOOL_typ}
+    | "string" {STRING_typ}
     | "int" {INT_typ}
     | "char" {CHAR_typ}
     | "unit" {UNIT_typ}
@@ -49,6 +52,7 @@ rule read =
     | "&&" {AND}
     | "||" {OR}
     | "lift" {LIFT}
+    | "++" {CHAR_STRING_CONCAT}
     | "+" {PLUS}
     | "-" {MINUS}
     | "*" {TIMES}
@@ -70,6 +74,7 @@ rule read =
     | ":" {COLON}
     | "//" {next_line lexbuf; read lexbuf}
     | "|" {PATTERN_OR}
+    | "^" {STRING_CONCAT}
     | "if" {IF}
     | "then" {THEN}
     | "else" {ELSE}
@@ -104,5 +109,23 @@ and comment =
   | _ (*skip*) {comment lexbuf}
 and character = 
   parse
-  | '\\' (backslash_escapes as c) '\'' {CHAR (char_for_backslash c)}
-  | _ as c '\'' {CHAR (char_for_backslash c)}
+  | '\\'(backslash_escapes as c)'\'' {CHAR (char_for_backslash c)}
+  | _ as c '\'' {CHAR (c)}
+and read_string buf =
+(*Code from https://dev.realworldocaml.org/parsing-with-ocamllex-and-menhir.html*)
+  parse
+  | '"'       { STRING (Buffer.contents buf) }
+  (* | '\\' '/'  { Buffer.add_char buf '/'; read_string buf lexbuf }
+  | '\\' '\\' { Buffer.add_char buf '\\'; read_string buf lexbuf }
+  | '\\' 'b'  { Buffer.add_char buf '\b'; read_string buf lexbuf }
+  | '\\' 'f'  { Buffer.add_char buf '\012'; read_string buf lexbuf }
+  | '\\' 'n'  { Buffer.add_char buf '\n'; read_string buf lexbuf }
+  | '\\' 'r'  { Buffer.add_char buf '\r'; read_string buf lexbuf }
+  | '\\' 't'  { Buffer.add_char buf '\t'; read_string buf lexbuf } *)
+  | '\\'(backslash_escapes as c) {Buffer.add_char buf (char_for_backslash c); read_string buf lexbuf}
+  | [^ '"' '\\']+
+    { Buffer.add_string buf (Lexing.lexeme lexbuf);
+      read_string buf lexbuf
+    }
+  | _ { raise (SyntaxError ("Illegal string character: " ^ Lexing.lexeme lexbuf)) }
+  | eof { raise (SyntaxError ("String is not terminated")) }

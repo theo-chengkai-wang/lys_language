@@ -14,6 +14,7 @@ and Typ : sig
     | TBool
     | TInt
     | TChar
+    | TString
     | TIdentifier of Identifier.t
     | TFun of t * t
     | TBox of Context.t * t
@@ -45,6 +46,8 @@ and BinaryOperator : sig
     | LT
     | AND
     | OR
+    | CHARSTRINGCONCAT
+    | STRINGCONCAT
   [@@deriving sexp, show, equal, compare]
 end
 
@@ -53,7 +56,7 @@ and UnaryOperator : sig
 end
 
 and Constant : sig
-  type t = Integer of int | Boolean of bool | Unit | Character of char
+  type t = Integer of int | Boolean of bool | Unit | Character of char | String of string
   [@@deriving sexp, show, equal, compare]
 end
 
@@ -65,6 +68,8 @@ and Pattern : sig
     | Prod of Identifier.t list
     | Id of Identifier.t
     | Wildcard
+    | String of string
+    | ConcatCharString of Identifier.t * Identifier.t
   [@@deriving sexp, show, equal, compare]
 end
 
