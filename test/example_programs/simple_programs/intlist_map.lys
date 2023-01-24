@@ -6,6 +6,14 @@ let rec map_int_int:(intlist -> (int -> int) -> intlist) =
     | Nil -> Nil
     | Cons (x, xs) -> Cons (f x, map_int_int xs f);;
 
+let rec fold_int_int_int: (intlist -> int -> (int -> int -> int) -> intlist) =
+    fun (xs: intlist) -> fun (init: int) -> fun (f: int -> int -> int) -> 
+        match xs with
+        | Nil -> init
+        | Cons (x, xs) -> fold_int_int_int xs (f init x) (f);;
+
+(*TODO: Stage fold_int_int_int*)
+
 map_int_int (Cons (1, Cons (2, Cons (3, Nil)))) (fun (x:int) -> x * 2);;
 
 (*Unfortunately lifting is necessary*)
