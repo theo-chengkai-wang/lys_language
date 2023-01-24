@@ -33,46 +33,65 @@ let rec get_from_env: env -> string -> value_option = fun (gamma: env) -> fun (i
     | Nil_env -> None_value
     | Cons_env (iddef, gamma) -> if id = iddef[0] then Some_value (iddef[1]) else get_from_env gamma id;;
 
-let rec type_infer: term -> typ_env -> typ_option = fun (e:term) -> fun (gamma: typ_env) -> 
-    match e with
-    | Id (id)  -> get_from_typ_env gamma id
-    | Unit -> Some_typ (TUnit)
-    | Lambda (id, tt, e) ->
-        (
-            match (type_infer e (add_to_typ_env gamma (id, tt))) with
-            | None_typ -> None_typ
-            | Some_typ (tt2) -> Some_typ (TFun (tt, tt2))
-        )
-    | App (e1, e2) -> 
-        match (type_infer e1 gamma) with
-        | None_typ -> None_typ
-        | Some_typ (t1) -> 
-            (match t1 with
-            | TFun (tt2, tt3) ->
-                (match (type_infer e2 gamma) with
+let type_infer: term -> typ_env -> typ_option = 
+    let add_to_env: env -> (string * value) -> env = fun (gamma: env) -> fun (iddef: (string * value)) -> Cons_env (iddef, gamma)
+    in
+    let rec get_from_env: env -> string -> value_option = fun (gamma: env) -> fun (id: string) ->
+        match gamma with
+        | Nil_env -> None_value
+        | Cons_env (iddef, gamma) -> if id = iddef[0] then Some_value (iddef[1]) else get_from_env gamma id
+    in
+    let rec type_infer: term -> typ_env -> typ_option = fun (e:term) -> fun (gamma: typ_env) -> 
+        match e with
+        | Id (id)  -> get_from_typ_env gamma id
+        | Unit -> Some_typ (TUnit)
+        | Lambda (id, tt, e) ->
+            (
+                match (type_infer e (add_to_typ_env gamma (id, tt))) with
                 | None_typ -> None_typ
-                | Some_typ (t2) -> if tt2 = t2 then Some_typ (tt3) else None_typ)
-            | _ -> None_typ);;
+                | Some_typ (tt2) -> Some_typ (TFun (tt, tt2))
+            )
+        | App (e1, e2) -> 
+            match (type_infer e1 gamma) with
+            | None_typ -> None_typ
+            | Some_typ (t1) -> 
+                (match t1 with
+                | TFun (tt2, tt3) ->
+                    (match (type_infer e2 gamma) with
+                    | None_typ -> None_typ
+                    | Some_typ (t2) -> if tt2 = t2 then Some_typ (tt3) else None_typ)
+                | _ -> None_typ)
+    in
+    type_infer;;
 
-let rec eval: term -> env -> value_option = fun (e: term) -> fun (bindings: env) -> 
-    match e with
-    | Id (id) -> get_from_env bindings id
-    | Unit -> Some_value (VUnit)
-    | Lambda (id, tt, e) -> Some_value (VLambda (id, tt, e))
-    | App (t1, t2) -> 
-        let v1_opt: value_option = eval t1 bindings in
-        let v2_opt: value_option = eval t2 bindings in
-        (match v1_opt with
-        | None_value -> None_value
-        | Some_value (v1) -> 
-            (match v2_opt with
+let eval: term -> env  -> value_option = 
+    let add_to_typ_env: typ_env -> (string * typ) -> typ_env = fun (gamma: typ_env) -> fun (iddef: (string * typ)) -> Cons_typ_env (iddef, gamma)
+    in
+    let rec get_from_typ_env: typ_env -> string -> typ_option = fun (gamma: typ_env) -> fun (id: string) ->
+        match gamma with
+        | Nil_typ_env -> None_typ
+        | Cons_typ_env (iddef, gamma) -> if id = iddef[0] then Some_typ (iddef[1]) else get_from_typ_env gamma id
+    in
+    let rec eval: term -> env -> value_option = fun (e: term) -> fun (bindings: env) -> 
+        match e with
+        | Id (id) -> get_from_env bindings id
+        | Unit -> Some_value (VUnit)
+        | Lambda (id, tt, e) -> Some_value (VLambda (id, tt, e))
+        | App (t1, t2) -> 
+            let v1_opt: value_option = eval t1 bindings in
+            let v2_opt: value_option = eval t2 bindings in
+            (match v1_opt with
             | None_value -> None_value
-            | Some_value (v2) ->
-                (match v1 with
-                | VLambda (id1, t1, e1) ->
-                    let new_bindings: env = add_to_env bindings (id1, v2) in
-                    eval e1 new_bindings
-                | _ -> None_value)));;
+            | Some_value (v1) -> 
+                (match v2_opt with
+                | None_value -> None_value
+                | Some_value (v2) ->
+                    (match v1 with
+                    | VLambda (id1, t1, e1) ->
+                        let new_bindings: env = add_to_env bindings (id1, v2) in
+                        eval e1 new_bindings
+                    | _ -> None_value)))
+    in eval;;
 
 let rec substitute: term -> string -> value -> term = fun (e:term) -> fun (id_to_sub: string) -> fun (v: value) ->
     match e with
@@ -103,7 +122,7 @@ let rec eval2: term -> value_option = fun (e: term) ->
                 | _ -> None_value)));;
 
 (*
-    Peano encoding
+    Church encoding
     0 = lambda f. lambda x. x
     n = lambda f. lambda x. f f f f ...(f x)
     succ = lambda n. lambda f. lambda x. f (n f x)
@@ -117,15 +136,9 @@ let num: int -> term = fun (n:int) ->
 
 let zero: term = num 0;;
 
-type_infer zero (Nil_typ_env);;
-
 let one: term = num 1;;
 
-type_infer one (Nil_typ_env);;
-
 let five: term = num 5;;
-
-type_infer five (Nil_typ_env);;
 
 let succ: term = Lambda("n", TFun (TFun (TUnit, TUnit), TFun (TUnit, TUnit)), 
                     Lambda ("f", TFun (TUnit, TUnit), 
@@ -133,6 +146,20 @@ let succ: term = Lambda("n", TFun (TFun (TUnit, TUnit), TFun (TUnit, TUnit)),
                             App (Id ("f"), App (App (Id ("n"), Id ("f")), Id ("x")))
                             )));;
 
-type_infer succ (Nil_typ_env);;
 
-eval2 (App (succ, one));;
+(*Tests*)
+
+type_infer zero (Nil_typ_env);;
+eval one (Nil_env);;
+
+type_infer one (Nil_typ_env);;
+eval one (Nil_env);;
+
+type_infer five (Nil_typ_env);;
+eval five (Nil_env);;
+
+type_infer succ (Nil_typ_env);;
+eval succ (Nil_env);;
+
+type_infer (App (succ, one)) (Nil_typ_env);;
+eval (App (succ, one)) (Nil_env);;

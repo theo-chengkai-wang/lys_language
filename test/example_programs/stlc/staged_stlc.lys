@@ -1,5 +1,3 @@
-（*TODO: Write staged version*)
-
 datatype typ = TUnit | TFun of (typ * typ);;
 
 datatype typ_option = None_typ | Some_typ of typ;;
@@ -16,96 +14,8 @@ datatype typ_env = Nil_typ_env | Cons_typ_env of ((string * typ) * typ_env);;
 
 datatype env = Nil_env | Cons_env of ((string * value) * env);;
 
-let to_term: value -> term = fun (t:value) ->
-    match t with
-    | VUnit -> Unit
-    | VLambda (id, tt, e) -> Lambda (id, tt, e);;
-
-let add_to_typ_env: typ_env -> (string * typ) -> typ_env = fun (gamma: typ_env) -> fun (iddef: (string * typ)) -> Cons_typ_env (iddef, gamma);;
-
-let rec get_from_typ_env: typ_env -> string -> typ_option = fun (gamma: typ_env) -> fun (id: string) ->
-    match gamma with
-    | Nil_typ_env -> None_typ
-    | Cons_typ_env (iddef, gamma) -> if id = iddef[0] then Some_typ (iddef[1]) else get_from_typ_env gamma id;;
-
-let add_to_env: env -> (string * value) -> env = fun (gamma: env) -> fun (iddef: (string * value)) -> Cons_env (iddef, gamma);;
-
-let rec get_from_env: env -> string -> value_option = fun (gamma: env) -> fun (id: string) ->
-    match gamma with
-    | Nil_env -> None_value
-    | Cons_env (iddef, gamma) -> if id = iddef[0] then Some_value (iddef[1]) else get_from_env gamma id;;
-
-let rec type_infer: term -> typ_env -> typ_option = fun (e:term) -> fun (gamma: typ_env) -> 
-    match e with
-    | Id (id)  -> get_from_typ_env gamma id
-    | Unit -> Some_typ (TUnit)
-    | Lambda (id, tt, e) ->
-        (
-            match (type_infer e (add_to_typ_env gamma (id, tt))) with
-            | None_typ -> None_typ
-            | Some_typ (tt2) -> Some_typ (TFun (tt, tt2))
-        )
-    | App (e1, e2) -> 
-        match (type_infer e1 gamma) with
-        | None_typ -> None_typ
-        | Some_typ (t1) -> 
-            (match t1 with
-            | TFun (tt2, tt3) ->
-                (match (type_infer e2 gamma) with
-                | None_typ -> None_typ
-                | Some_typ (t2) -> if tt2 = t2 then Some_typ (tt3) else None_typ)
-            | _ -> None_typ);;
-
-let rec eval: term -> env -> value_option = fun (e: term) -> fun (bindings: env) -> 
-    match e with
-    | Id (id) -> get_from_env bindings id
-    | Unit -> Some_value (VUnit)
-    | Lambda (id, tt, e) -> Some_value (VLambda (id, tt, e))
-    | App (t1, t2) -> 
-        let v1_opt: value_option = eval t1 bindings in
-        let v2_opt: value_option = eval t2 bindings in
-        (match v1_opt with
-        | None_value -> None_value
-        | Some_value (v1) -> 
-            (match v2_opt with
-            | None_value -> None_value
-            | Some_value (v2) ->
-                (match v1 with
-                | VLambda (id1, t1, e1) ->
-                    let new_bindings: env = add_to_env bindings (id1, v2) in
-                    eval e1 new_bindings
-                | _ -> None_value)));;
-
-let rec substitute: term -> string -> value -> term = fun (e:term) -> fun (id_to_sub: string) -> fun (v: value) ->
-    match e with
-    | Unit -> Unit
-    | Lambda (id, tt, e) -> 
-        if id = id_to_sub then Lambda (id, tt, e) (*Cut*)
-        else Lambda (id, tt, substitute e id_to_sub v) (*This is sound only because the value is closed*)
-    | App (t1, t2) -> App (substitute t1 id_to_sub v, substitute t2 id_to_sub v)
-    | Id (id) -> if id = id_to_sub then to_term v else Id (id);;
-
-let rec eval2: term -> value_option = fun (e: term) ->
-    match e with
-    | Id (id) -> None_value
-    | Unit -> Some_value (VUnit)
-    | Lambda (id, tt, e) -> Some_value (VLambda (id, tt, e))
-    | App (t1, t2) -> 
-        let v1_opt: value_option = eval2 t1 in
-        let v2_opt: value_option = eval2 t2 in
-        (match v1_opt with
-        | None_value -> None_value
-        | Some_value (v1) -> 
-            (match v2_opt with
-            | None_value -> None_value
-            | Some_value (v2) ->
-                (match v1 with
-                | VLambda (id1, t1, e1) ->
-                    eval2 (substitute e1 id1 v2)
-                | _ -> None_value)));;
-
 (*
-    Peano encoding
+    Church encoding
     0 = lambda f. lambda x. x
     n = lambda f. lambda x. f f f f ...(f x)
     succ = lambda n. lambda f. lambda x. f (n f x)
@@ -119,15 +29,9 @@ let num: int -> term = fun (n:int) ->
 
 let zero: term = num 0;;
 
-type_infer zero (Nil_typ_env);;
-
 let one: term = num 1;;
 
-type_infer one (Nil_typ_env);;
-
 let five: term = num 5;;
-
-type_infer five (Nil_typ_env);;
 
 let succ: term = Lambda("n", TFun (TFun (TUnit, TUnit), TFun (TUnit, TUnit)), 
                     Lambda ("f", TFun (TUnit, TUnit), 
@@ -135,6 +39,158 @@ let succ: term = Lambda("n", TFun (TFun (TUnit, TUnit), TFun (TUnit, TUnit)),
                             App (Id ("f"), App (App (Id ("n"), Id ("f")), Id ("x")))
                             )));;
 
-type_infer succ (Nil_typ_env);;
+(*Attempt 1: Useless first attempt*)
+(*
+let rec eval_staged: term -> []value_option = fun (e: term) ->
+    match e with
+    | Id (id) -> box (|- None_value)
+    | Unit -> box (|- Some_value (VUnit))
+    | Lambda (id, tt, e) -> let box res = lift[value] (VLambda (id, tt, e)) in box (|- Some_value (res with ()))
+    | App (t1, t2) -> 
+        let box v1_opt = eval_staged t1 in
+        let box v2_opt = eval_staged t2 in
+        (match (v1_opt with ()) with
+        | None_value -> box (|- None_value)
+        | Some_value (v1) -> 
+            (match (v2_opt with ()) with
+            | None_value -> box (|- None_value)
+            | Some_value (v2) ->
+                (match v1 with
+                | VLambda (id1, t1, e1) ->
+                    let box evaluated = eval_staged (substitute e1 id1 v2)
+                    in
+                        box (|- evaluated with ())
+                | _ -> box (|- None_value))));;
 
-eval2 (App (succ, one));;
+eval_staged (App (succ, one));;
+
+*)
+
+(*
+    Attempt 2: Use the contextual version of the interpreter.
+    Use context as input: list of (id, expr)
+    Failed because of staging issues -- cf. Eval.
+*)
+
+let type_infer: term -> [gamma: typ_env]typ_option =
+
+    let box add_to_typ_env = 
+        box (gamma: typ_env, iddef: (string*typ) |-
+            Cons_typ_env (iddef, gamma)
+        )
+    in
+
+    let box get_from_typ_env = box(gamma: typ_env, id: string|-
+        let rec get_from_typ_env: typ_env -> string -> typ_option = fun (gamma: typ_env) -> fun (id: string) ->
+            match gamma with
+            | Nil_typ_env -> None_typ
+            | Cons_typ_env (iddef, gamma) -> if id = iddef[0] then Some_typ (iddef[1]) else get_from_typ_env gamma id
+        in
+        get_from_typ_env gamma id)
+    in
+
+    let rec type_infer_aux: term -> [gamma: typ_env]typ_option = 
+        fun (e:term) ->
+        match e with
+        | Id (id)  -> let box lifted_id = (lift[string] id) in 
+            box (gamma: typ_env |- (get_from_typ_env with (gamma, lifted_id with ())))
+        | Unit -> box (gamma: typ_env|- Some_typ (TUnit))
+        | Lambda (id, tt, e) ->
+            let box typ_infer_e = type_infer_aux e in
+            let box lifted_id = lift[string] id in
+            let box lifted_tt = lift[typ] tt in
+            box (gamma: typ_env |-
+                let new_env: typ_env = (add_to_typ_env with (gamma, (lifted_id with (), lifted_tt with ()))) in
+                match (typ_infer_e with (new_env)) with
+                | None_typ -> None_typ
+                | Some_typ (tt2) -> Some_typ (TFun (lifted_tt with (), tt2))
+            )
+        | App (e1, e2) -> 
+            let box partial_type_infer_e1 = type_infer_aux e1 in
+            let box partial_type_infer_e2 = type_infer_aux e2 in
+            box (gamma: typ_env |-
+                match (partial_type_infer_e1 with (gamma)) with
+                | None_typ -> None_typ
+                | Some_typ (t1) -> 
+                    (match t1 with
+                    | TFun (tt2, tt3) ->
+                        (match (partial_type_infer_e2 with (gamma)) with
+                        | None_typ -> None_typ
+                        | Some_typ (t2) -> if tt2 = t2 then Some_typ (tt3) else None_typ)
+                    | _ -> None_typ)
+            )
+    in 
+        type_infer_aux;;
+
+let eval_with_input: term -> [bindings: env]value_option = 
+    let box add_to_env =
+        box (|- fun (gamma: env) -> fun (iddef: (string * value)) -> Cons_env (iddef, gamma))
+    in
+    let box get_from_env = box (|- let rec get_from_env: env -> string -> value_option = fun (gamma: env) -> fun (id: string) ->
+        match gamma with
+        | Nil_env -> None_value
+        | Cons_env (iddef, gamma) -> if id = iddef[0] then Some_value (iddef[1]) else get_from_env gamma id
+    in
+        get_from_env)
+    in 
+    let box eval_unboxed = box (|- 
+        let rec eval: term -> env -> value_option = fun (e: term) -> fun (bindings: env) -> 
+            match e with
+            | Id (id) -> (get_from_env with ()) bindings id
+            | Unit -> Some_value (VUnit)
+            | Lambda (id, tt, e) -> Some_value (VLambda (id, tt, e))
+            | App (t1, t2) -> 
+                let v1_opt: value_option = eval t1 bindings in
+                let v2_opt: value_option = eval t2 bindings in
+                (match v1_opt with
+                | None_value -> None_value
+                | Some_value (v1) -> 
+                    (match v2_opt with
+                    | None_value -> None_value
+                    | Some_value (v2) ->
+                        (match v1 with
+                        | VLambda (id1, t1, e1) ->
+                            let new_bindings: env = (add_to_env with ()) bindings (id1, v2) in
+                            eval e1 new_bindings
+                        | _ -> None_value)))
+        in eval
+    )
+    in
+    let rec eval_with_input: term -> [bindings: env]value_option = fun (e: term) -> 
+        match e with
+        | Id (id) -> let box unboxed_lifted_id = lift[string] id in box (bindings: env |- (get_from_env with ()) bindings (unboxed_lifted_id with ()))
+        | Unit -> box (bindings: env |- Some_value (VUnit))
+        | Lambda (id, tt, e) -> 
+            let box unboxed_value = lift[value] (VLambda (id, tt, e)) in 
+                box (bindings: env |- Some_value (unboxed_value with ()))
+        | App (t1, t2) -> 
+            let box eval_t1 = eval_with_input t1 in
+            let box eval_t2 = eval_with_input t2 in
+            box (bindings: env |- 
+            (
+                match (eval_t1 with (bindings)) with
+                | None_value -> None_value
+                | Some_value (v1) -> 
+                    (match (eval_t2 with (bindings)) with
+                    | None_value -> None_value
+                    | Some_value (v2) ->
+                        (match v1 with
+                        | VLambda (id1, t1, e1) ->
+                            let new_bindings: env = (add_to_env with ()) bindings (id1, v2) in
+                            (eval_unboxed with ()) e1 new_bindings (*BOOM*)
+                        | _ -> None_value)))
+            )
+    in
+    eval_with_input;;
+
+let res: [bindings: env]value_option = eval_with_input (App (succ, one));;
+
+let box u = res in u with (Nil_env);;
+
+let t: [gamma: typ_env]typ_option = type_infer (App (succ, one)) in 
+
+let box u = (t) in u with (Nil_typ_env);;
+
+let res: [bindings: env]value_option = eval_with_input (App (succ, one));;
+
+let box u = res in u with (Nil_env);;
