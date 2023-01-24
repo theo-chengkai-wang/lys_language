@@ -69,7 +69,7 @@ eval_staged (App (succ, one));;
 (*
     Attempt 2: Use the contextual version of the interpreter.
     Use context as input: list of (id, expr)
-    Failed because of staging issues -- cf. Eval.
+    Interestingly the staged version of type inference needs a LOT more steps than the non-staged version.
 *)
 
 let type_infer: term -> [gamma: typ_env]typ_option =
@@ -194,3 +194,5 @@ let box u = (t) in u with (Nil_typ_env);;
 let res: [bindings: env]value_option = eval_with_input (App (succ, one));;
 
 let box u = res in u with (Nil_env);;
+
+let box u = (type_infer (App (succ, one))) in u with (Nil_typ_env);;
