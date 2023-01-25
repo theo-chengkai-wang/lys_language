@@ -1,0 +1,53 @@
+datatype intlist = Nil | Cons of (int * intlist);;
+
+let rec map_int_int:(intlist -> (int -> int) -> intlist) = 
+    fun (xs: intlist) -> fun (f:(int -> int)) -> 
+    match xs with
+    | Nil -> Nil
+    | Cons (x, xs) -> Cons (f x, map_int_int xs f);;
+
+let rec fold_int_int_int: (intlist -> int -> (int -> int -> int) -> int) =
+    fun (xs: intlist) -> fun (init: int) -> fun (f: int -> int -> int) -> 
+        match xs with
+        | Nil -> init
+        | Cons (x, xs) -> fold_int_int_int xs (f init x) (f);;
+
+(*Unfortunately lifting is necessary*)
+(*
+    let rec lift_int: int -> []int = fun (n:int) -> 
+        if n = 0 then box (|- 0) else let box u = lift_int (n-1) in box (|- (u with ()) + 1);;
+*)
+(* Powerful new lifting primitive! *)
+let lift_int: int -> []int = fun (n:int) -> lift[int] n;;
+
+let rec map_int_int_b:(intlist -> [f:(int -> int)]intlist) = 
+    fun (xs:intlist) -> 
+    match xs with
+    | Nil -> box (f: (int -> int) |- Nil)
+    | Cons (x, xs) -> 
+        let box v = map_int_int_b xs in
+        let box lifted_x = lift_int x in
+        box (f: (int -> int) |- Cons (f (lifted_x with ()), v with (f)));;
+
+let rec fold_int_int_int_b: (intlist -> [init: int, f: (int -> int -> int)]int) =
+    fun (xs: intlist) ->
+        match xs with
+        | Nil -> box (init: int, f: (int -> int -> int)|- init)
+        | Cons (x, xs) -> 
+            let box fold_xs = fold_int_int_int_b xs in
+            let box lifted_x = lift[int] x in
+            box (init: int, f: (int -> int -> int) |- fold_xs with (f init (lifted_x with ()), (f)))
+         ;;
+
+map_int_int (Cons (1, Cons (2, Cons (3, Nil)))) (fun (x:int) -> x * 2);;
+
+let res:([f:(int -> int)]intlist) = map_int_int_b (Cons (1, Cons (2, Cons (3, Nil))));;
+
+let box u = res in u with (fun (x:int) -> x * 2);;
+
+fold_int_int_int (Cons (1, Cons (2, Cons (3, Nil)))) 0 (fun (acc:int) -> fun (x:int) -> acc + x);;
+
+let res2: [init: int, f: (int -> int -> int)]int = fold_int_int_int_b (Cons (1, Cons (2, Cons (3, Nil))));;
+
+let box u = res2 in u with (0, (fun (acc:int) -> fun (x:int) -> acc + x));;
+
