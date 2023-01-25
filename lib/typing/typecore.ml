@@ -517,8 +517,8 @@ and type_inference_expression meta_ctx ctx type_ctx e =
                       else
                         Or_error.error
                           "TypeInferenceError: Constructor doesn't match type"
-                          (constr, tid)
-                          [%sexp_of: Ast.Constructor.t * Ast.TypeIdentifier.t])
+                          (Ast.Pattern.Datatype (constr, id_list), tid)
+                          [%sexp_of: Ast.Pattern.t * Ast.TypeIdentifier.t])
                   >>= fun constr_record ->
                   (*2- get list*)
                   let typs =
