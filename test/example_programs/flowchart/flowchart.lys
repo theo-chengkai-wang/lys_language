@@ -6,12 +6,21 @@ datatype expr = Int of int | Var of string | Add of (expr * expr);;
 datatype command = Goto of int | Assign of (string * expr) | If of (expr * int * int) | Return of expr;;
 datatype string_list = Nil_s | Cons_s of (string * string_list);;
 datatype command_list = Nil_c | Cons_c of (command * command_list);;
-datatype int_list = Nil_i | Cons_i of (int * command_list);;
+datatype int_list = Nil_i | Cons_i of (int * int_list);;
 (*program = string_list * command_list *)
 datatype env = Nil_env | Cons_env of ((string * int) * env);; (*Only possible value = int*)
 
 (*We do not handle exceptions here*)
 (*TODO: Handle exceptions at some point*)
+
+let rec zip: string_list -> int_list -> env = fun (xs: string_list) -> fun (ys: int_list) ->
+    match xs with
+    | Nil_s -> 
+        (match ys with
+        | Nil_i -> (Nil_env))
+    | Cons_s (x, xs) ->
+        (match ys with 
+        | Cons_i (y, ys) -> Cons_env ((x, y), zip xs ys));;
 
 (*For evaluation*)
 let rec lookup: env -> string -> int = fun (bindings: env) -> fun (id: string) ->
@@ -56,4 +65,7 @@ let rec run: int -> command -> env -> command_list -> int = fun (l: int) -> fun 
 
 let interpret: (string_list * command_list) -> int_list -> int
 = fun (program: (string_list * command_list)) -> fun (args: int_list) ->
-    
+    let store: env = zip program[0] args in
+    match program[1] with
+    | Cons_c (c, cs) ->
+        run 1 c store program[1];;
