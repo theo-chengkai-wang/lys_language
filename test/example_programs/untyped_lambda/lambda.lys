@@ -1,3 +1,7 @@
+(* 
+    Inspired from Jones Gomard Sestoft, Partial Evaluationand Automatic Program Generation, Section 3.3.1
+*)
+
 datatype lambda = 
     Int of int | Var of string | Abs of (string * lambda) | Apply of (lambda * lambda) 
     | BinOp of (string * lambda * lambda) | If of (lambda * lambda * lambda)
