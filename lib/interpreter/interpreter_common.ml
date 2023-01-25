@@ -343,5 +343,5 @@ module TopLevelEvaluationResult = struct
         List.fold id_constr_typ_list_list ~init:""
           ~f:(fun acc (tid, constr_typ_list) ->
             let single_str = process_single_decl (tid, constr_typ_list) in
-            acc ^ "and " ^ single_str)
+            acc ^ single_str)
 end
