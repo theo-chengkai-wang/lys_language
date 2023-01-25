@@ -1,0 +1,39 @@
+(*let rec convolution xs ys cont =
+  match xs with
+  | [] -> cont ys
+  | x :: xs ->
+      convolution xs ys (fun ys ->
+          match ys with
+          | hd :: tl -> (x * hd) :: cont tl
+          | _ -> failwith "Length unequal")
+*)
+
+datatype intlist = Nil | Cons of (int * intlist);;
+
+let rec conv: intlist -> intlist -> (intlist -> intlist) -> intlist = fun (xs: intlist) -> fun (ys: intlist) -> fun (cont: intlist -> intlist) ->
+    match xs with
+    | Nil -> cont ys
+    | Cons (x, xs) ->
+        conv xs ys (fun (ys: intlist) -> 
+            match ys with
+            | Cons (hd, tl) -> Cons (x * hd, cont tl)
+        );;
+
+let rec conv_staged: intlist -> [ys: intlist] intlist -> [ys: intlist] intlist =
+    fun (xs: intlist) -> fun (cont: [ys: intlist]intlist) ->
+        match xs with
+        | Nil -> let box u = cont in box (ys: intlist|- u with (ys))
+        | Cons (x, xs) ->
+            let f:[ys: intlist]intlist -> [ys: intlist]intlist = conv_staged xs in
+            let box lifted_x = lift[int] x in
+            let box u = cont in
+            f (box (ys: intlist |- 
+                match ys with
+                | Cons (hd, tl) -> Cons ((lifted_x with ()) * hd, u with (tl))
+            ));;
+
+conv (Cons (3, Cons (2, Nil))) (Cons (3, Cons (2, Nil))) (fun (ys: intlist) -> Nil);;
+
+let staged: [ys: intlist] intlist = conv_staged (Cons (3, Cons (2, Nil))) (box (ys: intlist|- Nil));;
+
+let box u = staged in u with (Cons (3, Cons (2, Nil)));;
