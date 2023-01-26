@@ -77,9 +77,112 @@ let interpret: (string_list * command_list) -> int_list -> int
     Staged version:
     - interpret: (string_list * command_list) -> [args: intlist]int
     - run: int -> command -> commad_list -> [store: env]int
-    - eval: expr -> [store: ev]int
+    - eval: expr -> [store: env]int
     - The rest: just box them.
 *)
+
+let zip_box: [](string_list -> int_list -> env) = box (|- 
+    let rec zip: string_list -> int_list -> env = fun (xs: string_list) -> fun (ys: int_list) ->
+        match xs with
+        | Nil_s -> 
+            (match ys with
+            | Nil_i -> (Nil_env))
+        | Cons_s (x, xs) ->
+            (match ys with 
+            | Cons_i (y, ys) -> Cons_env ((x, y), zip xs ys))
+    in zip
+);;
+
+
+let lookup_box: [](env -> string -> int) = 
+    box (|- 
+        let rec lookup: env -> string -> int = fun (bindings: env) -> fun (id: string) ->
+            match bindings with
+            | Cons_env (binding, rest) -> if binding[0] = id then (binding[1]) else lookup rest id
+        in lookup
+    );;
+
+let update_box: [](env -> (string * int) -> env) = box (|- 
+    let rec update: env -> (string * int) -> env = fun (bindings: env) -> fun (id_val: (string * int)) ->
+        match bindings with
+        | Nil_env -> Cons_env (id_val, Nil_env)
+        | Cons_env (id_val_2, rest) -> if id_val_2[0] = id_val[0] then Cons_env (id_val, rest) else 
+            Cons_env (id_val_2, update rest id_val)
+    in update
+);;
+
+let nth_box: [](command_list -> int -> command) = box (|- 
+    (*For jumps*)
+    let rec nth: command_list -> int -> command = fun (cs: command_list) -> fun (i: int) ->
+        match cs with
+        | Cons_c (c, cs) ->
+            if i = 1 then c
+            else nth cs (i-1)
+    in nth
+);;
+
+
+let rec eval_staged: expr -> [store: env] int = 
+let box lookup = lookup_box in 
+fun (e: expr) -> 
+    match e with
+    | Int (n) -> let box lifted_n = lift[int] n in box (store: env |- lifted_n with ())
+    | Var (x) -> let box lifted_x = lift[string] x in box (store: env |- (lookup with ()) store (lifted_x with ()))
+    | Add (e1, e2) -> 
+        let box partial_1 = eval_staged e1 in
+        let box partial_2 = eval_staged e2 in
+        box (store: env |- 
+            (partial_1 with (store)) + (partial_2 with (store))
+        )
+    | Leq (e1, e2) ->
+        let box partial_1 = eval_staged e1 in
+        let box partial_2 = eval_staged e2 in
+        box (store: env |- 
+            if ((partial_1 with (store)) <= (partial_2 with (store))) then 0 else 1
+        );;
+
+let rec run_staged: int -> command -> command_list -> [store: env]int = 
+let box update = update_box in
+fun (l: int) -> fun (c1: command) -> fun (p: command_list) ->
+    match c1 with
+    | Goto (n) -> 
+    (*TODO: Fix*)
+        run_staged n (nth p n) p
+    | Assign (x, e) -> 
+        let box lifted_x = lift[string] x in
+        let box eval_e_partial = eval_staged e in
+        let box run_next_partial = run_staged (l + 1) (nth p (l+1)) p in
+        box (store: env|-
+            let s1: env = (update with ()) store (lifted_x with (), eval_e_partial with (store)) in
+            run_next_partial with (s1)
+        )
+    | If (e, m, n) ->
+    (*TODO: Fix*)
+        let box eval_partial = eval_staged e in
+        let box run_m_partial = run_staged m (nth p m) p in
+        let box run_n_partial = run_staged n (nth p n) p in
+        box (store: env |- 
+            if (eval_partial with (store)) = 0 then
+                run_m_partial with (store)
+            else
+                run_n_partial with (store)
+        )
+    | Return (e) ->
+        eval_staged e;;
+
+let interpret_staged: (string_list * command_list) -> [args: int_list]int = 
+    let box zip = zip_box in
+    fun (program: (string_list * command_list)) ->
+        let box compiled_program = 
+            match program[1] with
+            | Cons_c (c, cs) ->
+                run_staged 1 c program[1]
+        in
+        let box lifted_inputs = lift[string_list] program[0] in
+        box (args: int_list |- 
+            let store: env = (zip with ()) (lifted_inputs with ()) args in
+            compiled_program with (store)
+        );;
 
 (*
     https://en.wikipedia.org/wiki/Flow_chart_language
@@ -133,3 +236,7 @@ let p: (string_list * command_list) = (
 let a: int_list = Cons_i (10, Nil_i);;
 
 interpret p a;;
+
+let compiled:[args: int_list]int = interpret_staged p;;
+
+let box u = compiled in u with (a);;
