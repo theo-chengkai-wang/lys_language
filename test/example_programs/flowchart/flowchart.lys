@@ -73,7 +73,13 @@ let interpret: (string_list * command_list) -> int_list -> int
     | Cons_c (c, cs) ->
         run 1 c store program[1];;
 
-(*Staged version*)
+(*
+    Staged version:
+    - interpret: (string_list * command_list) -> [args: intlist]int
+    - run: int -> command -> commad_list -> [store: env]int
+    - eval: expr -> [store: ev]int
+    - The rest: just box them.
+*)
 
 (*
     https://en.wikipedia.org/wiki/Flow_chart_language
