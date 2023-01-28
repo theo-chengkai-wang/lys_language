@@ -1,0 +1,204 @@
+(* 
+    Inspired from Jones Gomard Sestoft, Partial Evaluationand Automatic Program Generation, Section 3.3.1
+*)
+
+datatype lambda = 
+    Int of int | Var of string | Abs of (string * lambda) | Apply of (lambda * lambda) 
+    | BinOp of (string * lambda * lambda) | If of (lambda * lambda * lambda)
+
+and value = Numb of int | Closure of (string * lambda * env)
+
+and env = Nil_env | Cons_env of ((string * value) * env)
+
+and lambda_list = Nil_lambda | Cons_lambda of (lambda * lambda_list);;
+
+datatype value_option = None | Some of value;;
+
+let rec lookup: env -> string -> value_option = fun (bindings: env) -> fun (id: string) ->
+    match bindings with
+    | Nil_env -> None
+    | Cons_env (binding, rest) -> if binding[0] = id then Some (binding[1]) else lookup rest id;;
+
+let rec eval: lambda -> env -> value_option = fun (e: lambda) -> fun (bindings: env) -> 
+    match e with
+    | Int (n) -> Some (Numb n)
+    | Var (x) -> lookup bindings x
+    | Abs (x, e) -> Some (Closure (x, e, bindings))
+    | Apply (e, f) -> 
+        let f1_opt: value_option = eval f bindings in
+        (match f1_opt with
+        | None -> None
+        | Some (f1) ->
+            let e_eval: value_option = eval e bindings in
+            match e_eval with
+            | None -> None
+            | Some (e_val) ->
+                (match e_val with
+                | Closure (x, e, clo_bindings) ->
+                    eval e (Cons_env ((x, f1), clo_bindings))
+                | _ -> None))
+    | BinOp (op, e1, e2) ->
+        let v1_opt: value_option = eval e1 bindings in
+        let v2_opt: value_option = eval e2 bindings in
+        (match v1_opt with
+        | None -> None
+        | Some (v1) ->
+            (match v2_opt with
+            | None -> None
+            | Some (v2) ->
+                (* Check both are numbers *)
+                match v1 with
+                | Numb (n1) ->
+                    (match v2 with
+                    | Numb (n2) -> Some (Numb (n1 + n2))
+                    | _ -> None)
+                | _ -> None))
+    | If (e, f, g) ->
+        match (eval e bindings) with
+        | None -> None
+        | Some (v_e) ->
+            match v_e with
+            | Numb (n) ->
+                if n = 1 then (eval f bindings)
+                else (eval g bindings)
+            | _ -> None;;
+
+(* Now staged version *)
+
+let lookup_box: [](env -> string -> value_option) =
+    box (|- 
+        let rec lookup: env -> string -> value_option = fun (bindings: env) -> fun (id: string) ->
+            match bindings with
+            | Nil_env -> None
+            | Cons_env (binding, rest) -> if binding[0] = id then Some (binding[1]) else lookup rest id
+        in
+        lookup
+    );;
+
+let eval_box: [](lambda -> env -> value_option) = 
+let box lookup = lookup_box in
+    box (|- 
+        let rec eval: lambda -> env -> value_option = fun (e: lambda) -> fun (bindings: env) -> 
+            match e with
+            | Int (n) -> Some (Numb n)
+            | Var (x) -> (lookup with ()) bindings x
+            | Abs (x, e) -> Some (Closure (x, e, bindings))
+            | Apply (e, f) -> 
+                let f1_opt: value_option = eval f bindings in
+                (match f1_opt with
+                | None -> None
+                | Some (f1) ->
+                    let e_eval: value_option = eval e bindings in
+                    match e_eval with
+                    | None -> None
+                    | Some (e_val) ->
+                        (match e_val with
+                        | Closure (x, e, clo_bindings) ->
+                            eval e (Cons_env ((x, f1), clo_bindings))
+                        | _ -> None))
+            | BinOp (op, e1, e2) ->
+                let v1_opt: value_option = eval e1 bindings in
+                let v2_opt: value_option = eval e2 bindings in
+                (match v1_opt with
+                | None -> None
+                | Some (v1) ->
+                    (match v2_opt with
+                    | None -> None
+                    | Some (v2) ->
+                        (* Check both are numbers *)
+                        match v1 with
+                        | Numb (n1) ->
+                            (match v2 with
+                            | Numb (n2) -> Some (Numb (n1 + n2))
+                            | _ -> None)
+                        | _ -> None))
+            | If (e, f, g) ->
+                match (eval e bindings) with
+                | None -> None
+                | Some (v_e) ->
+                    match v_e with
+                    | Numb (n) ->
+                        if n = 1 then (eval f bindings)
+                        else (eval g bindings)
+                    | _ -> None
+        in eval
+    );;
+
+let eval_staged: lambda -> [bindings: env]value_option = fun (e: lambda) ->
+    let box lookup = lookup_box in
+    let box eval_unstaged_aux = eval_box in
+    let rec eval_staged_aux: lambda -> [bindings: env]value_option = fun (e: lambda) ->
+        match e with
+        | Int (n) -> let box lifted_n = lift[int] n in box (bindings: env |- Some (Numb (lifted_n with ())))
+        | Var (x) -> let box lifted_x = lift[string] x in box (bindings: env |- (lookup with ()) bindings (lifted_x with ()))
+        | Abs (x, e) -> let box lifted_e = lift[lambda] (Abs (x, e)) in
+             box (bindings: env |- Some (Closure (lifted_e with (), bindings)))
+        | Apply (e, f) -> 
+            let box f1_partial = eval_staged_aux f in
+            let box e_partial = eval_staged_aux e in
+            box (bindings:env |- 
+                match (f1_partial with (bindings)) with
+                | None -> None
+                | Some (f1) ->
+                    match (e_partial with (bindings)) with
+                    | None -> None
+                    | Some (e_val) ->
+                        (match e_val with
+                        | Closure (e, clo_bindings) ->
+                            (match e with
+                            | Abs (x, e1) ->
+                                (eval_unstaged_aux with ()) e1 (Cons_env ((x, f1), clo_bindings))
+                            | _ -> None)
+                        | _ -> None)
+            )
+        | BinOp (op, e1, e2) ->
+            if op != "+" then box (bindings: env|- None)
+            else
+                let box v1_opt = eval_staged_aux e1 in
+                let box v2_opt = eval_staged_aux e2 in
+                box (bindings: env |- 
+                    match (v1_opt with (bindings)) with
+                    | None -> None
+                    | Some (v1) ->
+                        (match (v2_opt with (bindings)) with
+                        | None -> None
+                        | Some (v2) ->
+                            (* Check both are numbers *)
+                            match v1 with
+                            | Numb (n1) ->
+                                (match v2 with
+                                | Numb (n2) -> Some (Numb (n1 + n2))
+                                | _ -> None)
+                            | _ -> None)
+                )
+        | If (e, f, g) ->
+            let box e_partial = eval_staged_aux e in
+            let box f_partial = eval_staged_aux f in
+            let box g_partial = eval_staged_aux g in 
+            box (bindings: env |- 
+                match (e_partial with (bindings)) with
+                | None -> None
+                | Some (v_e) ->
+                    match v_e with
+                    | Numb (n) ->
+                        if n = 1 then (f_partial with (bindings))
+                        else (g_partial with (bindings))
+                    | _ -> None
+            )
+    in eval_staged_aux e;;
+
+let expr: lambda = (
+    Apply (
+        Apply (
+            Abs ("x", Abs ("y", BinOp ("+", Var ("x"), Var ("y")))),
+            Int (1)
+        ),
+        Int (2)
+    )
+);;
+
+eval expr (Nil_env);;
+
+let st: [bindings: env]value_option = eval_staged (expr);;
+
+let box u = st in u with (Nil_env);;

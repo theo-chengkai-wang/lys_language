@@ -141,6 +141,7 @@ fun (e: expr) ->
             if ((partial_1 with (store)) <= (partial_2 with (store))) then 0 else 1
         );;
 
+(**)
 let rec run_staged: int -> command -> command_list -> [store: env]int = 
 let box update = update_box in
 fun (l: int) -> fun (c1: command) -> fun (p: command_list) ->
@@ -195,7 +196,7 @@ let interpret_staged: (string_list * command_list) -> [args: int_list]int =
     4: return 1
 
     5: x1 = x1 + x2
-
+ 
     6: t = x1
     7: x1 = x2
     8: x2 = t
