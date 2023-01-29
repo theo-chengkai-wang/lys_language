@@ -4,7 +4,7 @@
 
 datatype lambda = 
     Int of int | Var of string | Abs of (string * lambda) | Apply of (lambda * lambda) 
-    | BinOp of (string * lambda * lambda) | If of (lambda * lambda * lambda)
+    | BinOp of (string * lambda * lambda) | If of (lambda * lambda * lambda) (*If here takes 0 as true and any other value as false*)
 
 and value = Numb of int | Closure of (string * lambda * env)
 
@@ -59,7 +59,7 @@ let rec eval: lambda -> env -> value_option = fun (e: lambda) -> fun (bindings: 
         | Some (v_e) ->
             match v_e with
             | Numb (n) ->
-                if n = 1 then (eval f bindings)
+                if n = 0 then (eval f bindings)
                 else (eval g bindings)
             | _ -> None;;
 
@@ -118,7 +118,7 @@ let box lookup = lookup_box in
                 | Some (v_e) ->
                     match v_e with
                     | Numb (n) ->
-                        if n = 1 then (eval f bindings)
+                        if n = 0 then (eval f bindings)
                         else (eval g bindings)
                     | _ -> None
         in eval
@@ -137,7 +137,7 @@ datatype string_list = Nil_s | Cons_s of (string * string_list);;
 let rec string_list_contains: string_list -> string -> bool = fun (xs: string_list) -> fun (x: string) ->
     match xs with
     | Nil_s -> false
-    | Cons (y, ys) -> if x = y then true else (string_list_contains ys x);; 
+    | Cons_s (y, ys) -> if x = y then true else (string_list_contains ys x);; 
 
 (*Checks that the expression contains variables which do not depend on any external inputs*)
 let rec pcheck_expr_is_known: lambda -> string_list -> bool = fun (e: lambda) -> fun (bound_variables: string_list) ->
@@ -145,10 +145,10 @@ let rec pcheck_expr_is_known: lambda -> string_list -> bool = fun (e: lambda) ->
     | Int (n) -> true
     | Var (x) -> string_list_contains bound_variables x
     | Abs (x, e) -> 
-        pcheck_expr_is_known e (Cons (x, bound_variables))
+        pcheck_expr_is_known e (Cons_s (x, bound_variables))
     | Apply (f, e) -> 
         (pcheck_expr_is_known f bound_variables) && (pcheck_expr_is_known e bound_variables)
-    | Binop (op, e1, e2) ->
+    | BinOp (op, e1, e2) ->
         (pcheck_expr_is_known e1 bound_variables) && (pcheck_expr_is_known e2 bound_variables)
     | If (e, f, g) -> 
         (pcheck_expr_is_known e bound_variables) 
@@ -166,10 +166,16 @@ let rec concat_staged: env -> [ys: env]env = fun (xs: env) ->
     match xs with
     | Nil_env -> box (ys: env |- ys)
     | Cons_env (x, xs) -> 
-        let box lifted_x = lift[string * value] x in
+        let box lifted_x = lift[(string * value)] x in
         let box concat_xs = concat_staged xs in
         box (ys: env |- Cons_env (lifted_x with (), concat_xs with (ys)));;
 
+let rec remove_bindings: env -> string -> env = fun (bindings: env) -> fun (id: string) ->
+    match bindings with
+    | Nil_env -> Nil_env
+    | Cons_env (x, xs) -> if id = x[0] then remove_bindings xs id else Cons_env (x, remove_bindings xs id);;
+
+(*For peval in particular, make sure the closure context do not contain shadowed bindings*)
 let rec peval: lambda -> env -> pval = 
     let box lookup_unboxed = lookup_box in
     let box eval_unboxed = eval_box in
@@ -178,25 +184,26 @@ let rec peval: lambda -> env -> pval =
         | Int (n) -> Known (Numb (n))
         | Var (x) -> (
             match (lookup known_env x) with
-            | None_env -> 
+            | None -> 
                 let box lifted_x = lift[string] x in
                 Unknown (box (bindings: env |- (lookup_unboxed with ()) bindings (lifted_x with ())))
             | Some (v) -> 
                 Known (v)
         )
         | Abs (x, e) -> 
-            let known_variables: string_list = env_to_string_list known_env in
+            let known_env: env = remove_bindings known_env x in
+            let known_variables: string_list = Cons_s (x, env_to_string_list known_env) in
             let pcheck_result: bool = pcheck_expr_is_known e known_variables in
             if pcheck_result then
                 Known (Closure (x, e, known_env))
             else
                 let box lifted_x = lift[string] x in
                 let box lifted_e = lift[lambda] e in
-                let box concat_known_env_ = concat_staged known_env in
+                let box concat_known_env = concat_staged known_env in
                 Unknown (
                     box (bindings: env |- 
                         Some (
-                            Closure (lifted_x with (), lifted e with (), concat_known_env_ with (bindings))
+                            Closure (lifted_x with (), lifted_e with (), concat_known_env with (bindings))
                         )
                     )
                 )
@@ -205,30 +212,30 @@ let rec peval: lambda -> env -> pval =
             let right: pval = peval f known_env in
             (
                 match left with
-                | Unknown boxed_v_1 -> 
+                | Unknown (boxed_v_1) -> 
                 let box unboxed_v_1 = boxed_v_1 in
                 (
                     match right with
-                    | Unknown boxed_v_2 ->
+                    | Unknown (boxed_v_2) ->
                         let box unboxed_v_2 = boxed_v_2 in
                         Unknown (box (bindings: env |- 
                             match (unboxed_v_1 with (bindings)) with
                             | None -> None
-                            | Some v1 ->
+                            | Some (v1) ->
                                 match (unboxed_v_2 with (bindings)) with
-                                | None_value -> None
-                                | Some_value v2 -> 
+                                | None -> None
+                                | Some (v2) -> 
                                     match v1 with
                                     | Closure (x, e, clo_bindings) ->
                                         (eval_unboxed with ()) e (Cons_env ((x, v2), clo_bindings))
                                     | _ -> None
                         ))
-                    | Known v2 ->
+                    | Known (v2) ->
                         let box lifted_v2 = lift[value] v2 in
                         Unknown (box (bindings: env |- 
                             match (unboxed_v_1 with (bindings)) with
                             | None -> None
-                            | Some v1 ->
+                            | Some (v1) ->
                                 match v1 with
                                 | Closure (x, e, clo_bindings) ->
                                     (eval_unboxed with ()) e (Cons_env ((x, lifted_v2 with ()), clo_bindings))
@@ -236,26 +243,54 @@ let rec peval: lambda -> env -> pval =
                         ))
                     | Error -> Error
                 )
-                | Known v1 ->
+                | Known (v1) ->
                     (match v1 with 
                     | Closure (x, e, clo_bindings) ->
                         (
                             match right with
-                            | Unknown boxed_v_2 -> 
-                                let box lifted_x = lift[string] x in
-                                let box lifted_e = lift[lambda] e in
-                                let box lifted_clo_bindings = lift[env] clo_bindings in
+                            | Unknown (boxed_v_2) -> 
+                                let eval_e: pval = peval e clo_bindings in (*Relies on assumption that clo_bindings does not contain x*)
                                 let box unboxed_v_2 = boxed_v_2 in
-                                Unknown ( box (bindings: env |- 
-                                    match (unboxed_v_2 with (bindings)) with
-                                    | None -> None
-                                    | Some v2 ->
-                                        (eval_unboxed with ()) 
-                                            (lifted_e with ()) 
-                                            (Cons_env ((lifted_x with (), v2), lifted_clo_bindings with ())) 
-                                ))
-                            | Known v2 ->
-                                let new_known_env: env = Cons ((x, v2), clo_bindings) in 
+                                (match eval_e with
+                                | Known (v) -> 
+                                    let box lifted_v = lift[value] v in
+                                    (*Here we don't just give the constant to account for error behaviour; 
+                                    alternatively can just simplify to constant...*)
+                                    Unknown (box (bindings: env |- 
+                                        match (unboxed_v_2 with (bindings)) with
+                                        | None -> None
+                                        | Some (v2) ->
+                                            Some (lifted_v with ())
+                                    ))
+                                | Unknown (boxed_e_v) ->
+                                    let box unboxed_e_v = boxed_e_v in
+                                    let box lifted_x = lift[string] x in
+                                    Unknown (box (bindings: env |- 
+                                        (*Here have to essentially apply boxed_e_v to bindings with additional 
+                                        binding of x -> unboxed_v_2*)
+                                        match (unboxed_v_2 with (bindings)) with
+                                        | None -> None
+                                        | Some (v2) ->
+                                            let new_bindings: env = Cons_env ((lifted_x with (), v2), bindings) in
+                                            unboxed_e_v with (new_bindings)
+                                    ))
+                                )
+                                (* BEFORE OPTIMISATION
+                                    let box lifted_x = lift[string] x in
+                                    let box lifted_e = lift[lambda] e in
+                                    let box lifted_clo_bindings = lift[env] clo_bindings in
+                                    Unknown ( box (bindings: env |- 
+                                        match (unboxed_v_2 with (bindings)) with
+                                        | None -> None
+                                        | Some (v2) ->
+                                            (eval_unboxed with ()) 
+                                                (lifted_e with ()) 
+                                                (Cons_env ((lifted_x with (), v2), lifted_clo_bindings with ())) 
+
+                                    ))
+                                *)
+                            | Known (v2) ->
+                                let new_known_env: env = Cons_env ((x, v2), clo_bindings) in 
                                 peval e new_known_env
                             | Error -> Error
                         )
@@ -263,7 +298,121 @@ let rec peval: lambda -> env -> pval =
                 | Error -> Error
             )
         | BinOp (op, e1, e2) ->
+            if op != "+" then Error else
+            (*Essentially check if both sides evaluate to numbers and combine them*)
+            let left: pval = peval e1 known_env in
+            let right: pval = peval e2 known_env in
+            (
+                match left with
+                | Unknown (boxed_v_1) -> 
+                let box unboxed_v_1 = boxed_v_1 in
+                (
+                    match right with
+                    | Unknown (boxed_v_2) ->
+                        let box unboxed_v_2 = boxed_v_2 in
+                        Unknown (box (bindings: env |- 
+                            let v1_opt: value_option = unboxed_v_1 with (bindings) in
+                            let v2_opt: value_option = unboxed_v_2 with (bindings) in
+                            match (v1_opt) with
+                            | None -> None
+                            | Some (v1) ->
+                            (* check if number *)
+                                match v1 with
+                                | Numb (n1) -> 
+                                    (
+                                        match v2_opt with
+                                        | None -> None
+                                        | Some (v2) ->
+                                        (* check if number *)
+                                            match v2 with
+                                            | Numb (n2) ->
+                                                Some (Numb (n1 + n2))
+                                            | _ -> None 
+                                    )
+                                | _ -> None
+                        ))
+                    | Known (v2) ->
+                        (*Is number check*)
+                        (match v2 with
+                        | Numb (n2) -> 
+                        (
+                            let box lifted_n2 = lift[int] n2 in
+                            Unknown (box (bindings: env |- 
+                                let v1_opt: value_option = unboxed_v_1 with (bindings) in
+                                match v1_opt with
+                                | None -> None
+                                | Some (v1) ->
+                                    match v1 with
+                                    | Numb (n1) ->
+                                        Some (Numb (n1 + (lifted_n2 with ())))
+                                    | _ -> None
+                            ))
+                        )
+                        | _ -> Error)
+                    | Error -> Error
+                )
+                | Known (v1) ->
+                    (match v1 with 
+                    | Numb (n1) ->
+                        let box lifted_n1 = lift[int] n1 in
+                        (
+                            match right with
+                            | Unknown (boxed_v_2) -> 
+                                let box unboxed_v_2 = boxed_v_2 in
+                                Unknown (box (bindings: env |- 
+                                    match (unboxed_v_2 with (bindings)) with
+                                    | None -> None 
+                                    | Some (v2) ->
+                                        match v2 with
+                                        | Numb (n2) -> Some (Numb ((lifted_n1 with ()) + n2))
+                                        | _ -> None
+                                ))
+                            | Known (v2) ->
+                                (match v2 with
+                                | Numb (n2) -> Known (Numb (n1 + n2))
+                                | _ -> Error)
+                            | Error -> Error
+                        )
+                    | _ -> Error )
+                | Error -> Error
+            )
+            
         | If (e, f, g) ->
+            (*Strategy: evaluate e, f and g. If e is Known then we give f or g, otherwise we give big box*)
+            let evaluated_e: pval = peval e known_env in
+            let convert_evaluated_to_box: pval -> [bindings:env]value_option =
+                fun (evaluated: pval) -> 
+                match evaluated with
+                | Unknown (boxed_v) -> boxed_v
+                | Known (v) -> let box lifted_v = lift[value] v in
+                    box (bindings: env |- Some (lifted_v with ()))
+            in  
+            let evaluated_f: pval = peval f known_env in
+            let box unboxed_f = convert_evaluated_to_box evaluated_f in
+            let evaluated_g: pval = peval g known_env in
+            let box unboxed_g = convert_evaluated_to_box evaluated_g in
+            match evaluated_e with
+            | Error -> Error
+            | Known (e_v) -> 
+                (match (e_v) with
+                | Numb (n) ->
+                    if n = 0 then evaluated_f else evaluated_g
+                | _ -> Error)
+            | Unknown (boxed_e) ->
+                let box unboxed_e = boxed_e in 
+                Unknown (box (bindings: env |-
+                    match (unboxed_e with (bindings)) with
+                    | None -> None
+                    | Some (e_v) ->
+                        match (e_v) with
+                        | Numb (n) ->
+                            if n = 0 then 
+                                unboxed_f with (bindings)
+                            else
+                                unboxed_g with (bindings)
+                        | _ -> None
+                ))
+;;
 
 let expr: lambda = (
     Apply (
@@ -271,8 +420,13 @@ let expr: lambda = (
             Abs ("x", Abs ("y", BinOp ("+", Var ("x"), Var ("y")))),
             Int (1)
         ),
-        Int (2)
+        Var ("in2")
     )
 );;
 
-eval expr (Nil_env);;
+let initial_env: env = Cons_env (("in2", Numb (5)), Cons_env (("in1", Numb (3)), Nil_env));;
+
+eval expr (initial_env);;
+let st: pval = peval (expr) (Nil_env);;
+
+match st with Unknown (b) -> let box u = b in u with (initial_env);;
