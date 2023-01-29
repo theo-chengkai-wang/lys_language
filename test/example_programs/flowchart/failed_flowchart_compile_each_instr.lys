@@ -75,8 +75,8 @@ let interpret: (string_list * command_list) -> int_list -> int
 
 (*
     Staged version:
-    - interpret: (string_list * command_list) -> [args: int_list]int
-    - run: int -> command -> command_list -> [store: env]int
+    - interpret: (string_list * command_list) -> [args: intlist]int
+    - run: int -> command -> commad_list -> [store: env]int
     - eval: expr -> [store: env]int
     - The rest: just box them.
 *)
@@ -143,128 +143,61 @@ fun (e: expr) ->
 
 datatype result = Res of int | JumpTo of (int * env);;
 
-datatype memo_list = Nil_m | Cons_m of ((int * [store: env](result)) * memo_list);;
 
-let rec get_all_jump_destinations: command_list -> int_list = fun (cs: command_list) ->
-    match cs with
-    | Nil_c -> Nil_i
-    | Cons_c (c, cs) -> 
-        match c with
-        | Goto (n) -> Cons_i (n, get_all_jump_destinations cs)
-        | If (e, m, n) -> Cons_i (m, Cons_i (n, get_all_jump_destinations cs))
-        | _ -> get_all_jump_destinations cs;;
-
-let rec filter_i: int_list -> (int -> bool) -> int_list = fun (xs: int_list) -> fun (f: int -> bool) -> 
-    match xs with
-    | Nil_i -> Nil_i
-    | Cons_i (x, xs) -> if (f x) then Cons_i (x, filter_i xs f) else filter_i xs f;;
-
-let rec append_i: int_list -> int_list -> int_list = fun (xs: int_list) -> fun (ys: int_list) ->
-    match xs with
-    | Nil_i -> ys
-    | Cons_i (x, xs) -> Cons_i (x, append_i xs ys);;
-
-let rec sort_and_unique_int_list: int_list -> int_list = fun (xs: int_list) ->
-    match xs with
-    | Nil_i -> Nil_i
-    | Cons_i (x, xs) ->
-        let left: int_list = filter_i xs (fun (y: int) -> y < x) in
-        let right: int_list = filter_i xs (fun (y: int) -> y > x) in
-        append_i left (Cons_i (x, right));;
-
-let rec from_c: command_list -> int -> command_list = fun (cs: command_list) -> fun (l: int) ->
-    match cs with
-    | Cons_c (c, cs) -> if l = 1 then Cons_c (c, cs) else from_c cs (l-1);;
+datatype memo_list = Nil_m | Cons_m of ([store: env](result) * memo_list);;
 
 (*This is the only way that might work because otherwise even compilation can have cycles*)
-let compile_from_root: int -> int -> command_list -> [store: env](result) = 
+let rec compile_to_list: int -> command_list -> memo_list = fun (l: int) -> fun (cs: command_list) -> (*l must start from 1*)
 let box update = update_box in
-(*Start incl, End excl*)
-fun (start: int) -> fun (end: int) -> fun (cs: command_list) -> (*l must start from 1*)
-    let from_start: command_list = from_c cs start in
-    let max_steps: int = end - start in
-    let rec compile_aux: int -> int -> command_list -> [store: env](result) = 
-        fun (l: int) -> fun (max_steps: int) -> fun (cs: command_list) ->
-        match cs with
-        | Cons_c (c, cs) ->
-            match c with
-            | Goto (n) -> 
-                let box lifted_n = lift[int] n in
-                box (store: env|- JumpTo (lifted_n with (), store))
-            | If (e, m, n) ->
-                let box eval_partial = eval_staged e in
-                let box lifted_n = lift[int] n in
-                let box lifted_m = lift[int] m in
-                box (store: env |- 
-                    if (eval_partial with (store)) = 0 then
-                        JumpTo (lifted_m with (), store)
-                    else
-                        JumpTo (lifted_n with (), store)
-                )
-            | Assign (x, e) -> 
-                let box lifted_x = lift[string] x in
-                let box eval_e_partial = eval_staged e in
-                let box lifted_l = lift[int] l in
-                if max_steps = 1 then 
-                    box (store: env|-
-                        let s1: env = (update with ()) store (lifted_x with (), eval_e_partial with (store)) in
-                        JumpTo (lifted_l with (), s1)
-                    )
+    match cs with
+    | Nil_c -> Nil_m
+    | Cons_c (c, cs) -> 
+        match c with
+        | Assign (x, e) -> 
+            let box lifted_x = lift[string] x in
+            let box eval_e_partial = eval_staged e in
+            let box lifted_l = lift[int] (l + 1) in  
+            Cons_m (
+                box (store: env|-
+                    let s1: env = (update with ()) store (lifted_x with (), eval_e_partial with (store)) in
+                    JumpTo (lifted_l with (), s1)
+                ),
+                compile_to_list (l+1) cs
+            )
+        | Return (e) -> let box u = (eval_staged e) in Cons_m (box (store: env |- Res (u with (store))), compile_to_list (l+1) cs)
+        | Goto (n) -> 
+            let box lifted_n = lift[int] n in
+            Cons_m (box (store: env|- JumpTo (lifted_n with (), store)), compile_to_list (l+1) cs)
+        | If (e, m, n) ->
+            let box eval_partial = eval_staged e in
+            let box lifted_m = lift[int] m in 
+            let box lifted_n = lift[int] n in 
+            Cons_m (box (store: env |- 
+                if (eval_partial with (store)) = 0 then
+                    JumpTo (lifted_m with () , store)
                 else
-                    let box compile_rest = compile_aux (l + 1) (max_steps - 1) cs in
-                    box (store: env|-
-                        let s1: env = (update with ()) store (lifted_x with (), eval_e_partial with (store)) in
-                        compile_rest with (s1)
-                    )
-            | Return (e) ->
-                let box u = eval_staged e in box (store: env |- Res (u with (store)))
-    in
-    compile_aux start max_steps from_start;;
+                    JumpTo (lifted_n with (), store)
+            ), compile_to_list (l+1) cs);;        
 
-let rec list_length_c: command_list -> int = fun (cs: command_list) -> 
-    match cs with 
-    | Nil_c -> 0
-    | Cons_c (x, xs) -> 1 + (list_length_c xs);;
-
-let compile: command_list -> memo_list = fun (cs: command_list) ->
-    let all_destinations: int_list = sort_and_unique_int_list (Cons_i (1, get_all_jump_destinations cs)) in
-    let rec foreach_destination: int_list -> memo_list = fun (dests: int_list) ->
-        match dests with
-        | Nil_i -> Nil_m
-        | Cons_i (start, rest) ->
-        let end:int = 
-            match rest with
-            | Nil_i -> (list_length_c cs) + 1  (*end excluded, 1-indexed*)
-            | Cons_i (y, ys) -> y
-        in 
-        Cons_m ((start, compile_from_root start end cs), foreach_destination rest)
-    in
-    foreach_destination (all_destinations);;
-
-let list_find_m_box: [](memo_list -> int -> [store: env](result)) = box (|- 
-    let rec list_find_m: memo_list -> int -> [store: env](result) = fun (ms: memo_list) -> fun (k: int) -> 
-        match ms with
-        | Cons_m (m, ms) -> if m[0] = k then m[1] else list_find_m (ms) k
-    in list_find_m
+let nth_memo_box: [](memo_list -> int -> [store: env](result)) = box (|- 
+let rec nth_memo: memo_list -> int -> [store: env](result) = fun (cs: memo_list) -> fun (i: int) ->
+    match cs with
+    | Cons_m (c, cs) ->
+        if i = 1 then c
+        else nth_memo cs (i-1)
+in nth_memo
 );;
 
-let interpret_staged: (string_list * command_list) -> [args: int_list]int = 
-    let box zip = zip_box in
-    let box list_find_m = list_find_m_box in
-    fun (program: (string_list * command_list)) ->
-        let compiled_program: memo_list = compile program[1] in
-        let box lifted_compiled_program = lift[memo_list] compiled_program in
-        let box lifted_inputs = lift[string_list] program[0] in
-        box (args: int_list |- 
-            let store: env = (zip with ()) (lifted_inputs with ()) args in
-            let compiled_program: memo_list = (lifted_compiled_program with ()) in
-            let rec execute: int -> env -> int = fun (l: int) -> fun (store: env) -> 
-                let box current_exec = (list_find_m with ()) compiled_program l in
-                match (current_exec with (store)) with
-                | Res (n) -> n
-                | JumpTo (n, new_store) -> execute n (new_store)
-            in execute 1 store
-        );;
+let from_memo_box: [](memo_list -> int -> env -> int) = 
+let box nth_memo = nth_memo_box in
+box (|- 
+    let rec from_memo: memo_list -> int -> env -> int = fun (m: memo_list) -> fun (l: int) -> fun (store: env) ->
+        let box from_memo_unboxed = (nth_memo with ()) m l in
+        match (from_memo_unboxed with (store)) with
+        | Res (n) -> n
+        | JumpTo (i, new_store) -> from_memo m i new_store
+    in from_memo
+);;
 
 (*TODO: Implement
 let rec run_staged: int -> int_list -> memo_list -> [store: env]int = 
@@ -349,15 +282,15 @@ let p2: (string_list * command_list) = (
     ))) 
 );;
 
-(*
+
 let compiled_list: memo_list = compile_to_list 1 p[1];;
 
 let box u = from_memo_box in (u with ()) compiled_list 1 (zip p[0] a);;
-*)
-
-let compiled:[args: int_list]int = interpret_staged p;;
-
-let box u = compiled in u with (a);;
 
 interpret p a;;
 
+(*
+let compiled:[args: int_list]int = interpret_staged p;;
+
+let box u = compiled in u with (a);;
+*)

@@ -141,8 +141,6 @@ fun (e: expr) ->
             if ((partial_1 with (store)) <= (partial_2 with (store))) then 0 else 1
         );;
 
-datatype 
-
 (**)
 let rec run_staged: int -> command -> command_list -> [store: env]int = 
 let box update = update_box in
@@ -236,10 +234,22 @@ let p: (string_list * command_list) = (
     )
 );;
 
+let p2: (string_list * command_list) = (
+    Cons_s ("n", Nil_s),
+    Cons_c (
+        Assign ("x1", Int 1), 
+        Cons_c (
+            Assign ("x1", Int 1), 
+            Cons_c (
+                Assign ("x1", Int 1), 
+                Cons_c (Return (Var ("n")), Nil_c)
+    ))) 
+);;
+
 let a: int_list = Cons_i (10, Nil_i);;
 
-interpret p a;;
+interpret p2 a;;
 
-let compiled:[args: int_list]int = interpret_staged p;;
+let compiled:[args: int_list]int = interpret_staged p2;;
 
 let box u = compiled in u with (a);;
