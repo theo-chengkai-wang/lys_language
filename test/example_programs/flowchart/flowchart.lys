@@ -75,10 +75,6 @@ let interpret: (string_list * command_list) -> int_list -> int
 
 (*
     Staged version:
-    - interpret: (string_list * command_list) -> [args: int_list]int
-    - run: int -> command -> command_list -> [store: env]int
-    - eval: expr -> [store: env]int
-    - The rest: just box them.
 *)
 
 let zip_box: [](string_list -> int_list -> env) = box (|- 
@@ -266,26 +262,6 @@ let interpret_staged: (string_list * command_list) -> [args: int_list]int =
             in execute 1 store
         );;
 
-(*TODO: Implement
-let rec run_staged: int -> int_list -> memo_list -> [store: env]int = 
-let box update = update_box in
-fun (l: int) -> fun (seen: int_list) -> fun (m: memo_list) -> 
-
-let interpret_staged: (string_list * command_list) -> [args: int_list]int = 
-    let box zip = zip_box in
-    fun (program: (string_list * command_list)) ->
-        let box compiled_program = 
-            match program[1] with
-            | Cons_c (c, cs) ->
-                run_staged 1 c program[1]
-        in
-        let box lifted_inputs = lift[string_list] program[0] in
-        box (args: int_list |- 
-            let store: env = (zip with ()) (lifted_inputs with ()) args in
-            compiled_program with (store)
-        );;
-
-*)
 (*
     https://en.wikipedia.org/wiki/Flow_chart_language
     (n)
