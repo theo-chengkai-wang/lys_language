@@ -425,9 +425,8 @@ let rec peval: lambda -> env -> pval =
 let expr: lambda = (
         Apply (
             Abs ("x", Abs ("y", BinOp ("+", Var ("x"), Var ("y")))),
-            Int (1)
+            Var ("in1")
         )
-
 );;
 
 let initial_env: env = Cons_env (("in2", Numb (5)), Cons_env (("in1", Numb (3)), Nil_env));;
