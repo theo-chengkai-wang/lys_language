@@ -1,8 +1,12 @@
+(* 
+    Inspired from Jones Gomard Sestoft, Partial Evaluationand Automatic Program Generation, Section 3.3.1
+*)
+
 datatype lambda = 
     Int of int | Var of string | Abs of (string * lambda) | Apply of (lambda * lambda) 
     | BinOp of (string * lambda * lambda) | If of (lambda * lambda * lambda)
 
-and value = Numb of int | Closure of (lambda * env)
+and value = Numb of int | Closure of (string * lambda * env)
 
 and env = Nil_env | Cons_env of ((string * value) * env)
 
@@ -19,7 +23,7 @@ let rec eval: lambda -> env -> value_option = fun (e: lambda) -> fun (bindings: 
     match e with
     | Int (n) -> Some (Numb n)
     | Var (x) -> lookup bindings x
-    | Abs (x, e) -> Some (Closure (Abs (x, e), bindings))
+    | Abs (x, e) -> Some (Closure (x, e, bindings))
     | Apply (e, f) -> 
         let f1_opt: value_option = eval f bindings in
         (match f1_opt with
@@ -30,11 +34,8 @@ let rec eval: lambda -> env -> value_option = fun (e: lambda) -> fun (bindings: 
             | None -> None
             | Some (e_val) ->
                 (match e_val with
-                | Closure (e, clo_bindings) ->
-                    (match e with
-                    | Abs (x, e1) ->
-                        eval e1 (Cons_env ((x, f1), clo_bindings))
-                    | _ -> None)
+                | Closure (x, e, clo_bindings) ->
+                    eval e (Cons_env ((x, f1), clo_bindings))
                 | _ -> None))
     | BinOp (op, e1, e2) ->
         let v1_opt: value_option = eval e1 bindings in
@@ -64,21 +65,24 @@ let rec eval: lambda -> env -> value_option = fun (e: lambda) -> fun (bindings: 
 
 (* Now staged version *)
 
-let eval_staged: lambda -> [bindings: env]value_option = fun (e: lambda) ->
-    let box lookup = box (|- 
+let lookup_box: [](env -> string -> value_option) =
+    box (|- 
         let rec lookup: env -> string -> value_option = fun (bindings: env) -> fun (id: string) ->
             match bindings with
             | Nil_env -> None
             | Cons_env (binding, rest) -> if binding[0] = id then Some (binding[1]) else lookup rest id
         in
         lookup
-    ) in
-    let box eval_unstaged_aux = box (|- 
+    );;
+
+let eval_box: [](lambda -> env -> value_option) = 
+let box lookup = lookup_box in
+    box (|- 
         let rec eval: lambda -> env -> value_option = fun (e: lambda) -> fun (bindings: env) -> 
             match e with
             | Int (n) -> Some (Numb n)
             | Var (x) -> (lookup with ()) bindings x
-            | Abs (x, e) -> Some (Closure (Abs (x, e), bindings))
+            | Abs (x, e) -> Some (Closure (x, e, bindings))
             | Apply (e, f) -> 
                 let f1_opt: value_option = eval f bindings in
                 (match f1_opt with
@@ -89,11 +93,8 @@ let eval_staged: lambda -> [bindings: env]value_option = fun (e: lambda) ->
                     | None -> None
                     | Some (e_val) ->
                         (match e_val with
-                        | Closure (e, clo_bindings) ->
-                            (match e with
-                            | Abs (x, e1) ->
-                                eval e1 (Cons_env ((x, f1), clo_bindings))
-                            | _ -> None)
+                        | Closure (x, e, clo_bindings) ->
+                            eval e (Cons_env ((x, f1), clo_bindings))
                         | _ -> None))
             | BinOp (op, e1, e2) ->
                 let v1_opt: value_option = eval e1 bindings in
@@ -121,7 +122,11 @@ let eval_staged: lambda -> [bindings: env]value_option = fun (e: lambda) ->
                         else (eval g bindings)
                     | _ -> None
         in eval
-    ) in
+    );;
+
+let eval_staged: lambda -> [bindings: env]value_option = fun (e: lambda) ->
+    let box lookup = lookup_box in
+    let box eval_unstaged_aux = eval_box in
     let rec eval_staged_aux: lambda -> [bindings: env]value_option = fun (e: lambda) ->
         match e with
         | Int (n) -> let box lifted_n = lift[int] n in box (bindings: env |- Some (Numb (lifted_n with ())))
