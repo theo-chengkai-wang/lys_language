@@ -414,14 +414,22 @@ let rec peval: lambda -> env -> pval =
                 ))
 ;;
 
+(*
+    One idea to make this general
+    1. Go down the expr until first reduct.
+    2. If unknown we give up.
+    3. If known: Go down and count the lambdas, add binders in, reduce that reduct with the known stuff added to the Known context.
+    4. Now have (x, value) list for the known values. Simply peval the inner expr with the known context, and put in all the unknowns. Difficult innit.
+*)
+
 let expr: lambda = (
     Apply (
         Apply (
             Abs ("x", Abs ("y", BinOp ("+", Var ("x"), Var ("y")))),
-            Int (1)
+            Var ("in1")
         ),
-        Var ("in2")
-    )
+        Int (2)
+    )   
 );;
 
 let initial_env: env = Cons_env (("in2", Numb (5)), Cons_env (("in1", Numb (3)), Nil_env));;
