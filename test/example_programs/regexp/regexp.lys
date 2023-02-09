@@ -190,3 +190,14 @@ let box u = compiled_regexp in
 let box u = compiled_regexp in
     u with ("")
 ;;
+
+accept2 (Times (
+    Plus (
+        Times (
+            Const ('1'), 
+            Times (Const ('2'), Empty)
+        ), 
+        Empty
+    ), 
+    Const ('3')
+));;

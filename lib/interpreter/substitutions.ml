@@ -409,6 +409,7 @@ let rec meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth
       (*Check for equality of u and u'*)
       if not (equal_meta_id_str_depth metaid meta_id_str current_meta_depth)
       then
+        (*TODO: There is a problem here. LOOK INTO IT.*)
         Ast.MetaIdentifier.shift ~depth:current_meta_depth ~offset:(-1) metaid
         >>= fun metaid -> Ok (Ast.Expr.Closure (metaid, exprs_in_subs))
       else
