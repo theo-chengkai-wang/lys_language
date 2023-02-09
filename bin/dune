@@ -1,4 +1,5 @@
 (executables
- (public_names lys lys_repl parse_print type_check test_bench)
- (names main repl parse_print type_check test_bench)
- (libraries lys_ast lys_parsing lys_typing lys_interpreter core core_unix.command_unix))
+ (public_names lys lys_repl parse_print type_check test_bench benchmarks)
+ (names main repl parse_print type_check test_bench benchmarks)
+ (libraries lys_ast lys_parsing lys_typing lys_interpreter core core_unix.command_unix)
+ (preprocess (pps ppx_jane ppx_deriving.show)))
