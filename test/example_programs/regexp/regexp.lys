@@ -30,7 +30,7 @@ let accept1:regexp -> string -> bool = fun (exp:regexp) -> fun (str: string) ->
     acc1 exp null str;;
 
 let regexp_to_test:regexp = 
-(*Times (
+Times (
     Plus (
         Times (
             Const ('1'), 
@@ -39,7 +39,7 @@ let regexp_to_test:regexp =
         Empty
     ), 
     Const ('3')
-);;*)
+);;
 (*Plus (Const ('1'), Const ('2'));;*)
 Times (Const ('0'), Star (Times (Star (Const ('a')), Const('b'))));;
 (*Star (Star (Const ('1')));;*)
@@ -74,10 +74,10 @@ fun (exp: regexp) ->
             )
         )
     | Times (e1, e2) ->
-        let box res1 = acc2 e1 in
-        let box res2 = acc2 e2 in
+        let box res1_ = acc2 e1 in
+        let box res2_ = acc2 e2 in
         box (cont: [str:string, loop: string -> bool]bool |-
-            res1 with (res2 with (cont))
+            res1_ with (res2_ with (cont))
         ) 
     | Const (c) ->
         let box lifted_unboxed_c = lift[char] c in

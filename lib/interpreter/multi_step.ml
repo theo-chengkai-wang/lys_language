@@ -1047,6 +1047,8 @@ let rec multi_step_reduce ~top_level_context ~type_constr_context ~expr =
       multi_step_reduce ~top_level_context ~type_constr_context ~expr:ev2
   | Ast.Expr.Box (ctx, e) -> Ok (Ast.Value.Box (ctx, e))
   | Ast.Expr.LetBox (metaid, e, e2) -> (
+        (*TODO: Debug code here*)
+        let () = if String.equal (Ast.MetaIdentifier.get_name metaid) ("res2_") || String.equal (Ast.MetaIdentifier.get_name metaid) ("res1_") then print_endline (Ast.Expr.show expr) in
       multi_step_reduce ~top_level_context ~type_constr_context ~expr:e
       >>= fun box_v ->
       match box_v with

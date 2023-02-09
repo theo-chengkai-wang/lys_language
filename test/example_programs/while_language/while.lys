@@ -267,7 +267,7 @@ let program: (string_list * string_list * com) =
     )
 );;
 
-let args: int_list = Cons_i (10, Nil_i);;
+let args: int_list = Cons_i (20, Nil_i);;
 
 let compiled: [args: int_list]int_list = interpret_staged program;;
 
