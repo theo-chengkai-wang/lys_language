@@ -191,6 +191,7 @@ let box u = compiled_regexp in
     u with ("")
 ;;
 
+(*
 accept2 (Times (
     Plus (
         Times (
@@ -201,3 +202,4 @@ accept2 (Times (
     ), 
     Const ('3')
 ));;
+*)

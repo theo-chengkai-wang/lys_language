@@ -43,7 +43,7 @@ let rec substitute_aux expr_subst_for id_str current_depth current_meta_depth ex
       else
         (*Shift expression with free variables forth. We start from 0 as this is the assumption where we are at level 0 for
            the expr to be substituted in.
-            TODO: Do that for meta variables too.   
+        Do that for meta variables too.   
         *)
         Ast.Expr.shift_indices expr_subst_for ~obj_depth:0 ~meta_depth:0
           ~obj_offset:current_depth ~meta_offset:current_meta_depth
@@ -176,7 +176,7 @@ let rec sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth exp
             >>= fun oid -> Ok (Ast.Expr.Identifier oid)
         | Some (expr, id) ->
             (* In the expr to sub in, shift obj DB indices by the current_depth to preserve consistency of the DB indices. 
-               TODO: Shift meta-indices too*)
+               Shift meta-indices too*)
             Ast.Expr.shift_indices expr ~obj_depth:0 ~meta_depth:0
               ~obj_offset:current_depth ~meta_offset:current_meta_depth
             |> Or_error.tag
@@ -400,7 +400,7 @@ let rec meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth
         (current_meta_depth + 1) e2
       >>= fun e2 -> Ok (Ast.Expr.LetBox (metaid, e, e2))
   | Ast.Expr.Closure (metaid, exprs) ->
-      (*TODO: Debug code here*)
+      (* Debug code here
       let () =
         if String.equal (Ast.MetaIdentifier.get_name metaid) "res2_" then (
           print_endline
@@ -408,7 +408,7 @@ let rec meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth
                current_meta_depth);
           print_endline (Ast.MetaIdentifier.show metaid))
         else ()
-      in
+      in *)
       exprs
       |> List.map
            ~f:
@@ -423,7 +423,6 @@ let rec meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth
       (*Check for equality of u and u'*)
       if not (equal_meta_id_str_depth metaid meta_id_str current_meta_depth)
       then
-        (*TODO: There is a problem here. LOOK INTO IT.*)
         Ast.MetaIdentifier.shift ~depth:current_meta_depth ~offset:(-1) metaid
         |> fun or_error ->
         Or_error.tag_arg or_error
@@ -431,12 +430,12 @@ let rec meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth
           (exprs_in_subs, metaid)
           [%sexp_of: Ast.Expr.t list * Ast.MetaIdentifier.t]
         >>= fun metaid ->
-        (*TODO: Debug*)
+        (*Debug
         let () =
           if String.equal (Ast.MetaIdentifier.get_name metaid) "res2_" then
             print_endline (Ast.MetaIdentifier.show metaid)
           else ()
-        in
+        in *)
         Ok (Ast.Expr.Closure (metaid, exprs_in_subs))
       else
         expr_subst_for

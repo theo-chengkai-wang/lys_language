@@ -44,23 +44,7 @@ let rec multi_step_reduce_with_step_count ~top_level_context
                      Ast.Expr.Identifier
                        (Ast.ObjIdentifier.of_string_and_index id_str
                           debruijn_index) ))
-            >>= fun (v, cnt) -> Ok (v, cnt + 1)
-        (* if EvaluationContext.is_not_rec { typ; rec_preface ; value } then
-             (*Substitution -- no need to worry about De Bruijn indices as there is no way they can go wrong*)
-             Ok (value, 1)
-           else
-             (* Recursion: handle once together. *) (*TODO: Change this to right definition*)
-             Ast.DeBruijnIndex.create 0 >>= fun debruijn_index ->
-             multi_step_reduce_with_step_count ~top_level_context
-               ~type_constr_context
-               ~expr:
-                 (Ast.Expr.LetRec
-                    ( (Ast.ObjIdentifier.of_string id_str, typ),
-                      Ast.Value.to_expr value,
-                      Ast.Expr.Identifier
-                        (Ast.ObjIdentifier.of_string_and_index id_str
-                           debruijn_index) ))
-             >>= fun e -> *))
+            >>= fun (v, cnt) -> Ok (v, cnt + 1))
   | Ast.Expr.Constant c -> Ok (Ast.Value.Constant c, 0)
   | Ast.Expr.UnaryOp (op, expr) -> (
       multi_step_reduce_with_step_count ~top_level_context ~type_constr_context
@@ -1047,8 +1031,8 @@ let rec multi_step_reduce ~top_level_context ~type_constr_context ~expr =
       multi_step_reduce ~top_level_context ~type_constr_context ~expr:ev2
   | Ast.Expr.Box (ctx, e) -> Ok (Ast.Value.Box (ctx, e))
   | Ast.Expr.LetBox (metaid, e, e2) -> (
-        (*TODO: Debug code here*)
-        let () = if String.equal (Ast.MetaIdentifier.get_name metaid) ("res2_") || String.equal (Ast.MetaIdentifier.get_name metaid) ("res1_") then print_endline (Ast.Expr.show expr) in
+      (* Debug code here
+         let () = if String.equal (Ast.MetaIdentifier.get_name metaid) ("res2_") || String.equal (Ast.MetaIdentifier.get_name metaid) ("res1_") then print_endline (Ast.Expr.show expr) in *)
       multi_step_reduce ~top_level_context ~type_constr_context ~expr:e
       >>= fun box_v ->
       match box_v with
