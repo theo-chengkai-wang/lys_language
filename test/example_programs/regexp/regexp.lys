@@ -30,7 +30,7 @@ let accept1:regexp -> string -> bool = fun (exp:regexp) -> fun (str: string) ->
     acc1 exp null str;;
 
 let regexp_to_test:regexp = 
-Times (
+(*Times (
     Plus (
         Times (
             Const ('1'), 
@@ -39,10 +39,10 @@ Times (
         Empty
     ), 
     Const ('3')
-);;
+);;*)
 (*Plus (Const ('1'), Const ('2'));;*)
 Times (Const ('0'), Star (Times (Star (Const ('a')), Const('b'))));;
-(*Star (Star (Const ('1')));;*)
+Star (Star (Const ('1')));;
 
 accept1 (regexp_to_test) "111";;
 
@@ -106,6 +106,7 @@ fun (exp: regexp) ->
                 let box lifted_unboxed_str = lift[string] str in
                 let contstar: [str:string]bool = box (str:string |- 
                     if str = (lifted_unboxed_str with ()) then false
+                    else if str = "" then true
                     else res_star_cont with (str)
                 ) in
                 let box unboxed_res_contstar = res with (contstar) in
@@ -122,6 +123,7 @@ fun (exp: regexp) ->
                 let box lifted_unboxed_old_str = lift[string] str in
                 let new_cont: [str: string, loop: string -> bool]bool = box (str: string, loop: string -> bool |- 
                     if str = (lifted_unboxed_old_str with ()) then false
+                    else if str = "" then true
                     else loop str
                 )
                 in
@@ -129,8 +131,8 @@ fun (exp: regexp) ->
                 let rec star_loop: string -> bool = 
                     fun (s: string) ->
                         (*Shortcircuiting OR*)
-                        if unboxed_cont with (s, loop) then true
-                        else (unboxed_acc2_e_new_cont with (s, star_loop))
+                        if unboxed_acc2_e_new_cont with (s, star_loop) then true
+                        else (unboxed_cont with (s, loop))
                 in
                 star_loop str
             )
