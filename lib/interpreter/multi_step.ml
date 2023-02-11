@@ -818,7 +818,7 @@ let rec multi_step_reduce ~top_level_context ~type_constr_context ~expr =
           Ast.Value.Constant (Ast.Constant.Integer i2) ) ->
           Ok (Ast.Value.Constant (Ast.Constant.Integer (i1 % i2)))
       | Ast.BinaryOperator.EQ, v1, v2 ->
-          print_endline (Printf.sprintf "Value 1: %s \n Value 2: %s \n" (Ast.Value.show v1) (Ast.Value.show v2));
+          (* DEBUG print_endline (Printf.sprintf "Value 1: %s \n Value 2: %s \n" (Ast.Value.show v1) (Ast.Value.show v2)); *)
           Ok (Ast.Value.Constant (Ast.Constant.Boolean (Ast.Value.equal v1 v2)))
       | Ast.BinaryOperator.NEQ, v1, v2 ->
           Ok

@@ -41,7 +41,7 @@ let regexp_to_test:regexp =
     Const ('3')
 );;*)
 (*Plus (Const ('1'), Const ('2'));;*)
-Times (Const ('0'), Star (Times (Star (Const ('a')), Const('b'))));;
+(*Times (Const ('0'), Star (Times (Star (Const ('a')), Const('b'))));;*)
 Star (Star (Const ('1')));;
 
 accept1 (regexp_to_test) "111";;
@@ -123,16 +123,21 @@ fun (exp: regexp) ->
                 let box lifted_unboxed_old_str = lift[string] str in
                 let new_cont: [str: string, loop: string -> bool]bool = box (str: string, loop: string -> bool |- 
                     if str = (lifted_unboxed_old_str with ()) then false
-                    else if str = "" then true
                     else loop str
                 )
                 in
                 let box unboxed_acc2_e_new_cont = res with (new_cont) in
                 let rec star_loop: string -> bool = 
                     fun (s: string) ->
-                        (*Shortcircuiting OR*)
-                        if unboxed_acc2_e_new_cont with (s, star_loop) then true
-                        else (unboxed_cont with (s, loop))
+                        (*If we don't have anything left we just call the continuation*)
+                        if s = "" then 
+                            (unboxed_cont with (s, loop)) 
+                        else
+                            (*Shortcircuiting OR*)
+                            if unboxed_acc2_e_new_cont with (s, star_loop) then 
+                                true
+                            else 
+                                (unboxed_cont with (s, loop))
                 in
                 star_loop str
             )
