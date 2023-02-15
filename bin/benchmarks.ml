@@ -53,6 +53,23 @@ type benchmark_result_record = {
 }
 [@@deriving show, sexp]
 
+(*Print to CSV utils*)
+
+let to_csv results =
+  List.map results
+    ~f:(fun { base_program_loc; run_id; benchmark; defn_id; steps; time } ->
+      [
+        base_program_loc;
+        Int.to_string run_id;
+        benchmark.name;
+        Int.to_string defn_id;
+        Int.to_string steps;
+        Float.to_string time;
+      ])
+  |> fun l ->
+  (*Header*)
+  [ "base_program"; "run_id"; "benchmark"; "defn_id"; "steps"; "time" ] :: l
+
 (*Step * Time list for each expression executed, and in a list.*)
 
 let run_num = 10
@@ -84,7 +101,7 @@ let benchmarks =
                    persist = false;
                  };
                  {
-                   name = Printf.sprintf "pow_%i_%i_staged" n x;
+                   name = Printf.sprintf "pow_%i_%i_compile" n x;
                    body = Printf.sprintf "let p: [x:int]int = pow2 %i;;" n;
                    persist = true;
                  };
@@ -178,7 +195,8 @@ let benchmarks =
                   {
                     name = Printf.sprintf "regexp_%i_%i_compile" i j;
                     body =
-                      Printf.sprintf "let p: [str: string]bool = accept2 (%s);;" regexp;
+                      Printf.sprintf "let p: [str: string]bool = accept2 (%s);;"
+                        regexp;
                     persist = true;
                   };
                   {
@@ -212,7 +230,8 @@ let get_top_level_non_rec_time_exn t =
 
 let rec perform_run run_cnt base_program_loc { name; body; persist } eval_ctx
     typ_ctx run_id =
-  print_endline ("... ... benchmarking: " ^ name ^ "; run: " ^ Int.to_string run_id);
+  print_endline
+    ("... ... benchmarking: " ^ name ^ "; run: " ^ Int.to_string run_id);
   (*Performs run_cnt number of runs and get both the step cnt and the time measurement*)
   if run_id >= run_cnt then
     (*Compute new context if we have persist = true*)
@@ -265,7 +284,8 @@ let rec perform_run run_cnt base_program_loc { name; body; persist } eval_ctx
 let do_benchmark ({ base_program_loc; run; benchmarks } : base_benchmark_record)
     =
   (*do a benchmark*)
-  print_endline (Printf.sprintf "---------------------- \n Fetching: %s" base_program_loc);
+  print_endline
+    (Printf.sprintf "---------------------- \n Fetching: %s" base_program_loc);
   let _, eval_ctx, typ_ctx =
     In_channel.with_file base_program_loc ~f:(fun file_ic ->
         evaluate_from_lexbuf_given_context
@@ -283,10 +303,9 @@ let do_benchmark ({ base_program_loc; run; benchmarks } : base_benchmark_record)
   |> fun (results, _, _) -> results
 
 let perform_all_benchmarks bms =
-  List.concat_map bms ~f:(fun bm -> do_benchmark bm)
+  List.concat_map bms ~f:do_benchmark
 
 let () =
   perform_all_benchmarks benchmarks
-  |> List.map ~f:(fun b ->
-         (show_benchmark_result_record b ^ "\n----------\n"))
-  |> Out_channel.write_lines "traces/benchmarks/20230209_first_try"
+  |> to_csv
+  |> Csv.save "traces/benchmarks/20230215_benchmarks.csv"
