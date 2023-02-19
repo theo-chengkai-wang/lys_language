@@ -129,7 +129,10 @@ let benchmarks =
                [
                  {
                    name = Printf.sprintf "conv_%i" i;
-                   body = Printf.sprintf "conv (%s) (%s);;" xs_str ys_str;
+                   body =
+                     Printf.sprintf
+                       "conv (%s) (%s) (fun (ys: intlist) -> Nil);;" xs_str
+                       ys_str;
                    persist = false;
                  };
                  {
@@ -207,7 +210,88 @@ let benchmarks =
                   };
                 ]));
     };
-    (*TODO: WHILE and Flowchart*)
+    (* {
+      base_program_loc = "test/example_programs/while_language/while.lys";
+      run = run_num;
+      benchmarks =
+        (let programs_and_inputs =
+           [
+             ( "fib_program",
+               [ 1; 2; 5; 10; 20; 50; 100 ]
+               |> List.map ~f:(fun x_l ->
+                      print_int_list [ x_l ] "Cons_i" "Nil_i") );
+           ]
+         in
+         List.concat_map programs_and_inputs
+           ~f:(fun (program_name, program_args) ->
+             List.concat_map program_args ~f:(fun arg ->
+                 [
+                   {
+                     name = Printf.sprintf "interpret_%s_%s" program_name arg;
+                     body =
+                       Printf.sprintf "interpret (%s) (%s);;" program_name arg;
+                     persist = false;
+                   };
+                   {
+                     name = Printf.sprintf "interpret_compile_%s" program_name;
+                     body =
+                       Printf.sprintf
+                         "let compiled: [args: int_list]int_list = \
+                          interpret_staged %s;;"
+                         program_name;
+                     persist = true;
+                   };
+                   {
+                     name =
+                       Printf.sprintf "interpret_staged_%s_%s" program_name arg;
+                     body =
+                       Printf.sprintf "let box u = compiled in u with (%s);;"
+                         arg;
+                     persist = false;
+                   };
+                 ])));
+    }; *)
+    (* {
+      base_program_loc = "test/example_programs/flowchart/flowchart.lys";
+      run = run_num;
+      benchmarks =
+        (let programs_and_inputs =
+           [
+             ( "fib_program",
+               [ 1; 2; 5; 10; 20; 50; 100 ]
+               |> List.map ~f:(fun x_l ->
+                      print_int_list [ x_l ] "Cons_i" "Nil_i") );
+           ]
+         in
+         List.concat_map programs_and_inputs
+           ~f:(fun (program_name, program_args) ->
+             List.concat_map program_args ~f:(fun arg ->
+                 [
+                   {
+                     name = Printf.sprintf "interpret_%s_%s" program_name arg;
+                     body =
+                       Printf.sprintf "interpret (%s) (%s);;" program_name arg;
+                     persist = false;
+                   };
+                   {
+                     name = Printf.sprintf "interpret_compile_%s" program_name;
+                     body =
+                       Printf.sprintf
+                         "let compiled: [args: int_list]int = \
+                          interpret_staged %s;;"
+                         program_name;
+                     persist = true;
+                   };
+                   {
+                     name =
+                       Printf.sprintf "interpret_staged_%s_%s" program_name arg;
+                     body =
+                       Printf.sprintf "let box u = compiled in u with (%s);;"
+                         arg;
+                     persist = false;
+                   };
+                 ])));
+    }; *)
   ]
 
 (*TODO: Perform all benchmarks and convert to CSV*)
@@ -302,10 +386,12 @@ let do_benchmark ({ base_program_loc; run; benchmarks } : base_benchmark_record)
       (current_list @ results, new_eval_ctx, new_typ_ctx))
   |> fun (results, _, _) -> results
 
-let perform_all_benchmarks bms =
-  List.concat_map bms ~f:do_benchmark
+let perform_all_benchmarks bms = List.concat_map bms ~f:do_benchmark
 
 let () =
   perform_all_benchmarks benchmarks
   |> to_csv
-  |> Csv.save "traces/benchmarks/20230215_benchmarks.csv"
+  |> Csv.save "traces/benchmarks/20230219_benchmarks_others.csv"
+(* random_list 200
+   |> (fun l -> print_int_list l "Cons" "Nil") |>
+   print_endline *)
