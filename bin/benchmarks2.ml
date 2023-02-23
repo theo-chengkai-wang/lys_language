@@ -1,6 +1,11 @@
 open Core
 open Core_bench
 
+
+let benchmarks = [
+  
+]
+
 let () =
   Random.self_init ();
   let x = Random.float 10.0 in
@@ -17,10 +22,10 @@ let () =
   in
   Bench.bench
     ~run_config:
-      (Bench.Run_config.create ~quota:(Bench.Quota.Num_calls 500)
+      (Bench.Run_config.create ~quota:(Bench.Quota.Num_calls 100)
          ~stabilize_gc_between_runs:true ())
-    ~analysis_configs:(List.map ~f:Bench.Analysis_config.with_error_estimation Bench.Analysis_config.default)
-    ~display_config:
-      (Bench.Display_config.create ~show_absolute_ci:true
-         ())
+    ~analysis_configs:
+      (List.map ~f:Bench.Analysis_config.with_error_estimation
+         Bench.Analysis_config.default)
+    ~display_config:(Bench.Display_config.create ~ascii_table:true ~show_absolute_ci:true ())
     tests
