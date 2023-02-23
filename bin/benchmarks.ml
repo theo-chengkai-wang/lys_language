@@ -72,7 +72,7 @@ let to_csv results =
 
 (*Step * Time list for each expression executed, and in a list.*)
 
-let run_num = 10
+let run_num = 100
 
 let benchmarks =
   [
@@ -210,7 +210,7 @@ let benchmarks =
                   };
                 ]));
     };
-    (* {
+    {
       base_program_loc = "test/example_programs/while_language/while.lys";
       run = run_num;
       benchmarks =
@@ -250,7 +250,7 @@ let benchmarks =
                      persist = false;
                    };
                  ])));
-    }; *)
+    };
     (* {
       base_program_loc = "test/example_programs/flowchart/flowchart.lys";
       run = run_num;
@@ -391,7 +391,7 @@ let perform_all_benchmarks bms = List.concat_map bms ~f:do_benchmark
 let () =
   perform_all_benchmarks benchmarks
   |> to_csv
-  |> Csv.save "traces/benchmarks/20230219_benchmarks_others.csv"
+  |> Csv.save "traces/benchmarks/20230222_benchmarks_except_flowchart.csv"
 (* random_list 200
    |> (fun l -> print_int_list l "Cons" "Nil") |>
    print_endline *)
