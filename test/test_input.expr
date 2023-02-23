@@ -6,30 +6,9 @@ Empty
 | Const of char
 ;;
 
-let rec acc1:(regexp -> (string -> bool) -> string -> bool) = 
-fun (exp: regexp) -> fun (cont:(string -> bool)) -> fun (str: string) ->
-    match exp with
-    | Empty -> cont str
-    | Plus (e1, e2) -> (acc1 e1 cont str) || (acc1 e2 cont str)
-    | Times (e1, e2) -> 
-        let cnt2:(string -> bool) = acc1 e2 cont in
-        acc1 e1 cnt2 str
-    | Star (e) ->
-        (cont str) || (acc1 e (fun (str2: string) -> 
-            if str = str2 then false else acc1 (Star e) cont str2
-        )) str
-    | Const (c) -> 
-        match str with
-        | "" -> false
-        | x ++ xs -> (x = c) && (cont xs);;
-
 let null:string -> bool = fun (str: string) -> 
-    match str with
-    | "" -> true
-    | _ -> false;;
+    str = "";;
 
-let accept1:regexp -> string -> bool = fun (exp:regexp) -> fun (str: string) -> 
-    acc1 exp null str;;
 
 let regexp_to_test:regexp = 
 (*Times (
@@ -42,9 +21,126 @@ let regexp_to_test:regexp =
     ), 
     Const ('3')
 );;*)
-(*Plus (Const ('1'), Const ('b'));;*)
-Times (Const ('0'), Star (Times (Star (Const ('a')), Const('b'))));;
-(*Times (Const ('0'), Star (Times (Star (Const ('1')), Const ('2'))));;*)
+(*Plus (Const ('1'), Const ('2'));;*)
+(*Times (Const ('0'), Star (Times (Star (Const ('a')), Const('b'))));;*)
+Star (Star(Const('1')));;
 
-accept1 (regexp_to_test) "0abaab";;
+let rec acc2:(regexp -> [cont: [str:string, loop: string -> bool]bool][str: string, loop: string -> bool]bool) = 
+fun (exp: regexp) ->    
+    match exp with
+    | Empty -> 
+        box (cont: [str:string, loop: string -> bool]bool |- 
+            cont
+        )
+    | Plus (e1, e2) -> 
+        let box res1 = acc2 e1 in
+        let box res2 = acc2 e2 in
+        box (cont: [str:string, loop: string -> bool]bool |-
+            let box unboxed_res1 = (res1 with (cont)) in
+            let box unboxed_res2 = (res2 with (cont)) in
+            box (str: string, loop: string -> bool |- 
+                (unboxed_res1 with (str, loop)) || (unboxed_res2 with (str, loop))
+            )
+        )
+    | Times (e1, e2) ->
+        let box res1_ = acc2 e1 in
+        let box res2_ = acc2 e2 in
+        box (cont: [str:string, loop: string -> bool]bool |-
+            res1_ with (res2_ with (cont))
+        ) 
+    | Const (c) ->
+        let box lifted_unboxed_c = lift[char] c in
+        box (cont: [str:string, loop: string -> bool]bool |- 
+            let box unboxed_cont = cont in
+            box (str: string, loop: string -> bool |- 
+                match str with
+                | "" -> false
+                | x++xs -> 
+                    if (x = (lifted_unboxed_c with ())) then
+                        (unboxed_cont with (xs, loop))
+                    else false
+            )
+        )
+    | Star (e) -> 
+    (*Doesn't work here: infinite loop, cf https://www.cs.cmu.edu/~rwh/students/nanevski.pdf for a solution*)
+        (*
+        let box res = acc2 e in
+        let box res_star = acc (Star (e))
+        in
+        box (cont: [str:string]bool |- 
+            let box unboxed_cont = cont in
+            let box res_star_cont = res_star with (cont) in
+            box (str:string |- 
+                let box lifted_unboxed_str = lift[string] str in
+                let contstar: [str:string]bool = box (str:string |- 
+                    if str = (lifted_unboxed_str with ()) then false
+                    else res_star_cont with (str)
+                ) in
+                let box unboxed_res_contstar = res with (contstar) in
+                unboxed_cont with (str) || (unboxed_res_contstar with (str))
+            )
+        )
+        *)
+    (*Trick = introduce a spurious redex to stop beta reduction*)
+        let box res = acc2 e in 
+        box (cont: [str: string, loop: string -> bool]bool |- 
+            let box unboxed_cont = cont in
+            box (str: string, loop: string -> bool |- 
+                (*Construct cont*)
+                let box lifted_unboxed_old_str = lift[string] str in
+                let new_cont: [str: string, loop: string -> bool]bool = box (str: string, loop: string -> bool |- 
+                    (*TODO: Error is here*)
+                    if str = (lifted_unboxed_old_str with ()) then false
+                    else if str = "" then true
+                    else loop str
+                )
+                in
+                let box unboxed_acc2_e_new_cont = res with (new_cont) in
+                let rec star_loop: string -> bool = 
+                    fun (s: string) ->
+                        if (unboxed_acc2_e_new_cont with (s, star_loop)) then true else
+                        (unboxed_cont with (s, loop))
+                in
+                star_loop str
+            )
+        )
+;;
 
+
+
+let accept2:(regexp->[str:string]bool) = 
+fun (exp:regexp) ->
+    let null:[str:string, loop: string -> bool]bool = 
+        box (str: string, loop: string -> bool |- 
+            str = ""
+        )
+    in
+    let box place_holder = box (|-fun (x:string) -> false) in
+    let box unboxed_acc2_exp = acc2 exp in
+    let box unboxed_acc_exp_null = unboxed_acc2_exp with (null) in
+    box (str: string |- 
+        unboxed_acc_exp_null with (str, place_holder with ())
+    )
+;;
+
+let compiled_regexp: [str:string]bool = accept2 regexp_to_test;;
+
+(*false*)
+
+let box u = compiled_regexp in
+    u with ("000000000")
+;;
+
+
+(*
+accept2 (Times (
+    Plus (
+        Times (
+            Const ('1'), 
+            Times (Const ('2'), Empty)
+        ), 
+        Empty
+    ), 
+    Const ('3')
+));;
+*)

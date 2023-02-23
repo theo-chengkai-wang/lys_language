@@ -236,7 +236,7 @@ fun (program: (string_list * string_list * com)) ->
     }
 *)
 
-let program: (string_list * string_list * com) = 
+let fib_program: (string_list * string_list * com) = 
 (
     Cons_s ("i", Nil_s),
     Cons_s ("t1", Nil_s),
@@ -267,10 +267,10 @@ let program: (string_list * string_list * com) =
     )
 );;
 
-let args: int_list = Cons_i (10, Nil_i);;
+let args: int_list = Cons_i (20, Nil_i);;
 
-let compiled: [args: int_list]int_list = interpret_staged program;;
+let compiled: [args: int_list]int_list = interpret_staged fib_program;;
 
 let box u = compiled in u with (args);;
 
-interpret program args;;
+interpret fib_program args;;

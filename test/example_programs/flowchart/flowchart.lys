@@ -284,7 +284,7 @@ let interpret_staged: (string_list * command_list) -> [args: int_list]int =
 
     11: return x2
 *)
-let p: (string_list * command_list) = (
+let fib_program: (string_list * command_list) = (
     Cons_s ("n", Nil_s),
     Cons_c (Assign ("x1", Int 1), 
         Cons_c (Assign ("x2", Int 1), 
@@ -326,14 +326,14 @@ let p2: (string_list * command_list) = (
 );;
 
 (*
-let compiled_list: memo_list = compile_to_list 1 p[1];;
+let compiled_list: memo_list = compile_to_list 1 fib_program[1];;
 
-let box u = from_memo_box in (u with ()) compiled_list 1 (zip p[0] a);;
+let box u = from_memo_box in (u with ()) compiled_list 1 (zip fib_program[0] a);;
 *)
 
-let compiled:[args: int_list]int = interpret_staged p;;
+let compiled:[args: int_list]int = interpret_staged fib_program;;
 
 let box u = compiled in u with (a);;
 
-interpret p a;;
+interpret fib_program a;;
 

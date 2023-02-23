@@ -11,6 +11,8 @@ let loop filename () =
     |> Ast.Program.of_past
     |> Typecore.type_check_program 
     |> ok_exn
+    |> Ast.TypedProgram.populate_index
+    |> ok_exn
     |> Ast.TypedProgram.show
     |> print_endline
       )
