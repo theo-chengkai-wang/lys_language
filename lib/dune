@@ -3,7 +3,8 @@
  (libraries
  lys_ast
  lys_parsing
- lys_typing))
+ lys_typing
+ lys_benchmarks))
 (env
   (dev
     (flags (:standard -warn-error -A))))
