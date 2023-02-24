@@ -43,7 +43,7 @@ let benchmarks =
                  };
                ]);
     };
-    {
+    (* {
       base_program_loc = "test/example_programs/simple_programs/convolution.lys";
       run = run_num;
       benchmarks =
@@ -181,7 +181,7 @@ let benchmarks =
                      persist = false;
                    };
                  ])));
-    };
+    }; *)
     (* {
          base_program_loc = "test/example_programs/flowchart/flowchart.lys";
          run = run_num;
@@ -227,4 +227,4 @@ let benchmarks =
 
 (*TODO: Perform all benchmarks and convert to CSV*)
 
-let () = Bench_legacy.bench benchmarks file_to_save
+let () = Bench_cb.bench_display_exn benchmarks

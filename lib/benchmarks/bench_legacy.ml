@@ -5,8 +5,8 @@ open Benchmark_utils
 
 (*Step * Time list for each expression executed, and in a list.*)
 
-let rec perform_run run_cnt base_program_loc { name; body; persist } eval_ctx
-    typ_ctx run_id =
+let rec perform_run steps_only run_cnt base_program_loc { name; body; persist }
+    eval_ctx typ_ctx run_id =
   print_endline
     ("... ... benchmarking: " ^ name ^ "; run: " ^ Int.to_string run_id);
   (*Performs run_cnt number of runs and get both the step cnt and the time measurement*)
@@ -31,15 +31,18 @@ let rec perform_run run_cnt base_program_loc { name; body; persist } eval_ctx
       List.map top_level_results ~f:(fun top_level ->
           get_top_level_non_rec_step_count_exn top_level)
     in
-    (*Time*)
-    let top_level_results, _, _ =
-      evaluate_from_lexbuf_given_context
-        (Interpreter.MultiStep { show_time = true })
-        (Lexing.from_string body) eval_ctx typ_ctx
-    in
     let results_time =
-      List.map top_level_results ~f:(fun top_level ->
-          get_top_level_non_rec_time_exn top_level)
+      (*If only steps we only treat steps*)
+      if steps_only then List.map results_step ~f:(fun _ -> 0.)
+      else
+        (*Time*)
+        let top_level_results, _, _ =
+          evaluate_from_lexbuf_given_context
+            (Interpreter.MultiStep { show_time = true })
+            (Lexing.from_string body) eval_ctx typ_ctx
+        in
+        List.map top_level_results ~f:(fun top_level ->
+            get_top_level_non_rec_time_exn top_level)
     in
     List.zip_exn results_step results_time
     |> List.mapi ~f:(fun i (steps, time) ->
@@ -53,13 +56,13 @@ let rec perform_run run_cnt base_program_loc { name; body; persist } eval_ctx
            })
     |> fun res ->
     let rest, new_eval_ctx, new_typ_context =
-      perform_run run_cnt base_program_loc { name; body; persist } eval_ctx
-        typ_ctx (run_id + 1)
+      perform_run steps_only run_cnt base_program_loc { name; body; persist }
+        eval_ctx typ_ctx (run_id + 1)
     in
     (res @ rest, new_eval_ctx, new_typ_context)
 
-let do_benchmark ({ base_program_loc; run; benchmarks } : base_benchmark_record)
-    =
+let do_benchmark ?(steps_only = false)
+    ({ base_program_loc; run; benchmarks } : base_benchmark_record) =
   (*do a benchmark*)
   print_endline
     (Printf.sprintf "---------------------- \n Fetching: %s" base_program_loc);
@@ -74,12 +77,13 @@ let do_benchmark ({ base_program_loc; run; benchmarks } : base_benchmark_record)
   List.fold benchmarks ~init:([], eval_ctx, typ_ctx)
     ~f:(fun (current_list, eval_ctx, typ_ctx) bm ->
       print_endline ("... benchmarking " ^ bm.name);
-      perform_run run base_program_loc bm eval_ctx typ_ctx 0
+      perform_run steps_only run base_program_loc bm eval_ctx typ_ctx 0
       |> fun (results, new_eval_ctx, new_typ_ctx) ->
       (current_list @ results, new_eval_ctx, new_typ_ctx))
   |> fun (results, _, _) -> results
 
-let perform_all_benchmarks bms = List.concat_map bms ~f:do_benchmark
+let perform_all_benchmarks ?(steps_only = false) bms =
+  List.concat_map bms ~f:(do_benchmark ~steps_only)
 
-let bench benchmarks filename =
-  perform_all_benchmarks benchmarks |> to_csv |> Csv.save filename
+let bench ?(steps_only = false) benchmarks filename =
+  perform_all_benchmarks ~steps_only benchmarks |> to_csv |> Csv.save filename

@@ -1,11 +1,10 @@
 open Core
 open Core_bench
 
-let bench_without_display ~run_config ~analysis_configs tests = 
-  tests |> Bench.measure ~run_config 
+let bench_without_display ~run_config ~analysis_configs tests =
+  tests |> Bench.measure ~run_config
   |> List.map ~f:(Bench.analyze ~analysis_configs)
-  |> Or_error.combine_errors
-  |> ok_exn
+  |> Or_error.combine_errors |> ok_exn
 
 let () =
   Random.self_init ();
@@ -15,10 +14,10 @@ let () =
     [
       Bench.Test.create ~name:"Float add" (fun () -> ignore (x +. y));
       (* Bench.Test.create ~name:"Float mul" (fun () -> ignore (x *. y));
-      Bench.Test.create ~name:"Float div" (fun () -> ignore (x /. y));
-      Bench.Test.create_indexed ~name:"Array.create"
-        ~args:[ 1; 10; 100; 200; 300; 400 ] (fun len ->
-          Staged.stage (fun () -> ignore (Array.create ~len 0))); *)
+         Bench.Test.create ~name:"Float div" (fun () -> ignore (x /. y));
+         Bench.Test.create_indexed ~name:"Array.create"
+           ~args:[ 1; 10; 100; 200; 300; 400 ] (fun len ->
+             Staged.stage (fun () -> ignore (Array.create ~len 0))); *)
     ]
   in
   Bench.bench
@@ -28,8 +27,10 @@ let () =
     ~analysis_configs:
       (List.map ~f:Bench.Analysis_config.with_error_estimation
          Bench.Analysis_config.default)
-  ~display_config:(Bench.Display_config.create ~show_all_values:true ~ascii_table:true ~show_absolute_ci:true ())
+    ~display_config:
+      (Bench.Display_config.create ~show_all_values:true ~ascii_table:true
+         ~show_absolute_ci:true ())
     tests
-  (* |> [%sexp_of: Bench.Analysis_result.t list]
-  |> Sexp.to_string_hum
-  |> print_endline *)
+(* |> [%sexp_of: Bench.Analysis_result.t list]
+   |> Sexp.to_string_hum
+   |> print_endline *)

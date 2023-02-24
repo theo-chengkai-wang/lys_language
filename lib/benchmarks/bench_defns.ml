@@ -10,7 +10,7 @@ type base_benchmark_record = {
 }
 [@@deriving show, sexp]
 
-type benchmark_result_record = {
+type benchmark_result_record_legacy = {
   base_program_loc : string;
   run_id : int;
   benchmark : benchmark_program;

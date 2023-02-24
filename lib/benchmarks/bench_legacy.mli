@@ -1,3 +1,3 @@
 open Bench_defns
 
-val bench : base_benchmark_record list -> string -> unit
+val bench : ?steps_only:bool -> base_benchmark_record list -> string -> unit
