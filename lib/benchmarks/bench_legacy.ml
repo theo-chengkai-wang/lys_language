@@ -86,4 +86,4 @@ let perform_all_benchmarks ?(steps_only = false) bms =
   List.concat_map bms ~f:(do_benchmark ~steps_only)
 
 let bench ?(steps_only = false) benchmarks filename =
-  perform_all_benchmarks ~steps_only benchmarks |> to_csv |> Csv.save filename
+  perform_all_benchmarks ~steps_only benchmarks |> to_csv_legacy |> Csv.save filename

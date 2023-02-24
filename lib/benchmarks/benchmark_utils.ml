@@ -34,9 +34,11 @@ let rec print_int_list l cons nil =
   (THINK CSV AGAIN PLEASE) -- maybe have record entry.
 *)
 
-(*Print to CSV utils*)
+(*Print to CSV utils
+Do not touch because might break it easily.   
+*)
 
-let to_csv results =
+let to_csv_legacy results =
   List.map results
     ~f:(fun { base_program_loc; run_id; benchmark; defn_id; steps; time } ->
       [
@@ -50,6 +52,59 @@ let to_csv results =
   |> fun l ->
   (*Header*)
   [ "base_program"; "run_id"; "benchmark"; "defn_id"; "steps"; "time" ] :: l
+
+let data_to_csv_list { r_2; mean; abs_lo_diff; abs_hi_diff } =
+  [
+    Float.to_string r_2;
+    Float.to_string mean;
+    Float.to_string abs_lo_diff;
+    Float.to_string abs_hi_diff;
+  ]
+
+let to_csv results =
+  List.map results
+    ~f:(fun
+         {
+           base_program_loc;
+           benchmark;
+           time_per_run;
+           mWd_per_run;
+           mjWd_per_run;
+           promotions_per_run;
+           mGC_per_run;
+           mjGC_per_run;
+           compactions_per_run;
+         }
+       ->
+      [ base_program_loc; benchmark.name ]
+      @ List.concat
+          (List.map ~f:data_to_csv_list
+             [
+               time_per_run;
+               mWd_per_run;
+               mjWd_per_run;
+               promotions_per_run;
+               mGC_per_run;
+               mjGC_per_run;
+               compactions_per_run;
+             ]))
+  |> fun l ->
+  (*Header*)
+  ([ "base_program"; "benchmark" ]
+  @ List.concat
+      (List.map
+         ~f:(fun s ->
+           [ s ^ "_r2"; s ^ "_mean"; s ^ "_abs_lo_diff"; s ^ "_abs_hi_diff" ])
+         [
+           "time_per_run";
+           "mWd_per_run";
+           "mjWd_per_run";
+           "promotions_per_run";
+           "mGC_per_run";
+           "mjGC_per_run";
+           "compactions_per_run";
+         ]))
+  :: l
 
 let get_top_level_non_rec_step_count_exn t =
   match t with

@@ -21,8 +21,8 @@ let compile_single_benchmark_program { name; body; persist } eval_ctx typ_ctx =
     (test, new_eval_ctx, new_typ_context)
   else (test, eval_ctx, typ_ctx)
 
-let compile_base_record ?(analysis_configs = Bench.Analysis_config.default)
-    { base_program_loc; run; benchmarks } =
+let compile_base_record ~analysis_configs { base_program_loc; run; benchmarks }
+    =
   print_endline
     (Printf.sprintf "---------------------- \n Fetching: %s" base_program_loc);
   let _, eval_ctx, typ_ctx =
