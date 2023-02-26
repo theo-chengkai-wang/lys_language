@@ -7,12 +7,13 @@ open Core_bench
 let default_display_config =
   Bench.Display_config.create ~ascii_table:true ~show_absolute_ci:true ()
 
-let compile_single_benchmark_program_legacy { name; body; persist } eval_ctx typ_ctx =
+let compile_single_benchmark_program_legacy { name; body; persist } eval_ctx
+    typ_ctx =
   print_endline ("... ... compiling benchmark: " ^ name);
   let test =
     Bench.Test.create ~name (fun () ->
         evaluate_from_lexbuf_given_context
-          (Interpreter.MultiStep { show_time = true })
+          (Interpreter.MultiStep { show_time = false })
           (Lexing.from_string body) eval_ctx typ_ctx)
   in
   if persist then
@@ -24,8 +25,8 @@ let compile_single_benchmark_program_legacy { name; body; persist } eval_ctx typ
     (test, new_eval_ctx, new_typ_context)
   else (test, eval_ctx, typ_ctx)
 
-let compile_base_record_legacy ~analysis_configs { base_program_loc; run; benchmarks }
-    =
+let compile_base_record_legacy ~analysis_configs
+    { base_program_loc; run; benchmarks } =
   print_endline
     (Printf.sprintf "---------------------- \n Fetching: %s" base_program_loc);
   let _, eval_ctx, typ_ctx =
@@ -49,6 +50,94 @@ let compile_base_record_legacy ~analysis_configs { base_program_loc; run; benchm
 
 let compile_bench_legacy ?(analysis_configs = Bench.Analysis_config.default) =
   List.map ~f:(compile_base_record_legacy ~analysis_configs)
+
+let format_run = Printf.sprintf "(%s) (%s) (%s);;"
+let format_compile = Printf.sprintf "let (%s: %s) = (%s) (%s);;"
+let format_staged = Printf.sprintf "let box u = %s in u with (%s);;"
+
+let compile_one name
+    { program_run; program_compile; compiled_type; program_staged_name } i
+    ((stage_0 : argument), (stage_1_list : argument list)) eval_ctx typ_ctx =
+  (*i is the index in the arguments list; j is the index in the list of stage_1 things for 1 stage_0 thing*)
+  print_endline
+    ("... ... compiling benchmark: " ^ name ^ " iteration " ^ Int.to_string i);
+  let string_or_index s_o i = Option.value s_o ~default:(Int.to_string i) in
+  let test_compile_name =
+    name ^ "_" ^ string_or_index stage_0.name i ^ "_compile"
+  in
+  let test_compile =
+    Bench.Test.create ~name:test_compile_name (fun () ->
+        evaluate_from_lexbuf_given_context
+          (Interpreter.MultiStep { show_time = false })
+          (Lexing.from_string
+             (format_compile program_staged_name compiled_type program_compile
+                stage_0.body))
+          eval_ctx typ_ctx)
+  in
+  let _, new_eval_ctx, new_typ_ctx =
+    evaluate_from_lexbuf_given_context
+      (Interpreter.MultiStep { show_time = false })
+      (Lexing.from_string
+         (format_compile program_staged_name compiled_type program_compile
+            stage_0.body))
+      eval_ctx typ_ctx
+  in
+  let test_run_staged_for j (stage_1 : argument) =
+    let test_run_staged_name =
+      name ^ "_"
+      ^ string_or_index stage_0.name i
+      ^ "_"
+      ^ string_or_index stage_1.name j
+      ^ "_staged"
+    in
+    Bench.Test.create ~name:test_run_staged_name (fun () ->
+        evaluate_from_lexbuf_given_context
+          (Interpreter.MultiStep { show_time = false })
+          (* access the same program_staged_name as we've computed and stored in the context *)
+          (Lexing.from_string (format_staged program_staged_name stage_1.body))
+          new_eval_ctx new_typ_ctx)
+  in
+  let test_run_for j (stage_1 : argument) =
+    let test_run_name =
+      name ^ "_"
+      ^ string_or_index stage_0.name i
+      ^ "_"
+      ^ string_or_index stage_1.name j
+      ^ "_run"
+    in
+    Bench.Test.create ~name:test_run_name (fun () ->
+        evaluate_from_lexbuf_given_context
+          (Interpreter.MultiStep { show_time = false })
+          (Lexing.from_string
+             (format_run program_run stage_0.body stage_1.body))
+          eval_ctx typ_ctx)
+  in
+  List.mapi ~f:test_run_for stage_1_list
+  @ [ test_compile ]
+  @ List.mapi ~f:test_run_staged_for stage_1_list
+
+let compile_base_record ~analysis_configs
+    { name; base_program_loc; run; program; arguments } =
+  print_endline
+    (Printf.sprintf "---------------------- \n Fetching: %s" base_program_loc);
+  let _, eval_ctx, typ_ctx =
+    In_channel.with_file base_program_loc ~f:(fun file_ic ->
+        evaluate_from_lexbuf_given_context
+          (Interpreter.MultiStep { show_time = false })
+          (Lexing.from_channel file_ic)
+          Interpreter_common.EvaluationContext.empty
+          Interpreter_common.TypeConstrContext.empty)
+  in
+  List.mapi arguments ~f:(fun i args ->
+      compile_one name program i args eval_ctx typ_ctx)
+  |> List.concat
+  |> fun results ->
+  ( Bench.Run_config.create ~quota:(Bench.Quota.Num_calls run) (),
+    List.map ~f:Bench.Analysis_config.with_error_estimation analysis_configs,
+    results )
+
+let compile_bench ?(analysis_configs = Bench.Analysis_config.default) =
+  List.map ~f:(compile_base_record ~analysis_configs)
 
 let bench_without_display_or_error ~run_config ~analysis_configs tests =
   tests |> Bench.measure ~run_config
@@ -132,9 +221,18 @@ let run_bench_exn
       |> ok_exn)
   |> List.concat |> List.rev
 
-let bench_display_exn_legacy ?(display_config = default_display_config) bench_list =
-  bench_list |> compile_bench_legacy |> run_bench_exn |> Bench.display ~display_config
+let bench_display_exn_legacy ?(display_config = default_display_config)
+    bench_list =
+  bench_list |> compile_bench_legacy |> run_bench_exn
+  |> Bench.display ~display_config
 
 let bench_to_csv_exn_legacy bench_list =
-  bench_list |> compile_bench_legacy |> run_bench_exn |> translate_bench_results_exn
+  bench_list |> compile_bench_legacy |> run_bench_exn
+  |> translate_bench_results_exn |> to_csv
+
+let bench_display_exn ?(display_config = default_display_config) bench_list =
+  bench_list |> compile_bench |> run_bench_exn |> Bench.display ~display_config
+
+let bench_to_csv_exn bench_list =
+  bench_list |> compile_bench |> run_bench_exn |> translate_bench_results_exn
   |> to_csv

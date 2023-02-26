@@ -21,20 +21,21 @@ type benchmark_result_record_legacy = {
 [@@deriving show, sexp]
 
 type benchmark_program = {
-  program_run : string -> string; (*argument: usually bench_unstaged %s*)
-  program_compile : string -> string -> string;
-      (*Type -> Term -> String program to compile, usually let x:typ = term;;*)
-  program_staged : string -> string;
-      (*usually let box u = staged compile in u with (blah)*)
+  program_run : string; (*argument: usually bench_unstaged %s %s*)
+  program_compile : string;
+  (*Type -> Term -> String program to compile, usually let x:typ = term;;*)
+  compiled_type : string;
+  program_staged_name : string;
 }
 
-type argument = { first : string; compiled_type : string; second : string }
+type argument = { body : string; name : string option }
 
 type base_benchmark_record = {
+  name : string;
   base_program_loc : string;
   run : int;
   program : benchmark_program;
-  arguments : argument list;
+  arguments : (argument * argument list) list;
 }
 
 type data_with_interval = {
