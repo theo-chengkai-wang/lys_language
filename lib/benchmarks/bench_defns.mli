@@ -1,22 +1,41 @@
-type benchmark_program = { name : string; body : string; persist : bool }
+open Core
+
+type benchmark_program_legacy = { name : string; body : string; persist : bool }
 [@@deriving show, sexp]
 
-type base_benchmark_record = {
+type base_benchmark_record_legacy = {
   base_program_loc : string;
   run : int;
-  benchmarks : benchmark_program list;
+  benchmarks : benchmark_program_legacy list;
 }
 [@@deriving show, sexp]
 
 type benchmark_result_record_legacy = {
   base_program_loc : string;
   run_id : int;
-  benchmark : benchmark_program;
-  defn_id : int; (*The # of the definition executed*)
+  benchmark : benchmark_program_legacy;
+  defn_id : int;
   steps : int;
   time : float;
 }
 [@@deriving show, sexp]
+
+type benchmark_program = {
+  program_run : string -> string; (*argument: usually bench_unstaged %s*)
+  program_compile : string -> string -> string;
+      (*Type -> Term -> String program to compile, usually let x:typ = term;;*)
+  program_staged : string -> string;
+      (*usually let box u = staged compile in u with (blah)*)
+}
+
+type argument = { first : string; compiled_type : string; second : string }
+
+type base_benchmark_record = {
+  base_program_loc : string;
+  run : int;
+  program : benchmark_program;
+  arguments : argument list;
+}
 
 type data_with_interval = {
   r_2 : float;

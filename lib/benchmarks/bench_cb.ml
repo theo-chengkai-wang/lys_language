@@ -7,7 +7,7 @@ open Core_bench
 let default_display_config =
   Bench.Display_config.create ~ascii_table:true ~show_absolute_ci:true ()
 
-let compile_single_benchmark_program { name; body; persist } eval_ctx typ_ctx =
+let compile_single_benchmark_program_legacy { name; body; persist } eval_ctx typ_ctx =
   print_endline ("... ... compiling benchmark: " ^ name);
   let test =
     Bench.Test.create ~name (fun () ->
@@ -24,7 +24,7 @@ let compile_single_benchmark_program { name; body; persist } eval_ctx typ_ctx =
     (test, new_eval_ctx, new_typ_context)
   else (test, eval_ctx, typ_ctx)
 
-let compile_base_record ~analysis_configs { base_program_loc; run; benchmarks }
+let compile_base_record_legacy ~analysis_configs { base_program_loc; run; benchmarks }
     =
   print_endline
     (Printf.sprintf "---------------------- \n Fetching: %s" base_program_loc);
@@ -39,7 +39,7 @@ let compile_base_record ~analysis_configs { base_program_loc; run; benchmarks }
   List.fold benchmarks ~init:([], eval_ctx, typ_ctx)
     ~f:(fun (current_list, eval_ctx, typ_ctx) bm ->
       print_endline ("... compiling benchmark " ^ bm.name);
-      compile_single_benchmark_program bm eval_ctx typ_ctx
+      compile_single_benchmark_program_legacy bm eval_ctx typ_ctx
       |> fun (results, new_eval_ctx, new_typ_ctx) ->
       (results :: current_list, new_eval_ctx, new_typ_ctx))
   |> fun (results, _, _) ->
@@ -47,8 +47,8 @@ let compile_base_record ~analysis_configs { base_program_loc; run; benchmarks }
     List.map ~f:Bench.Analysis_config.with_error_estimation analysis_configs,
     results )
 
-let compile_bench ?(analysis_configs = Bench.Analysis_config.default) =
-  List.map ~f:(compile_base_record ~analysis_configs)
+let compile_bench_legacy ?(analysis_configs = Bench.Analysis_config.default) =
+  List.map ~f:(compile_base_record_legacy ~analysis_configs)
 
 let bench_without_display_or_error ~run_config ~analysis_configs tests =
   tests |> Bench.measure ~run_config
@@ -132,9 +132,9 @@ let run_bench_exn
       |> ok_exn)
   |> List.concat |> List.rev
 
-let bench_display_exn ?(display_config = default_display_config) bench_list =
-  bench_list |> compile_bench |> run_bench_exn |> Bench.display ~display_config
+let bench_display_exn_legacy ?(display_config = default_display_config) bench_list =
+  bench_list |> compile_bench_legacy |> run_bench_exn |> Bench.display ~display_config
 
-let bench_to_csv_exn bench_list =
-  bench_list |> compile_bench |> run_bench_exn |> translate_bench_results_exn
+let bench_to_csv_exn_legacy bench_list =
+  bench_list |> compile_bench_legacy |> run_bench_exn |> translate_bench_results_exn
   |> to_csv

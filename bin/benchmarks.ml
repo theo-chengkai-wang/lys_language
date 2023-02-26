@@ -21,7 +21,9 @@ let benchmarks =
           (5, 16);
           (10, 2);
           (10, 3);
+          (10, 10);
           (50, 2);
+          (50, 10);
         ]
         |> List.concat_map ~f:(fun (n, x) ->
                [
@@ -43,45 +45,45 @@ let benchmarks =
                ]);
     };
     {
-         base_program_loc = "test/example_programs/simple_programs/convolution.lys";
-         run = 1000;
-         benchmarks =
-           [
-             (Benchmark_utils.random_list 5, Benchmark_utils.random_list 5);
-             (Benchmark_utils.random_list 10, Benchmark_utils.random_list 10);
-             (Benchmark_utils.random_list 100, Benchmark_utils.random_list 100);
-             (Benchmark_utils.random_list 200, Benchmark_utils.random_list 200);
-           ]
-           |> List.concat_map ~f:(fun (xs, ys) ->
-                  let i = List.length xs in
-                  let xs_str = Benchmark_utils.print_int_list xs "Cons" "Nil" in
-                  let ys_str = Benchmark_utils.print_int_list ys "Cons" "Nil" in
-                  [
-                    {
-                      name = Printf.sprintf "conv_%i" i;
-                      body =
-                        Printf.sprintf
-                          "conv (%s) (%s) (fun (ys: intlist) -> Nil);;" xs_str
-                          ys_str;
-                      persist = false;
-                    };
-                    {
-                      name = Printf.sprintf "conv_%i_compile" i;
-                      body =
-                        Printf.sprintf
-                          "let p: [ys: intlist]intlist = conv_staged (%s) (box \
-                           (ys: intlist|- Nil));;"
-                          xs_str;
-                      persist = true;
-                    };
-                    {
-                      name = Printf.sprintf "conv_%i_staged" i;
-                      body = Printf.sprintf "let box u = p in u with (%s);;" ys_str;
-                      persist = false;
-                    };
-                  ]);
-       };
-       {
+      base_program_loc = "test/example_programs/simple_programs/convolution.lys";
+      run = 1000;
+      benchmarks =
+        [
+          (Benchmark_utils.random_list 5, Benchmark_utils.random_list 5);
+          (Benchmark_utils.random_list 10, Benchmark_utils.random_list 10);
+          (Benchmark_utils.random_list 100, Benchmark_utils.random_list 100);
+          (Benchmark_utils.random_list 200, Benchmark_utils.random_list 200);
+        ]
+        |> List.concat_map ~f:(fun (xs, ys) ->
+               let i = List.length xs in
+               let xs_str = Benchmark_utils.print_int_list xs "Cons" "Nil" in
+               let ys_str = Benchmark_utils.print_int_list ys "Cons" "Nil" in
+               [
+                 {
+                   name = Printf.sprintf "conv_%i" i;
+                   body =
+                     Printf.sprintf
+                       "conv (%s) (%s) (fun (ys: intlist) -> Nil);;" xs_str
+                       ys_str;
+                   persist = false;
+                 };
+                 {
+                   name = Printf.sprintf "conv_%i_compile" i;
+                   body =
+                     Printf.sprintf
+                       "let p: [ys: intlist]intlist = conv_staged (%s) (box \
+                        (ys: intlist|- Nil));;"
+                       xs_str;
+                   persist = true;
+                 };
+                 {
+                   name = Printf.sprintf "conv_%i_staged" i;
+                   body = Printf.sprintf "let box u = p in u with (%s);;" ys_str;
+                   persist = false;
+                 };
+               ]);
+    };
+    (* {
          base_program_loc = "test/example_programs/regexp/regexp.lys";
          run = 500;
          benchmarks =
@@ -139,8 +141,8 @@ let benchmarks =
                        persist = false;
                      };
                    ]));
-       };
-       {
+       }; *)
+    (* {
          base_program_loc = "test/example_programs/while_language/while.lys";
          run = 100;
          benchmarks =
@@ -181,8 +183,8 @@ let benchmarks =
                         persist = false;
                       };
                     ])));
-       };
-       {
+       }; *)
+    (* {
          base_program_loc = "test/example_programs/flowchart/flowchart.lys";
          run = 100;
          benchmarks =
@@ -223,7 +225,7 @@ let benchmarks =
                         persist = false;
                       };
                     ])));
-       };
+       }; *)
   ]
 
 let () =
@@ -233,7 +235,7 @@ let () =
       +> flag "save" (optional string) ~aliases:[ "s" ] ~doc:"Save to file")
     (fun filename_opt () ->
       match filename_opt with
-      | None -> Bench_cb.bench_display_exn benchmarks
+      | None -> Bench_cb.bench_display_exn_legacy benchmarks
       | Some filename ->
-          Bench_cb.bench_to_csv_exn benchmarks |> Csv.save filename)
+          Bench_cb.bench_to_csv_exn_legacy benchmarks |> Csv.save filename)
   |> Command_unix.run

@@ -62,7 +62,7 @@ let rec perform_run steps_only run_cnt base_program_loc { name; body; persist }
     (res @ rest, new_eval_ctx, new_typ_context)
 
 let do_benchmark ?(steps_only = false)
-    ({ base_program_loc; run; benchmarks } : base_benchmark_record) =
+    ({ base_program_loc; run; benchmarks } : base_benchmark_record_legacy) =
   (*do a benchmark*)
   print_endline
     (Printf.sprintf "---------------------- \n Fetching: %s" base_program_loc);
