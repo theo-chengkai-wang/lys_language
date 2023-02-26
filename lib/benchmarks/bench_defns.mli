@@ -27,8 +27,7 @@ type data_with_interval = {
 [@@deriving show, sexp]
 
 type benchmark_result_record = {
-  base_program_loc : string;
-  benchmark : benchmark_program;
+  bench_name : string;
   time_per_run : data_with_interval;
   mWd_per_run : data_with_interval;
   mjWd_per_run : data_with_interval;

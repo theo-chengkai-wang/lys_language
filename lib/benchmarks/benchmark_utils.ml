@@ -35,7 +35,7 @@ let rec print_int_list l cons nil =
 *)
 
 (*Print to CSV utils
-Do not touch because might break it easily.   
+  Do not touch because might break it easily.
 *)
 
 let to_csv_legacy results =
@@ -65,8 +65,7 @@ let to_csv results =
   List.map results
     ~f:(fun
          {
-           base_program_loc;
-           benchmark;
+           bench_name;
            time_per_run;
            mWd_per_run;
            mjWd_per_run;
@@ -76,21 +75,21 @@ let to_csv results =
            compactions_per_run;
          }
        ->
-      [ base_program_loc; benchmark.name ]
-      @ List.concat
-          (List.map ~f:data_to_csv_list
-             [
-               time_per_run;
-               mWd_per_run;
-               mjWd_per_run;
-               promotions_per_run;
-               mGC_per_run;
-               mjGC_per_run;
-               compactions_per_run;
-             ]))
+      bench_name
+      :: List.concat
+           (List.map ~f:data_to_csv_list
+              [
+                time_per_run;
+                mWd_per_run;
+                mjWd_per_run;
+                promotions_per_run;
+                mGC_per_run;
+                mjGC_per_run;
+                compactions_per_run;
+              ]))
   |> fun l ->
   (*Header*)
-  ([ "base_program"; "benchmark" ]
+  ([ "benchmark_name" ]
   @ List.concat
       (List.map
          ~f:(fun s ->
