@@ -1,0 +1,4 @@
+(library
+ (name lys_benchmarks)
+ (libraries core lys_ast lys_typing lys_parsing lys_interpreter csv core_bench)
+ (preprocess (pps ppx_jane ppx_deriving.show)))
