@@ -8,7 +8,7 @@ let benchmarks =
   [
     {
       base_program_loc = "test/example_programs/simple_programs/hello_world.lys";
-      run = 100;
+      run = 10000;
       benchmarks =
         [
           (2, 3);
@@ -42,7 +42,7 @@ let benchmarks =
                  };
                ]);
     };
-    (* {
+    {
          base_program_loc = "test/example_programs/simple_programs/convolution.lys";
          run = 1000;
          benchmarks =
@@ -83,7 +83,7 @@ let benchmarks =
        };
        {
          base_program_loc = "test/example_programs/regexp/regexp.lys";
-         run = 100;
+         run = 500;
          benchmarks =
            (let regexps =
               [
@@ -158,13 +158,13 @@ let benchmarks =
                 List.concat_map program_args ~f:(fun arg ->
                     [
                       {
-                        name = Printf.sprintf "interpret_%s_%s" program_name arg;
+                        name = Printf.sprintf "while_interpret_%s_%s" program_name arg;
                         body =
                           Printf.sprintf "interpret (%s) (%s);;" program_name arg;
                         persist = false;
                       };
                       {
-                        name = Printf.sprintf "interpret_compile_%s" program_name;
+                        name = Printf.sprintf "while_interpret_compile_%s" program_name;
                         body =
                           Printf.sprintf
                             "let compiled: [args: int_list]int_list = \
@@ -174,7 +174,7 @@ let benchmarks =
                       };
                       {
                         name =
-                          Printf.sprintf "interpret_staged_%s_%s" program_name arg;
+                          Printf.sprintf "while_interpret_staged_%s_%s" program_name arg;
                         body =
                           Printf.sprintf "let box u = compiled in u with (%s);;"
                             arg;
@@ -200,13 +200,13 @@ let benchmarks =
                 List.concat_map program_args ~f:(fun arg ->
                     [
                       {
-                        name = Printf.sprintf "interpret_%s_%s" program_name arg;
+                        name = Printf.sprintf "flowchart_interpret_%s_%s" program_name arg;
                         body =
                           Printf.sprintf "interpret (%s) (%s);;" program_name arg;
                         persist = false;
                       };
                       {
-                        name = Printf.sprintf "interpret_compile_%s" program_name;
+                        name = Printf.sprintf "flowchart_interpret_compile_%s" program_name;
                         body =
                           Printf.sprintf
                             "let compiled: [args: int_list]int = interpret_staged \
@@ -216,14 +216,14 @@ let benchmarks =
                       };
                       {
                         name =
-                          Printf.sprintf "interpret_staged_%s_%s" program_name arg;
+                          Printf.sprintf "flowchart_interpret_staged_%s_%s" program_name arg;
                         body =
                           Printf.sprintf "let box u = compiled in u with (%s);;"
                             arg;
                         persist = false;
                       };
                     ])));
-       }; *)
+       };
   ]
 
 let () =

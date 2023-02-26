@@ -130,8 +130,7 @@ let run_bench_exn
   List.map compiled_tests ~f:(fun (rc, acs, tests) ->
       bench_without_display_or_error ~run_config:rc ~analysis_configs:acs tests
       |> ok_exn)
-  |> List.concat
-  |> List.rev
+  |> List.concat |> List.rev
 
 let bench_display_exn ?(display_config = default_display_config) bench_list =
   bench_list |> compile_bench |> run_bench_exn |> Bench.display ~display_config
