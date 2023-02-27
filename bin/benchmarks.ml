@@ -4,7 +4,6 @@ open Core
 open Lys_benchmarks
 open Lys_benchmarks.Bench_defns
 
-
 let benchmarks =
   [
     {
