@@ -68,7 +68,7 @@ let benchmarks =
     {
       name = "regexp";
       base_program_loc = "test/example_programs/regexp/regexp.lys";
-      run = 1;
+      run = 200;
       program =
         {
           program_run = "accept1";
@@ -78,7 +78,7 @@ let benchmarks =
         };
       arguments =
         (let regexps =
-           [
+           [ (* ((12)|\e)3 *)
              "Times (\n\
              \            Plus (\n\
              \                Times (\n\
@@ -89,10 +89,13 @@ let benchmarks =
              \            ), \n\
              \            Const ('3')\n\
              \          )";
+             (* (1|2)34 *)
              "Times (Plus (Const ('1'), Const ('2')), Times (Const ('3'), \
               Const ('4')))";
+              (* 0(a*b)* *)
              "Times (Const ('0'), Star (Times (Star (Const ('a')), \
               Const('b'))))";
+              (* 1** *)
              "Star (Star (Const ('1')))";
            ]
          in
