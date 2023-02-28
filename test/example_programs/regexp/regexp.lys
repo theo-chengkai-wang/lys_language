@@ -10,18 +10,18 @@ let rec acc1:(regexp -> (string -> bool) -> string -> bool) =
 fun (exp: regexp) -> fun (cont:(string -> bool)) -> fun (str: string) ->
     match exp with
     | Empty -> cont str
-    | Plus (e1, e2) -> (acc1 e1 cont str) || (acc1 e2 cont str)
+    | Plus (e1, e2) -> if (acc1 e1 cont str) then true else (acc1 e2 cont str)
     | Times (e1, e2) -> 
         let cnt2:(string -> bool) = acc1 e2 cont in
         acc1 e1 cnt2 str
     | Star (e) ->
-        (cont str) || (acc1 e (fun (str2: string) -> 
+        if (cont str) then true else (acc1 e (fun (str2: string) -> 
             if str = str2 then false else acc1 (Star e) cont str2
         )) str
     | Const (c) -> 
         match str with
         | "" -> false
-        | x++xs -> (x = c) && (cont xs);;
+        | x++xs -> if (x != c) then false else (cont xs);;
 
 let null:string -> bool = fun (str: string) -> 
     str = "";;
@@ -70,7 +70,8 @@ fun (exp: regexp) ->
             let box unboxed_res1 = (res1 with (cont)) in
             let box unboxed_res2 = (res2 with (cont)) in
             box (str: string, loop: string -> bool |- 
-                (unboxed_res1 with (str, loop)) || (unboxed_res2 with (str, loop))
+                (*Short circuiting OR*)
+                if (unboxed_res1 with (str, loop)) then true else (unboxed_res2 with (str, loop))
             )
         )
     | Times (e1, e2) ->

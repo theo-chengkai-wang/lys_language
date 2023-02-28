@@ -221,8 +221,7 @@ let benchmarks2 =
            ]
          in
          let strs =
-           List.init 10 ~f:(fun i ->
-               generate_random_string_accept ((i + 1) * 10))
+           List.init 10 ~f:(fun i -> generate_random_string_accept (i + 1))
          in
          let mapped_strs =
            List.mapi strs ~f:(fun _ s ->
@@ -264,8 +263,7 @@ let benchmarks2 =
            ]
          in
          let strs =
-           List.init 10 ~f:(fun i ->
-               generate_random_string_reject ((i + 1) * 10))
+           List.init 10 ~f:(fun i -> generate_random_string_reject (i + 1))
          in
          let mapped_strs =
            List.mapi strs ~f:(fun _ s ->
@@ -293,8 +291,7 @@ let benchmarks2 =
          in
          let regexps = [ "Star (Star (Const ('1')))" ] in
          let strs =
-           List.init 10 ~f:(fun i ->
-               generate_random_string_accept ((i + 1) * 10))
+           List.init 10 ~f:(fun i -> generate_random_string_accept (i + 1))
          in
          let mapped_strs =
            List.mapi strs ~f:(fun _ s ->
@@ -324,8 +321,7 @@ let benchmarks2 =
          in
          let regexps = [ "Star (Star (Const ('1')))" ] in
          let strs =
-           List.init 10 ~f:(fun i ->
-               generate_random_string_reject ((i + 1) * 10))
+           List.init 10 ~f:(fun i -> generate_random_string_reject (i + 1))
          in
          let mapped_strs =
            List.mapi strs ~f:(fun _ s ->
