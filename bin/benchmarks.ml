@@ -165,6 +165,7 @@ let benchmarks =
 
 let benchmarks2 =
   [
+    (*Expected 15 min*)
     {
       base_program_loc = "test/example_programs/simple_programs/hello_world.lys";
       run = 10000;
@@ -190,10 +191,11 @@ let benchmarks2 =
                in
                ({ name = Some str_stage_0; body = str_stage_0 }, str_stage_1));
     };
+    (*Next 4 each expected 1.25h*)
     {
       name = "regexp_0(a*b)*_accept";
       base_program_loc = "test/example_programs/regexp/regexp.lys";
-      run = 100;
+      run = 1;
       program =
         {
           program_run = "accept1";
@@ -221,7 +223,8 @@ let benchmarks2 =
            ]
          in
          let strs =
-           List.init 10 ~f:(fun i -> generate_random_string_accept (i + 1))
+           List.init 5 ~f:(fun i ->
+               generate_random_string_accept ((i + 1) * 20))
          in
          let mapped_strs =
            List.mapi strs ~f:(fun _ s ->
@@ -263,7 +266,8 @@ let benchmarks2 =
            ]
          in
          let strs =
-           List.init 10 ~f:(fun i -> generate_random_string_reject (i + 1))
+           List.init 5 ~f:(fun i ->
+               generate_random_string_reject ((i + 1) * 20))
          in
          let mapped_strs =
            List.mapi strs ~f:(fun _ s ->
@@ -291,7 +295,8 @@ let benchmarks2 =
          in
          let regexps = [ "Star (Star (Const ('1')))" ] in
          let strs =
-           List.init 10 ~f:(fun i -> generate_random_string_accept (i + 1))
+           List.init 5 ~f:(fun i ->
+               generate_random_string_accept ((i + 1) * 20))
          in
          let mapped_strs =
            List.mapi strs ~f:(fun _ s ->
@@ -321,7 +326,8 @@ let benchmarks2 =
          in
          let regexps = [ "Star (Star (Const ('1')))" ] in
          let strs =
-           List.init 10 ~f:(fun i -> generate_random_string_reject (i + 1))
+           List.init 5 ~f:(fun i ->
+               generate_random_string_reject ((i + 1) * 20))
          in
          let mapped_strs =
            List.mapi strs ~f:(fun _ s ->
@@ -334,14 +340,61 @@ let benchmarks2 =
     };
   ]
 
+let (additional_benchmarks2 : base_benchmark_record_legacy list) =
+  [
+    (*Expected 1h*)
+    {
+      base_program_loc = "test/example_programs/simple_programs/hello_world.lys";
+      run = 200;
+      benchmarks =
+        List.map
+          [ (10, [ 1; 2; 4; 8; 16; 31; 64; 128; 256; 512 ]) ]
+          ~f:(fun (exponent, length_list) ->
+            List.map length_list ~f:(fun length ->
+                let random_list =
+                  List.init length ~f:(fun _ -> Random.int 1024)
+                in
+                let xs =
+                  Benchmark_utils.print_int_list random_list "Cons" "Nil"
+                in
+                [
+                  {
+                    persist = false;
+                    name = Printf.sprintf "map_pow_%i_%i_run" exponent length;
+                    body =
+                      Printf.sprintf "map_int_int (%s) (pow (%i));;" xs exponent;
+                  };
+                  {
+                    persist = false;
+                    name = Printf.sprintf "map_pow_%i_%i_staged" exponent length;
+                    body =
+                      Printf.sprintf
+                        "let pow_compiled: int -> int = fun (x: int) -> let \
+                         box u = pow2 (%i) in u with (x)\n\
+                        \                  in map_int_int (%s) (pow_compiled);;"
+                        exponent xs;
+                  };
+                ])
+            |> List.concat)
+        |> List.concat;
+    };
+  ]
+
 let () =
   Command.basic_spec ~summary:"Run Benchmarks and save to file."
     Command.Spec.(
       empty
       +> flag "save" (optional string) ~aliases:[ "s" ] ~doc:"Save to file")
     (fun filename_opt () ->
+      let bench =
+        (* Bench_cb.compile_bench benchmarks2 *)
+        [] @ Bench_cb.compile_bench_legacy additional_benchmarks2
+      in
       match filename_opt with
-      | None -> Bench_cb.bench_display_exn benchmarks2
+      | None ->
+          bench |> Bench_cb.run_bench_exn
+          |> Core_bench.Bench.display
+               ~display_config:Bench_cb.default_display_config
       | Some filename ->
-          Bench_cb.bench_to_csv_exn benchmarks2 |> Csv.save filename)
+          bench |> Bench_cb.run_and_translate_to_csv |> Csv.save filename)
   |> Command_unix.run

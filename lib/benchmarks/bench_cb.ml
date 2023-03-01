@@ -221,6 +221,9 @@ let run_bench_exn
       |> ok_exn)
   |> List.concat |> List.rev
 
+let run_and_translate_to_csv test_list =
+  test_list |> run_bench_exn |> translate_bench_results_exn |> to_csv
+
 let bench_display_exn_legacy ?(display_config = default_display_config)
     bench_list =
   bench_list |> compile_bench_legacy |> run_bench_exn
