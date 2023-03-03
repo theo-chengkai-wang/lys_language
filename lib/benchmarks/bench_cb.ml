@@ -45,9 +45,10 @@ let compile_base_record_legacy ~analysis_configs
       (results :: current_list, new_eval_ctx, new_typ_ctx))
   |> fun (results, _, _) ->
   ( Bench.Run_config.create ~verbosity:Core_bench_internals.Verbosity.High
-      ~quota:(Bench.Quota.Num_calls run) (),
+      ~no_compactions:true ~fork_each_benchmark:true
+      ~stabilize_gc_between_runs:true ~quota:(Bench.Quota.Num_calls run) (),
     List.map ~f:Bench.Analysis_config.with_error_estimation analysis_configs,
-    results )
+    List.rev results )
 
 let compile_bench_legacy ?(analysis_configs = Bench.Analysis_config.default) =
   List.map ~f:(compile_base_record_legacy ~analysis_configs)
@@ -134,7 +135,8 @@ let compile_base_record ~analysis_configs
   |> List.concat
   |> fun results ->
   ( Bench.Run_config.create ~verbosity:Core_bench_internals.Verbosity.High
-      ~quota:(Bench.Quota.Num_calls run) (),
+      ~no_compactions:true ~fork_each_benchmark:true
+      ~stabilize_gc_between_runs:true ~quota:(Bench.Quota.Num_calls run) (),
     List.map ~f:Bench.Analysis_config.with_error_estimation analysis_configs,
     results )
 
