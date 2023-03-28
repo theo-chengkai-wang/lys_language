@@ -2,9 +2,9 @@
 
 open Core
 open Lys_benchmarks
-open Lys_benchmarks.Bench_defns
 
-let benchmarks =
+let benchmarks : Bench_defns.Current.Benchmark_config.base_benchmark_record list
+    =
   [
     {
       base_program_loc = "test/example_programs/simple_programs/convolution.lys";
@@ -18,10 +18,11 @@ let benchmarks =
         };
       name = "conv";
       arguments =
-        [ 5; 10; 20; 50; 100; 200 ]
+        [ 5; ]
         |> List.map ~f:(fun i ->
                ( {
-                   name = Some (Int.to_string i);
+                   Bench_defns.Current.Benchmark_config.name =
+                     Some (Int.to_string i);
                    body =
                      Benchmark_utils.print_int_list
                        (Benchmark_utils.random_list i)
@@ -29,7 +30,8 @@ let benchmarks =
                  },
                  [
                    {
-                     name = Some (Int.to_string i);
+                     Bench_defns.Current.Benchmark_config.name =
+                       Some (Int.to_string i);
                      body =
                        Benchmark_utils.print_int_list
                          (Benchmark_utils.random_list i)
@@ -37,7 +39,6 @@ let benchmarks =
                    };
                  ] ));
     };
-
     (* {
          base_program_loc = "test/example_programs/simple_programs/hello_world.lys";
          run = 10000;
@@ -117,28 +118,28 @@ let benchmarks =
               regexps);
        }; *)
     (* {
-      base_program_loc = "test/example_programs/while_language/while.lys";
-      run = 200;
-      name = "while";
-      program =
-        {
-          program_run = "interpret";
-          program_compile = "interpret_staged";
-          program_staged_name = "compiled";
-          compiled_type = "[args: int_list]int_list";
-        };
-      arguments =
-        [
-          ( { name = Some "fib_program"; body = "fib_program" },
-            [ 1; 2; 5; 10; 20; 50; 100 ]
-            |> List.map ~f:(fun i ->
-                   {
-                     name = Some (Int.to_string i);
-                     body =
-                       Benchmark_utils.print_int_list [ i ] "Cons_i" "Nil_i";
-                   }) );
-        ];
-    }; *)
+         base_program_loc = "test/example_programs/while_language/while.lys";
+         run = 200;
+         name = "while";
+         program =
+           {
+             program_run = "interpret";
+             program_compile = "interpret_staged";
+             program_staged_name = "compiled";
+             compiled_type = "[args: int_list]int_list";
+           };
+         arguments =
+           [
+             ( { name = Some "fib_program"; body = "fib_program" },
+               [ 1; 2; 5; 10; 20; 50; 100 ]
+               |> List.map ~f:(fun i ->
+                      {
+                        name = Some (Int.to_string i);
+                        body =
+                          Benchmark_utils.print_int_list [ i ] "Cons_i" "Nil_i";
+                      }) );
+           ];
+       }; *)
     (* {
          base_program_loc = "test/example_programs/flowchart/flowchart.lys";
          run = 100;
@@ -164,7 +165,8 @@ let benchmarks =
        }; *)
   ]
 
-let benchmarks2 =
+let benchmarks2 :
+    Bench_defns.Current.Benchmark_config.base_benchmark_record list =
   [
     (* Expected 15 min*)
     (* {
@@ -199,152 +201,152 @@ let benchmarks2 =
        }; *)
     (*1.25h*)
     (* {
-      name = "regexp_0(a*b)*_accept";
-      base_program_loc = "test/example_programs/regexp/regexp.lys";
-      run = 1000;
-      program =
-        {
-          program_run = "accept1";
-          program_compile = "accept2";
-          program_staged_name = "p";
-          compiled_type = "[str: string]bool";
-        };
-      arguments =
-        (let generate_random_string_accept length =
-           let rec generate_random_string_aux length =
-             if length = 0 then ""
-             else
-               let random_number = Random.int ((length / 2) + 1) in
-               String.init random_number ~f:(const 'a')
-               ^ "b"
-               ^ generate_random_string_aux (length - random_number - 1)
-           in
-           "0" ^ generate_random_string_aux (length - 1)
-         in
-         let regexps =
-           [
-             (* 0(a*b)* *)
-             "Times (Const ('0'), Star (Times (Star (Const ('a')), \
-              Const('b'))))";
-           ]
-         in
-         let strs =
-           List.init 5 ~f:(fun i ->
-               generate_random_string_accept ((i + 1) * 20))
-         in
-         let mapped_strs =
-           List.mapi strs ~f:(fun _ s ->
-               { name = Some s; body = Printf.sprintf "\"%s\"" s })
-         in
-         List.mapi
-           ~f:(fun i regexp ->
-             ({ name = Some (Int.to_string i); body = regexp }, mapped_strs))
-           regexps);
-    };
-    (*2 min*)
-    {
-      name = "regexp_0(a*b)*_reject";
-      base_program_loc = "test/example_programs/regexp/regexp.lys";
-      run = 1000;
-      program =
-        {
-          program_run = "accept1";
-          program_compile = "accept2";
-          program_staged_name = "p";
-          compiled_type = "[str: string]bool";
-        };
-      arguments =
-        (let generate_random_string_reject length =
-           "0"
-           ^ String.init (length - 1) ~f:(fun _ ->
-                 let i = Random.int 3 in
-                 match i with
-                 | 0 -> 'a'
-                 | 1 -> 'b'
-                 | 2 -> 'c'
-                 | _ -> failwith "should never reach here")
-           (*Have big proba for long run*)
-         in
-         let regexps =
-           [
-             (* 0(a*b)* *)
-             "Times (Const ('0'), Star (Times (Star (Const ('a')), \
-              Const('b'))))";
-           ]
-         in
-         let strs =
-           List.init 5 ~f:(fun i ->
-               generate_random_string_reject ((i + 1) * 20))
-         in
-         let mapped_strs =
-           List.mapi strs ~f:(fun _ s ->
-               { name = Some s; body = Printf.sprintf "\"%s\"" s })
-         in
-         List.mapi
-           ~f:(fun i regexp ->
-             ({ name = Some (Int.to_string i); body = regexp }, mapped_strs))
-           regexps);
-    }; *)
+         name = "regexp_0(a*b)*_accept";
+         base_program_loc = "test/example_programs/regexp/regexp.lys";
+         run = 1000;
+         program =
+           {
+             program_run = "accept1";
+             program_compile = "accept2";
+             program_staged_name = "p";
+             compiled_type = "[str: string]bool";
+           };
+         arguments =
+           (let generate_random_string_accept length =
+              let rec generate_random_string_aux length =
+                if length = 0 then ""
+                else
+                  let random_number = Random.int ((length / 2) + 1) in
+                  String.init random_number ~f:(const 'a')
+                  ^ "b"
+                  ^ generate_random_string_aux (length - random_number - 1)
+              in
+              "0" ^ generate_random_string_aux (length - 1)
+            in
+            let regexps =
+              [
+                (* 0(a*b)* *)
+                "Times (Const ('0'), Star (Times (Star (Const ('a')), \
+                 Const('b'))))";
+              ]
+            in
+            let strs =
+              List.init 5 ~f:(fun i ->
+                  generate_random_string_accept ((i + 1) * 20))
+            in
+            let mapped_strs =
+              List.mapi strs ~f:(fun _ s ->
+                  { name = Some s; body = Printf.sprintf "\"%s\"" s })
+            in
+            List.mapi
+              ~f:(fun i regexp ->
+                ({ name = Some (Int.to_string i); body = regexp }, mapped_strs))
+              regexps);
+       };
+       (*2 min*)
+       {
+         name = "regexp_0(a*b)*_reject";
+         base_program_loc = "test/example_programs/regexp/regexp.lys";
+         run = 1000;
+         program =
+           {
+             program_run = "accept1";
+             program_compile = "accept2";
+             program_staged_name = "p";
+             compiled_type = "[str: string]bool";
+           };
+         arguments =
+           (let generate_random_string_reject length =
+              "0"
+              ^ String.init (length - 1) ~f:(fun _ ->
+                    let i = Random.int 3 in
+                    match i with
+                    | 0 -> 'a'
+                    | 1 -> 'b'
+                    | 2 -> 'c'
+                    | _ -> failwith "should never reach here")
+              (*Have big proba for long run*)
+            in
+            let regexps =
+              [
+                (* 0(a*b)* *)
+                "Times (Const ('0'), Star (Times (Star (Const ('a')), \
+                 Const('b'))))";
+              ]
+            in
+            let strs =
+              List.init 5 ~f:(fun i ->
+                  generate_random_string_reject ((i + 1) * 20))
+            in
+            let mapped_strs =
+              List.mapi strs ~f:(fun _ s ->
+                  { name = Some s; body = Printf.sprintf "\"%s\"" s })
+            in
+            List.mapi
+              ~f:(fun i regexp ->
+                ({ name = Some (Int.to_string i); body = regexp }, mapped_strs))
+              regexps);
+       }; *)
     (* {
-      name = "regexp_1**_accept";
-      base_program_loc = "test/example_programs/regexp/regexp.lys";
-      run = 1000;
-      program =
-        {
-          program_run = "accept1";
-          program_compile = "accept2";
-          program_staged_name = "p";
-          compiled_type = "[str: string]bool";
-        };
-      arguments =
-        (let generate_random_string_accept length =
-           String.init ~f:(const '1') length
-         in
-         let regexps = [ "Star (Star (Const ('1')))" ] in
-         let strs =
-           List.init 5 ~f:(fun i ->
-               generate_random_string_accept ((i + 1) * 20))
-         in
-         let mapped_strs =
-           List.mapi strs ~f:(fun _ s ->
-               { name = Some s; body = Printf.sprintf "\"%s\"" s })
-         in
-         List.mapi
-           ~f:(fun i regexp ->
-             ({ name = Some (Int.to_string i); body = regexp }, mapped_strs))
-           regexps);
-    };
-    {
-      name = "regexp_1**_reject";
-      base_program_loc = "test/example_programs/regexp/regexp.lys";
-      run = 1000;
-      program =
-        {
-          program_run = "accept1";
-          program_compile = "accept2";
-          program_staged_name = "p";
-          compiled_type = "[str: string]bool";
-        };
-      arguments =
-        (let generate_random_string_reject length =
-           String.init (length - 1) ~f:(fun _ ->
-               if Random.int 3 < 2 then '1' else '0')
-           (*Bigger proba for long run*)
-         in
-         let regexps = [ "Star (Star (Const ('1')))" ] in
-         let strs =
-           List.init 5 ~f:(fun i ->
-               generate_random_string_reject ((i + 1) * 20))
-         in
-         let mapped_strs =
-           List.mapi strs ~f:(fun _ s ->
-               { name = Some s; body = Printf.sprintf "\"%s\"" s })
-         in
-         List.mapi
-           ~f:(fun i regexp ->
-             ({ name = Some (Int.to_string i); body = regexp }, mapped_strs))
-           regexps);
-    }; *)
+         name = "regexp_1**_accept";
+         base_program_loc = "test/example_programs/regexp/regexp.lys";
+         run = 1000;
+         program =
+           {
+             program_run = "accept1";
+             program_compile = "accept2";
+             program_staged_name = "p";
+             compiled_type = "[str: string]bool";
+           };
+         arguments =
+           (let generate_random_string_accept length =
+              String.init ~f:(const '1') length
+            in
+            let regexps = [ "Star (Star (Const ('1')))" ] in
+            let strs =
+              List.init 5 ~f:(fun i ->
+                  generate_random_string_accept ((i + 1) * 20))
+            in
+            let mapped_strs =
+              List.mapi strs ~f:(fun _ s ->
+                  { name = Some s; body = Printf.sprintf "\"%s\"" s })
+            in
+            List.mapi
+              ~f:(fun i regexp ->
+                ({ name = Some (Int.to_string i); body = regexp }, mapped_strs))
+              regexps);
+       };
+       {
+         name = "regexp_1**_reject";
+         base_program_loc = "test/example_programs/regexp/regexp.lys";
+         run = 1000;
+         program =
+           {
+             program_run = "accept1";
+             program_compile = "accept2";
+             program_staged_name = "p";
+             compiled_type = "[str: string]bool";
+           };
+         arguments =
+           (let generate_random_string_reject length =
+              String.init (length - 1) ~f:(fun _ ->
+                  if Random.int 3 < 2 then '1' else '0')
+              (*Bigger proba for long run*)
+            in
+            let regexps = [ "Star (Star (Const ('1')))" ] in
+            let strs =
+              List.init 5 ~f:(fun i ->
+                  generate_random_string_reject ((i + 1) * 20))
+            in
+            let mapped_strs =
+              List.mapi strs ~f:(fun _ s ->
+                  { name = Some s; body = Printf.sprintf "\"%s\"" s })
+            in
+            List.mapi
+              ~f:(fun i regexp ->
+                ({ name = Some (Int.to_string i); body = regexp }, mapped_strs))
+              regexps);
+       }; *)
     {
       name = "regexp_(aa|aa)*_exp_runtime";
       base_program_loc = "test/example_programs/regexp/regexp.lys";
@@ -360,23 +362,36 @@ let benchmarks2 =
         (let generate_random_string length =
            String.init ~f:(const 'a') length
          in
-         let regexps = [ "Star (Plus (Times (Const ('a'), Const ('a')), Times (Const ('a'), Const ('a'))))" ] in
+         let regexps =
+           [
+             "Star (Plus (Times (Const ('a'), Const ('a')), Times (Const \
+              ('a'), Const ('a'))))";
+           ]
+         in
          let strs =
-           List.init 10 ~f:(fun i ->
-               generate_random_string ((2 * i + 1)))
+           List.init 10 ~f:(fun i -> generate_random_string ((2 * i) + 1))
          in
          let mapped_strs =
            List.mapi strs ~f:(fun _ s ->
-               { name = Some s; body = Printf.sprintf "\"%s\"" s })
+               {
+                 Bench_defns.Current.Benchmark_config.name = Some s;
+                 body = Printf.sprintf "\"%s\"" s;
+               })
          in
          List.mapi
            ~f:(fun i regexp ->
-             ({ name = Some (Int.to_string i); body = regexp }, mapped_strs))
+             ( {
+                 Bench_defns.Current.Benchmark_config.name =
+                   Some (Int.to_string i);
+                 body = regexp;
+               },
+               mapped_strs ))
            regexps);
     };
   ]
 
-let (additional_benchmarks2 : base_benchmark_record_legacy list) =
+let (additional_benchmarks2 :
+      Bench_defns.Legacy.Base_benchmark_record_legacy.t list) =
   [
     (*Expected 1h*)
     {
@@ -400,7 +415,7 @@ let (additional_benchmarks2 : base_benchmark_record_legacy list) =
                 in
                 [
                   {
-                    persist = false;
+                    Bench_defns.Legacy.Benchmark_program_legacy.persist = false;
                     name = Printf.sprintf "map_pow_%i_%i_run" exponent length;
                     body =
                       Printf.sprintf "map_int_int (pow (%i)) (%s);;" exponent xs;
@@ -482,7 +497,8 @@ let () =
           |> Core_bench.Bench.display
                ~display_config:Bench_cb.default_display_config
       | Some filename ->
-          bench |> Bench_cb.run_and_translate_to_csv |> Csv.save filename)
+          bench |> Bench_cb.run_and_translate
+          |> Bench_defns.Current.Benchmark_result.csv_save filename)
   |> Command_unix.run
 (* let random_list =
      List.init 512 ~f:(fun _ -> Random.int Int.max_value)

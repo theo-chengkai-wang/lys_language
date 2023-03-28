@@ -7,8 +7,8 @@ open Core_bench
 let default_display_config =
   Bench.Display_config.create ~ascii_table:true ~show_absolute_ci:true ()
 
-let compile_single_benchmark_program_legacy { name; body; persist } eval_ctx
-    typ_ctx =
+let compile_single_benchmark_program_legacy
+    { Legacy.Benchmark_program_legacy.name; body; persist } eval_ctx typ_ctx =
   print_endline ("... ... compiling benchmark: " ^ name);
   let test =
     Bench.Test.create ~name (fun () ->
@@ -26,7 +26,7 @@ let compile_single_benchmark_program_legacy { name; body; persist } eval_ctx
   else (test, eval_ctx, typ_ctx)
 
 let compile_base_record_legacy ~analysis_configs
-    { base_program_loc; run; benchmarks } =
+    { Legacy.Base_benchmark_record_legacy.base_program_loc; run; benchmarks } =
   print_endline
     (Printf.sprintf "---------------------- \n Fetching: %s" base_program_loc);
   let _, eval_ctx, typ_ctx =
@@ -58,8 +58,15 @@ let format_compile = Printf.sprintf "let (%s: %s) = (%s) (%s);;"
 let format_staged = Printf.sprintf "let box u = %s in u with (%s);;"
 
 let compile_one name
-    { program_run; program_compile; compiled_type; program_staged_name } i
-    ((stage_0 : argument), (stage_1_list : argument list)) eval_ctx typ_ctx =
+    {
+      Current.Benchmark_config.program_run;
+      program_compile;
+      compiled_type;
+      program_staged_name;
+    } i
+    ( (stage_0 : Current.Benchmark_config.argument),
+      (stage_1_list : Current.Benchmark_config.argument list) ) eval_ctx typ_ctx
+    =
   (*i is the index in the arguments list; j is the index in the list of stage_1 things for 1 stage_0 thing*)
   print_endline
     ("... ... compiling benchmark: " ^ name ^ " iteration " ^ Int.to_string i);
@@ -84,7 +91,7 @@ let compile_one name
             stage_0.body))
       eval_ctx typ_ctx
   in
-  let test_run_staged_for j (stage_1 : argument) =
+  let test_run_staged_for j (stage_1 : Current.Benchmark_config.argument) =
     let test_run_staged_name =
       name ^ "_"
       ^ string_or_index stage_0.name i
@@ -99,7 +106,7 @@ let compile_one name
           (Lexing.from_string (format_staged program_staged_name stage_1.body))
           new_eval_ctx new_typ_ctx)
   in
-  let test_run_for j (stage_1 : argument) =
+  let test_run_for j (stage_1 : Current.Benchmark_config.argument) =
     let test_run_name =
       name ^ "_"
       ^ string_or_index stage_0.name i
@@ -119,7 +126,8 @@ let compile_one name
   @ List.mapi ~f:test_run_staged_for stage_1_list
 
 let compile_base_record ~analysis_configs
-    { name; base_program_loc; run; program; arguments } =
+    { Current.Benchmark_config.name; base_program_loc; run; program; arguments }
+    =
   print_endline
     (Printf.sprintf "---------------------- \n Fetching: %s" base_program_loc);
   let _, eval_ctx, typ_ctx =
@@ -178,7 +186,7 @@ let translate_bench_result_exn (result : Bench.Analysis_result.t) =
              | None -> (Float.neg_infinity, Float.neg_infinity)
            in
            {
-             r_2 = r_square;
+             Current.Benchmark_result.r_2 = r_square;
              mean = estimate;
              abs_lo_diff = lo;
              abs_hi_diff = hi;
@@ -198,7 +206,7 @@ let translate_bench_result_exn (result : Bench.Analysis_result.t) =
            ~data:vs_run_results)
   |> fun value_map ->
   {
-    bench_name = name;
+    Current.Benchmark_result.bench_name = name;
     time_per_run = String.Map.find_exn value_map (get_variable_name `Nanos);
     mWd_per_run =
       String.Map.find_exn value_map (get_variable_name `Minor_allocated);
@@ -225,21 +233,20 @@ let run_bench_exn
       |> ok_exn)
   |> List.concat |> List.rev
 
-let run_and_translate_to_csv test_list =
-  test_list |> run_bench_exn |> translate_bench_results_exn |> to_csv
+let run_and_translate test_list =
+  test_list |> run_bench_exn |> translate_bench_results_exn
 
 let bench_display_exn_legacy ?(display_config = default_display_config)
     bench_list =
   bench_list |> compile_bench_legacy |> run_bench_exn
   |> Bench.display ~display_config
 
-let bench_to_csv_exn_legacy bench_list =
+let bench_exn_legacy bench_list =
   bench_list |> compile_bench_legacy |> run_bench_exn
-  |> translate_bench_results_exn |> to_csv
+  |> translate_bench_results_exn
 
 let bench_display_exn ?(display_config = default_display_config) bench_list =
   bench_list |> compile_bench |> run_bench_exn |> Bench.display ~display_config
 
-let bench_to_csv_exn bench_list =
+let bench_exn bench_list =
   bench_list |> compile_bench |> run_bench_exn |> translate_bench_results_exn
-  |> to_csv

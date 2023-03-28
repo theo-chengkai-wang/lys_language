@@ -38,7 +38,7 @@ let rec print_int_list l cons nil =
   Do not touch because might break it easily.
 *)
 
-let to_csv_legacy results =
+(* let to_csv_legacy results =
   List.map results
     ~f:(fun { base_program_loc; run_id; benchmark; defn_id; steps; time } ->
       [
@@ -103,7 +103,7 @@ let to_csv results =
            "mjGC_per_run";
            "compactions_per_run";
          ]))
-  :: l
+  :: l *)
 
 let get_top_level_non_rec_step_count_exn t =
   match t with

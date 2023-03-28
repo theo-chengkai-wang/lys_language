@@ -4,7 +4,7 @@ open Core
 open Lys_benchmarks
 open Lys_benchmarks.Bench_defns
 
-let (additional_benchmarks2 : base_benchmark_record_legacy list) =
+let (additional_benchmarks2 : Legacy.Base_benchmark_record_legacy.t list) =
   [
     (*Expected 1h*)
     {
@@ -23,7 +23,7 @@ let (additional_benchmarks2 : base_benchmark_record_legacy list) =
                 in
                 [
                   {
-                    persist = false;
+                    Legacy.Benchmark_program_legacy.persist = false;
                     name = Printf.sprintf "map_pow_%i_%i_run" exponent length;
                     body =
                       Printf.sprintf "map_int_int (pow (%i)) (%s);;" exponent xs;

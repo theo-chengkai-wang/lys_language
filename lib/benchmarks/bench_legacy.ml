@@ -1,12 +1,12 @@
 open Core
 open Lys_interpreter
-open Bench_defns
+open Bench_defns.Legacy
 open Benchmark_utils
 
 (*Step * Time list for each expression executed, and in a list.*)
 
-let rec perform_run steps_only run_cnt base_program_loc { name; body; persist }
-    eval_ctx typ_ctx run_id =
+let rec perform_run steps_only run_cnt base_program_loc
+    { Benchmark_program_legacy.name; body; persist } eval_ctx typ_ctx run_id =
   print_endline
     ("... ... benchmarking: " ^ name ^ "; run: " ^ Int.to_string run_id);
   (*Performs run_cnt number of runs and get both the step cnt and the time measurement*)
@@ -47,7 +47,7 @@ let rec perform_run steps_only run_cnt base_program_loc { name; body; persist }
     List.zip_exn results_step results_time
     |> List.mapi ~f:(fun i (steps, time) ->
            {
-             base_program_loc;
+             Benchmark_result_record_legacy.base_program_loc;
              run_id;
              benchmark = { name; body; persist };
              defn_id = i;
@@ -62,7 +62,7 @@ let rec perform_run steps_only run_cnt base_program_loc { name; body; persist }
     (res @ rest, new_eval_ctx, new_typ_context)
 
 let do_benchmark ?(steps_only = false)
-    ({ base_program_loc; run; benchmarks } : base_benchmark_record_legacy) =
+    { Base_benchmark_record_legacy.base_program_loc; run; benchmarks } =
   (*do a benchmark*)
   print_endline
     (Printf.sprintf "---------------------- \n Fetching: %s" base_program_loc);
@@ -86,4 +86,5 @@ let perform_all_benchmarks ?(steps_only = false) bms =
   List.concat_map bms ~f:(do_benchmark ~steps_only)
 
 let bench ?(steps_only = false) benchmarks filename =
-  perform_all_benchmarks ~steps_only benchmarks |> to_csv_legacy |> Csv.save filename
+  perform_all_benchmarks ~steps_only benchmarks
+  |> Benchmark_result_record_legacy.csv_save filename
