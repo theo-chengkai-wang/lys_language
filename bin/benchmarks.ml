@@ -6,6 +6,38 @@ open Lys_benchmarks.Bench_defns
 
 let benchmarks =
   [
+    {
+      base_program_loc = "test/example_programs/simple_programs/convolution.lys";
+      run = 1000;
+      program =
+        {
+          program_run = "conv_";
+          program_compile = "conv_staged_";
+          program_staged_name = "p";
+          compiled_type = "[ys: intlist]intlist";
+        };
+      name = "conv";
+      arguments =
+        [ 5; 10; 20; 50; 100; 200 ]
+        |> List.map ~f:(fun i ->
+               ( {
+                   name = Some (Int.to_string i);
+                   body =
+                     Benchmark_utils.print_int_list
+                       (Benchmark_utils.random_list i)
+                       "Cons" "Nil";
+                 },
+                 [
+                   {
+                     name = Some (Int.to_string i);
+                     body =
+                       Benchmark_utils.print_int_list
+                         (Benchmark_utils.random_list i)
+                         "Cons" "Nil";
+                   };
+                 ] ));
+    };
+
     (* {
          base_program_loc = "test/example_programs/simple_programs/hello_world.lys";
          run = 10000;
@@ -33,37 +65,6 @@ let benchmarks =
                       stage_1_list
                   in
                   ({ name = Some str_stage_0; body = str_stage_0 }, str_stage_1));
-       };
-       {
-         base_program_loc = "test/example_programs/simple_programs/convolution.lys";
-         run = 1000;
-         program =
-           {
-             program_run = "conv_";
-             program_compile = "conv_staged_";
-             program_staged_name = "p";
-             compiled_type = "[ys: intlist]intlist";
-           };
-         name = "conv";
-         arguments =
-           [ 5; 10; 20; 50; 100; 200 ]
-           |> List.map ~f:(fun i ->
-                  ( {
-                      name = Some (Int.to_string i);
-                      body =
-                        Benchmark_utils.print_int_list
-                          (Benchmark_utils.random_list i)
-                          "Cons" "Nil";
-                    },
-                    [
-                      {
-                        name = Some (Int.to_string i);
-                        body =
-                          Benchmark_utils.print_int_list
-                            (Benchmark_utils.random_list i)
-                            "Cons" "Nil";
-                      };
-                    ] ));
        };
        {
          name = "regexp";
@@ -115,7 +116,7 @@ let benchmarks =
                 ({ name = Some (Int.to_string i); body = regexp }, mapped_strs))
               regexps);
        }; *)
-    {
+    (* {
       base_program_loc = "test/example_programs/while_language/while.lys";
       run = 200;
       name = "while";
@@ -137,7 +138,7 @@ let benchmarks =
                        Benchmark_utils.print_int_list [ i ] "Cons_i" "Nil_i";
                    }) );
         ];
-    };
+    }; *)
     (* {
          base_program_loc = "test/example_programs/flowchart/flowchart.lys";
          run = 100;
@@ -471,7 +472,7 @@ let () =
     (fun filename_opt () ->
       let bench =
         (* Bench_cb.compile_bench benchmarks2 *)
-        Bench_cb.compile_bench benchmarks2
+        Bench_cb.compile_bench benchmarks
         (* Bench_cb.compile_bench benchmarks *)
         (* @ Bench_cb.compile_bench_legacy additional_benchmarks2 *)
       in
