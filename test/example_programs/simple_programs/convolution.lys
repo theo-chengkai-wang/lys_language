@@ -19,6 +19,8 @@ let rec conv: intlist -> intlist -> (intlist -> intlist) -> intlist = fun (xs: i
             | Cons (hd, tl) -> Cons (x * hd, cont tl)
         );;
 
+let conv_: intlist -> intlist -> intlist = fun (xs: intlist) -> fun (ys: intlist) -> conv xs ys (fun (ys: intlist) -> Nil);;
+
 let rec conv_staged: intlist -> [ys: intlist] intlist -> [ys: intlist] intlist =
     fun (xs: intlist) -> fun (cont: [ys: intlist]intlist) ->
         match xs with
@@ -31,6 +33,8 @@ let rec conv_staged: intlist -> [ys: intlist] intlist -> [ys: intlist] intlist =
                 match ys with
                 | Cons (hd, tl) -> Cons ((lifted_x with ()) * hd, u with (tl))
             ));;
+
+let conv_staged_: intlist -> [ys:intlist] intlist = fun (xs: intlist) -> conv_staged xs (box (ys: intlist|- Nil));;
 
 conv (Cons (3, Cons (2, Nil))) (Cons (3, Cons (2, Nil))) (fun (ys: intlist) -> Nil);;
 

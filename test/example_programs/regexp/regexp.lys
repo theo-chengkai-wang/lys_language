@@ -10,18 +10,18 @@ let rec acc1:(regexp -> (string -> bool) -> string -> bool) =
 fun (exp: regexp) -> fun (cont:(string -> bool)) -> fun (str: string) ->
     match exp with
     | Empty -> cont str
-    | Plus (e1, e2) -> (acc1 e1 cont str) || (acc1 e2 cont str)
+    | Plus (e1, e2) -> if (acc1 e1 cont str) then true else (acc1 e2 cont str)
     | Times (e1, e2) -> 
         let cnt2:(string -> bool) = acc1 e2 cont in
         acc1 e1 cnt2 str
     | Star (e) ->
-        (cont str) || (acc1 e (fun (str2: string) -> 
+        if (cont str) then true else (acc1 e (fun (str2: string) -> 
             if str = str2 then false else acc1 (Star e) cont str2
         )) str
     | Const (c) -> 
         match str with
         | "" -> false
-        | x++xs -> (x = c) && (cont xs);;
+        | x++xs -> if (x != c) then false else (cont xs);;
 
 let null:string -> bool = fun (str: string) -> 
     str = "";;
@@ -56,40 +56,41 @@ accept1 (regexp_to_test) "0";;
 
 accept1 (regexp_to_test) "";;
 
-let rec acc2:(regexp -> [cont: [str:string, loop: string -> bool]bool][str: string, loop: string -> bool]bool) = 
+let rec acc2:(regexp -> [cont: [str:string, prev_str: string, loop: string -> bool]bool][str: string, prev_str: string, loop: string -> bool]bool) = 
 fun (exp: regexp) ->    
     match exp with
     | Empty -> 
-        box (cont: [str:string, loop: string -> bool]bool |- 
+        box (cont: [str:string, prev_str: string, loop: string -> bool]bool |- 
             cont
         )
     | Plus (e1, e2) -> 
         let box res1 = acc2 e1 in
         let box res2 = acc2 e2 in
-        box (cont: [str:string, loop: string -> bool]bool |-
+        box (cont: [str:string, prev_str: string, loop: string -> bool]bool |-
             let box unboxed_res1 = (res1 with (cont)) in
             let box unboxed_res2 = (res2 with (cont)) in
-            box (str: string, loop: string -> bool |- 
-                (unboxed_res1 with (str, loop)) || (unboxed_res2 with (str, loop))
+            box (str: string, prev_str: string, loop: string -> bool |- 
+                (*Short circuiting OR*)
+                if (unboxed_res1 with (str, prev_str, loop)) then true else (unboxed_res2 with (str, prev_str, loop))
             )
         )
     | Times (e1, e2) ->
         let box res1_ = acc2 e1 in
         let box res2_ = acc2 e2 in
-        box (cont: [str:string, loop: string -> bool]bool |-
+        box (cont: [str:string, prev_str: string, loop: string -> bool]bool |-
             res1_ with (res2_ with (cont))
         ) 
     | Const (c) ->
         let box lifted_unboxed_c = lift[char] c in
-        box (cont: [str:string, loop: string -> bool]bool |- 
+        box (cont: [str:string, prev_str: string, loop: string -> bool]bool |- 
             let box unboxed_cont = cont in
-            box (str: string, loop: string -> bool |- 
+            box (str: string, prev_str: string, loop: string -> bool |- 
                 match str with
                 | "" -> false
                 | x++xs -> 
                     (*Shortcircuiting AND*)
                     if (x = (lifted_unboxed_c with ())) then
-                        (unboxed_cont with (xs, loop))
+                        (unboxed_cont with (xs, prev_str, loop))
                     else false
             )
         )
@@ -116,28 +117,23 @@ fun (exp: regexp) ->
         *)
     (*Trick = introduce a spurious redex to stop beta reduction*)
         let box res = acc2 e in 
-        box (cont: [str: string, loop: string -> bool]bool |- 
+        box (cont: [str: string, prev_str: string, loop: string -> bool]bool |- 
             let box unboxed_cont = cont in
-            box (str: string, loop: string -> bool |- 
+            box (str: string, prev_str: string, loop: string -> bool |- 
                 (*Construct cont*)
-                let box lifted_unboxed_old_str = lift[string] str in
-                let new_cont: [str: string, loop: string -> bool]bool = box (str: string, loop: string -> bool |- 
-                    if str = (lifted_unboxed_old_str with ()) then false
+                let new_cont: [str: string, prev_str: string, loop: string -> bool]bool = box (str: string, prev_str: string, loop: string -> bool |- 
+                    if str = prev_str then false
                     else loop str
                 )
                 in
                 let box unboxed_acc2_e_new_cont = res with (new_cont) in
                 let rec star_loop: string -> bool = 
                     fun (s: string) ->
-                        (*If we don't have anything left we just call the continuation*)
-                        if s = "" then 
-                            (unboxed_cont with (s, loop)) 
-                        else
-                            (*Shortcircuiting OR*)
-                            if unboxed_acc2_e_new_cont with (s, star_loop) then 
-                                true
-                            else 
-                                (unboxed_cont with (s, loop))
+                        (*Shortcircuiting OR*)
+                        if (unboxed_cont with (s, prev_str, loop)) then 
+                            true
+                        else 
+                            unboxed_acc2_e_new_cont with (s, s, star_loop)
                 in
                 star_loop str
             )
@@ -148,8 +144,8 @@ fun (exp: regexp) ->
 
 let accept2:(regexp->[str:string]bool) = 
 fun (exp:regexp) ->
-    let null:[str:string, loop: string -> bool]bool = 
-        box (str: string, loop: string -> bool |- 
+    let null:[str:string, prev_str: string, loop: string -> bool]bool = 
+        box (str: string, prev_str: string, loop: string -> bool |- 
             str = ""
         )
     in
@@ -157,7 +153,7 @@ fun (exp:regexp) ->
     let box unboxed_acc2_exp = acc2 exp in
     let box unboxed_acc_exp_null = unboxed_acc2_exp with (null) in
     box (str: string |- 
-        unboxed_acc_exp_null with (str, place_holder with ())
+        unboxed_acc_exp_null with (str, "", place_holder with ())
     )
 ;;
 
@@ -201,6 +197,10 @@ let box u = compiled_regexp in
     u with ("")
 ;;
 
+let box u = compiled_regexp in
+    u with ("110")
+;;
+
 (*
 accept2 (Times (
     Plus (
@@ -213,3 +213,5 @@ accept2 (Times (
     Const ('3')
 ));;
 *)
+
+Star (Plus (Times (Const ('a'), Const ('a')), Times (Const ('a'), Const ('a'))));;

@@ -24,3 +24,31 @@ else
 pow2 2;;
 
 let box u = pow2 2 in u with (3);; (*gives 9*)
+
+datatype intlist = Nil | Cons of (int * intlist);;
+
+let rec map_int_int:((int -> int) -> intlist -> intlist) = 
+    fun (f:(int -> int)) -> fun (xs: intlist) -> 
+    match xs with
+    | Cons (x, xs) -> Cons (f x, map_int_int f xs)
+    | Nil -> Nil;;
+
+
+let pow_compiled: int -> int = let box u = pow2 512 in fun (x: int) -> u with (x);;
+(*map_int_int (pow 10) (Cons (1, Cons (2, Nil)));;
+map_int_int (pow_10_compiled) (Cons (1, Cons (2, Nil)));;
+*)
+pow_compiled 0;;
+pow 512 0;;
+
+let rec run_n_times: (int -> int) -> int -> intlist -> intlist =
+    fun (f: int -> int) -> fun (x: int) ->  fun (xs: intlist) -> 
+        match xs with
+        | Cons (x, xs) ->
+            Cons(f 0, run_n_times f (x-1) xs)
+        | Nil -> Nil;;
+
+(*
+run_n_times pow_compiled 512;;
+run_n_times (pow 512) 512;;
+*)
