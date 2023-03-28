@@ -174,6 +174,9 @@ let rec substitute_aux expr_subst_for id_str current_depth current_meta_depth
   | Ast.Expr.Lift (typ, expr) ->
       substitute_aux expr_subst_for id_str current_depth current_meta_depth expr
       >>= fun expr -> Ok (Ast.Expr.Lift (typ, expr))
+  | Ast.Expr.EValue v ->
+      Ast.Value.to_expr v
+      |> substitute_aux expr_subst_for id_str current_depth current_meta_depth
 
 let substitute expr_subst_for id expr_subst_in =
   (*Assume that the id has De Bruijn index 0*)
@@ -331,6 +334,9 @@ let rec sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth
   | Ast.Expr.Lift (typ, expr) ->
       sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth expr
       >>= fun expr -> Ok (Ast.Expr.Lift (typ, expr))
+  | Ast.Expr.EValue v ->
+      Ast.Value.to_expr v
+      |> sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth
 
 let sim_substitute_from_zipped_list expr_id_zipped expr_subst_in =
   sim_substitute_aux expr_id_zipped 0 0 expr_subst_in
@@ -523,6 +529,9 @@ let rec meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth
   | Ast.Expr.Lift (typ, expr) ->
       meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth expr
       >>= fun expr -> Ok (Ast.Expr.Lift (typ, expr))
+  | Ast.Expr.EValue v ->
+      Ast.Value.to_expr v
+      |> meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth
 
 let meta_substitute ctx expr meta_id expr_subst_in =
   let meta_id_str = Ast.MetaIdentifier.get_name meta_id in
