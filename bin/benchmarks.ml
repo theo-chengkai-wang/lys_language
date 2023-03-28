@@ -284,7 +284,7 @@ let benchmarks2 =
              ({ name = Some (Int.to_string i); body = regexp }, mapped_strs))
            regexps);
     }; *)
-    {
+    (* {
       name = "regexp_1**_accept";
       base_program_loc = "test/example_programs/regexp/regexp.lys";
       run = 1000;
@@ -343,8 +343,8 @@ let benchmarks2 =
            ~f:(fun i regexp ->
              ({ name = Some (Int.to_string i); body = regexp }, mapped_strs))
            regexps);
-    };
-    (* {
+    }; *)
+    {
       name = "regexp_(aa|aa)*_exp_runtime";
       base_program_loc = "test/example_programs/regexp/regexp.lys";
       run = 100;
@@ -361,8 +361,8 @@ let benchmarks2 =
          in
          let regexps = [ "Star (Plus (Times (Const ('a'), Const ('a')), Times (Const ('a'), Const ('a'))))" ] in
          let strs =
-           List.init 5 ~f:(fun i ->
-               generate_random_string ((2 * i + 1) * 2))
+           List.init 10 ~f:(fun i ->
+               generate_random_string ((2 * i + 1)))
          in
          let mapped_strs =
            List.mapi strs ~f:(fun _ s ->
@@ -372,7 +372,7 @@ let benchmarks2 =
            ~f:(fun i regexp ->
              ({ name = Some (Int.to_string i); body = regexp }, mapped_strs))
            regexps);
-    }; *)
+    };
   ]
 
 let (additional_benchmarks2 : base_benchmark_record_legacy list) =
