@@ -416,7 +416,7 @@ end = struct
     | Id id -> [ id ]
     | Wildcard -> []
     | String _ -> []
-    | ConcatCharString (c, s) -> [c; s]
+    | ConcatCharString (c, s) -> [ c; s ]
 end
 
 and Expr : sig
@@ -448,6 +448,7 @@ and Expr : sig
     | Constr of Constructor.t * t option (* Constr e*)
     | Match of t * (Pattern.t * t) list
     | Lift of Typ.t * t
+    | EValue of Value.t
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.Expr.t -> t
@@ -498,6 +499,7 @@ end = struct
     | Constr of Constructor.t * t option (* Constr e*)
     | Match of t * (Pattern.t * t) list
     | Lift of Typ.t * t
+    | EValue of Value.t
   [@@deriving sexp, show, compare, equal]
 
   (* TODO: let rec pp_to_code expr = () *)
@@ -805,6 +807,10 @@ end = struct
         populate_index ~current_ast_level ~current_identifiers
           ~current_meta_ast_level ~current_meta_identifiers expr
         >>= fun expr -> Ok (Lift (typ, expr))
+    | EValue v ->
+        Value.to_expr v
+        |> populate_index ~current_ast_level ~current_identifiers
+             ~current_meta_ast_level ~current_meta_identifiers
 
   let rec shift_indices expr ~obj_depth ~meta_depth ~obj_offset ~meta_offset =
     let open Or_error.Monad_infix in
@@ -942,6 +948,9 @@ end = struct
     | Lift (typ, expr) ->
         shift_indices ~obj_depth ~meta_depth ~obj_offset ~meta_offset expr
         >>= fun expr -> Ok (Lift (typ, expr))
+    | EValue v ->
+        Value.to_expr v
+        |> shift_indices ~obj_depth ~meta_depth ~obj_offset ~meta_offset
 
   let rec to_val expr =
     let open Option.Monad_infix in
@@ -962,6 +971,7 @@ end = struct
         match e_opt with
         | None -> Some (Value.Constr (tid, None))
         | Some e -> to_val e >>= fun v -> Some (Value.Constr (tid, Some v)))
+    | EValue v -> Some v
     | _ -> None
 end
 
@@ -988,14 +998,14 @@ end = struct
     | Constr of Constructor.t * t option
   [@@deriving sexp, show, compare, equal]
 
-  let rec to_expr = function
+  let to_expr = function
     | Constant c -> Expr.Constant c
-    | Prod xs -> Expr.Prod (List.map xs ~f:to_expr)
-    | Left (t1, t2, v) -> Expr.Left (t1, t2, to_expr v)
-    | Right (t1, t2, v) -> Expr.Right (t1, t2, to_expr v)
+    | Prod xs -> Expr.Prod (List.map xs ~f:(fun x -> Expr.EValue x))
+    | Left (t1, t2, v) -> Expr.Left (t1, t2, Expr.EValue v)
+    | Right (t1, t2, v) -> Expr.Right (t1, t2, Expr.EValue v)
     | Lambda (iddef, expr) -> Expr.Lambda (iddef, expr)
     | Box (ctx, expr) -> Expr.Box (ctx, expr)
-    | Constr (constr, Some v) -> Expr.Constr (constr, Some (to_expr v))
+    | Constr (constr, Some v) -> Expr.Constr (constr, Some (Expr.EValue v))
     | Constr (constr, None) -> Expr.Constr (constr, None)
 end
 

@@ -632,6 +632,8 @@ and type_inference_expression meta_ctx ctx type_ctx e =
       else
         type_check_expression meta_ctx ctx type_ctx expr typ >>= fun () ->
         Ok (Ast.Typ.TBox ([], typ))
+  | Ast.Expr.EValue v ->
+      type_inference_expression meta_ctx ctx type_ctx (Ast.Value.to_expr v)
 
 let process_top_level meta_ctx ctx type_ctx = function
   | Ast.TopLevelDefn.Definition (iddef, e) ->

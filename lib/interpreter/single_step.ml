@@ -681,7 +681,8 @@ let rec reduce ~top_level_context ~type_constr_context expr =
                     [%sexp_of: Ast.Expr.t]
               | Some res_expr_or_error ->
                   res_expr_or_error >>= fun res_expr ->
-                  Ok (ReduceResult.ReducedToExpr res_expr)))
+                  Ok (ReduceResult.ReducedToExpr res_expr))
+      | Ast.Expr.EValue v -> Ok (ReduceResult.NotReduced v))
 
 let multi_step_reduce ~top_level_context ~type_constr_context ?(verbose = false)
     expr =

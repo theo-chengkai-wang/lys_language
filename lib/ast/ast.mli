@@ -132,7 +132,12 @@ and UnaryOperator : sig
 end
 
 and Constant : sig
-  type t = Integer of int | Boolean of bool | Unit | Character of char | String of string
+  type t =
+    | Integer of int
+    | Boolean of bool
+    | Unit
+    | Character of char
+    | String of string
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.Constant.t -> t
@@ -184,6 +189,7 @@ and Expr : sig
     | Constr of Constructor.t * t option (* Constr e*)
     | Match of t * (Pattern.t * t) list
     | Lift of Typ.t * t
+    | EValue of Value.t
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.Expr.t -> t
