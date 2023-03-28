@@ -26,4 +26,4 @@ Available interpreters:
 - `ssv`: single-step interpreter with reduction step count and in verbose mode (so with a dump of the reduction steps)
 
 ## License
-This project is dual-licensed under both the MIT License and the Apache License (Version 2.0). See [LICENSE-APACHE](./LICENSE-APACHE) and [LICENSE-MIT](./LICENSE-MIT) for details.
+This project is licensed under the MIT License. See [LICENSE](./LICENSE) for details.
