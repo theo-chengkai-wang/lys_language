@@ -304,7 +304,7 @@ let test_binop_or _ =
 let test_unop_not _ =
   assert_equal
     (Some (Past.Expr.UnaryOp (Past.UnaryOperator.NOT, Past.Expr.Identifier "a")))
-    (parse_expression (Lexing.from_string "!a;;"))
+    (parse_expression (Lexing.from_string "not a;;"))
 
 let test_binop_neg _ =
   assert_equal
@@ -343,7 +343,7 @@ let test_precedence_arith_bool _ =
                     Past.Expr.UnaryOp
                       (Past.UnaryOperator.NEG, Past.Expr.Identifier "x") ) ) )))
     (parse_expression
-       (Lexing.from_string "a+b = -c && !d || e <= 2 || f > 10/-x;;"))
+       (Lexing.from_string "a+b = -c && not d || e <= 2 || f > 10/-x;;"))
 
 let test_comment _ =
   assert_equal (Some (Past.Expr.Identifier "a"))
