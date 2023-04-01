@@ -355,7 +355,7 @@ and Constant : sig
     | Unit
     | Character of char
     | String of string
-    | Reference of Typ.t * (Value.t ref)
+    | Reference of Value.t ref
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.Constant.t -> t
@@ -366,7 +366,7 @@ end = struct
     | Unit
     | Character of char
     | String of string
-    | Reference of Typ.t * (Value.t ref)
+    | Reference of Value.t ref
   [@@deriving sexp, show, compare, equal]
 
   let of_past = function
@@ -829,6 +829,7 @@ end = struct
     | Ref e ->
         populate_index ~current_ast_level ~current_identifiers
           ~current_meta_ast_level ~current_meta_identifiers e
+        >>= fun expr -> Ok (Ref expr)
 
   let rec shift_indices expr ~obj_depth ~meta_depth ~obj_offset ~meta_offset =
     let open Or_error.Monad_infix in
@@ -969,7 +970,9 @@ end = struct
     | EValue v ->
         Value.to_expr v
         |> shift_indices ~obj_depth ~meta_depth ~obj_offset ~meta_offset
-    | Ref e -> shift_indices ~obj_depth ~meta_depth ~obj_offset ~meta_offset e
+    | Ref e ->
+        shift_indices ~obj_depth ~meta_depth ~obj_offset ~meta_offset e
+        >>= fun expr -> Ok (Ref expr)
 
   let rec to_val expr =
     let open Option.Monad_infix in

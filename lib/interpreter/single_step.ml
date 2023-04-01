@@ -137,6 +137,9 @@ let rec reduce ~top_level_context ~type_constr_context expr =
                   Ok
                     (ReduceResult.ReducedToVal
                        (Ast.Value.Constant (Ast.Constant.Boolean (not b))))
+              | ( Ast.UnaryOperator.DEREF,
+                  Ast.Value.Constant (Ast.Constant.Reference r) ) ->
+                  Ok (ReduceResult.ReducedToVal !r)
               | _, _ ->
                   error
                     "SingleStepReductionError: type mismatch at Unary \
@@ -151,112 +154,144 @@ let rec reduce ~top_level_context ~type_constr_context expr =
               Ok
                 (ReduceResult.ReducedToExpr (Ast.Expr.BinaryOp (op, e1, expr2))))
             ~not_reduced:(fun v1 ->
-              reduce ~top_level_context ~type_constr_context expr2
-              >>= fun res2 ->
-              ReduceResult.process res2
-                ~reduced:(fun e2 ->
+              match (op, v1) with
+              | Ast.BinaryOperator.SEQ, Ast.Value.Constant Ast.Constant.Unit ->
+                  reduce ~top_level_context ~type_constr_context expr2
+              | ( Ast.BinaryOperator.AND,
+                  Ast.Value.Constant (Ast.Constant.Boolean false) ) ->
                   Ok
-                    (ReduceResult.ReducedToExpr
-                       (Ast.Expr.BinaryOp (op, Ast.Value.to_expr v1, e2))))
-                ~not_reduced:(fun v2 ->
-                  match (op, v1, v2) with
-                  | ( Ast.BinaryOperator.ADD,
-                      Ast.Value.Constant (Ast.Constant.Integer i1),
-                      Ast.Value.Constant (Ast.Constant.Integer i2) ) ->
+                    (ReduceResult.ReducedToVal
+                       (Ast.Value.Constant (Ast.Constant.Boolean false)))
+              | ( Ast.BinaryOperator.OR,
+                  Ast.Value.Constant (Ast.Constant.Boolean true) ) ->
+                  Ok
+                    (ReduceResult.ReducedToVal
+                       (Ast.Value.Constant (Ast.Constant.Boolean true)))
+              | _, _ ->
+                  reduce ~top_level_context ~type_constr_context expr2
+                  >>= fun res2 ->
+                  ReduceResult.process res2
+                    ~reduced:(fun e2 ->
                       Ok
-                        (ReduceResult.ReducedToVal
-                           (Ast.Value.Constant (Ast.Constant.Integer (i1 + i2))))
-                  | ( Ast.BinaryOperator.SUB,
-                      Ast.Value.Constant (Ast.Constant.Integer i1),
-                      Ast.Value.Constant (Ast.Constant.Integer i2) ) ->
-                      Ok
-                        (ReduceResult.ReducedToVal
-                           (Ast.Value.Constant (Ast.Constant.Integer (i1 - i2))))
-                  | ( Ast.BinaryOperator.MUL,
-                      Ast.Value.Constant (Ast.Constant.Integer i1),
-                      Ast.Value.Constant (Ast.Constant.Integer i2) ) ->
-                      Ok
-                        (ReduceResult.ReducedToVal
-                           (Ast.Value.Constant (Ast.Constant.Integer (i1 * i2))))
-                  | ( Ast.BinaryOperator.DIV,
-                      Ast.Value.Constant (Ast.Constant.Integer i1),
-                      Ast.Value.Constant (Ast.Constant.Integer i2) ) ->
-                      Ok
-                        (ReduceResult.ReducedToVal
-                           (Ast.Value.Constant (Ast.Constant.Integer (i1 / i2))))
-                  | ( Ast.BinaryOperator.MOD,
-                      Ast.Value.Constant (Ast.Constant.Integer i1),
-                      Ast.Value.Constant (Ast.Constant.Integer i2) ) ->
-                      Ok
-                        (ReduceResult.ReducedToVal
-                           (Ast.Value.Constant (Ast.Constant.Integer (i1 % i2))))
-                  | Ast.BinaryOperator.EQ, v1, v2 ->
-                      Ok
-                        (ReduceResult.ReducedToVal
-                           (Ast.Value.Constant
-                              (Ast.Constant.Boolean (Ast.Value.equal v1 v2))))
-                  | Ast.BinaryOperator.NEQ, v1, v2 ->
-                      Ok
-                        (ReduceResult.ReducedToVal
-                           (Ast.Value.Constant
-                              (Ast.Constant.Boolean
-                                 (not (Ast.Value.equal v1 v2)))))
-                  | ( Ast.BinaryOperator.GTE,
-                      Ast.Value.Constant (Ast.Constant.Integer i1),
-                      Ast.Value.Constant (Ast.Constant.Integer i2) ) ->
-                      Ok
-                        (ReduceResult.ReducedToVal
-                           (Ast.Value.Constant (Ast.Constant.Boolean (i1 >= i2))))
-                  | ( Ast.BinaryOperator.GT,
-                      Ast.Value.Constant (Ast.Constant.Integer i1),
-                      Ast.Value.Constant (Ast.Constant.Integer i2) ) ->
-                      Ok
-                        (ReduceResult.ReducedToVal
-                           (Ast.Value.Constant (Ast.Constant.Boolean (i1 > i2))))
-                  | ( Ast.BinaryOperator.LT,
-                      Ast.Value.Constant (Ast.Constant.Integer i1),
-                      Ast.Value.Constant (Ast.Constant.Integer i2) ) ->
-                      Ok
-                        (ReduceResult.ReducedToVal
-                           (Ast.Value.Constant (Ast.Constant.Boolean (i1 < i2))))
-                  | ( Ast.BinaryOperator.LTE,
-                      Ast.Value.Constant (Ast.Constant.Integer i1),
-                      Ast.Value.Constant (Ast.Constant.Integer i2) ) ->
-                      Ok
-                        (ReduceResult.ReducedToVal
-                           (Ast.Value.Constant (Ast.Constant.Boolean (i1 <= i2))))
-                  | ( Ast.BinaryOperator.AND,
-                      Ast.Value.Constant (Ast.Constant.Boolean i1),
-                      Ast.Value.Constant (Ast.Constant.Boolean i2) ) ->
-                      Ok
-                        (ReduceResult.ReducedToVal
-                           (Ast.Value.Constant (Ast.Constant.Boolean (i1 && i2))))
-                  | ( Ast.BinaryOperator.OR,
-                      Ast.Value.Constant (Ast.Constant.Boolean i1),
-                      Ast.Value.Constant (Ast.Constant.Boolean i2) ) ->
-                      Ok
-                        (ReduceResult.ReducedToVal
-                           (Ast.Value.Constant (Ast.Constant.Boolean (i1 || i2))))
-                  | ( Ast.BinaryOperator.CHARSTRINGCONCAT,
-                      Ast.Value.Constant (Ast.Constant.Character c),
-                      Ast.Value.Constant (Ast.Constant.String s) ) ->
-                      Ok
-                        (ReducedToVal
-                           (Ast.Value.Constant
-                              (Ast.Constant.String (String.of_char c ^ s))))
-                  | ( Ast.BinaryOperator.STRINGCONCAT,
-                      Ast.Value.Constant (Ast.Constant.String s),
-                      Ast.Value.Constant (Ast.Constant.String s2) ) ->
-                      Ok
-                        (ReducedToVal
-                           (Ast.Value.Constant (Ast.Constant.String (s ^ s2))))
-                  | _, _, _ ->
-                      error
-                        "SingleStepReductionError: type mismatch at Binary \
-                         operator. [FATAL] should not happen! Type check \
-                         should have prevented this."
-                        (Ast.Expr.BinaryOp (op, expr1, expr2))
-                        [%sexp_of: Ast.Expr.t]))
+                        (ReduceResult.ReducedToExpr
+                           (Ast.Expr.BinaryOp (op, Ast.Value.to_expr v1, e2))))
+                    ~not_reduced:(fun v2 ->
+                      match (op, v1, v2) with
+                      | ( Ast.BinaryOperator.ADD,
+                          Ast.Value.Constant (Ast.Constant.Integer i1),
+                          Ast.Value.Constant (Ast.Constant.Integer i2) ) ->
+                          Ok
+                            (ReduceResult.ReducedToVal
+                               (Ast.Value.Constant
+                                  (Ast.Constant.Integer (i1 + i2))))
+                      | ( Ast.BinaryOperator.SUB,
+                          Ast.Value.Constant (Ast.Constant.Integer i1),
+                          Ast.Value.Constant (Ast.Constant.Integer i2) ) ->
+                          Ok
+                            (ReduceResult.ReducedToVal
+                               (Ast.Value.Constant
+                                  (Ast.Constant.Integer (i1 - i2))))
+                      | ( Ast.BinaryOperator.MUL,
+                          Ast.Value.Constant (Ast.Constant.Integer i1),
+                          Ast.Value.Constant (Ast.Constant.Integer i2) ) ->
+                          Ok
+                            (ReduceResult.ReducedToVal
+                               (Ast.Value.Constant
+                                  (Ast.Constant.Integer (i1 * i2))))
+                      | ( Ast.BinaryOperator.DIV,
+                          Ast.Value.Constant (Ast.Constant.Integer i1),
+                          Ast.Value.Constant (Ast.Constant.Integer i2) ) ->
+                          Ok
+                            (ReduceResult.ReducedToVal
+                               (Ast.Value.Constant
+                                  (Ast.Constant.Integer (i1 / i2))))
+                      | ( Ast.BinaryOperator.MOD,
+                          Ast.Value.Constant (Ast.Constant.Integer i1),
+                          Ast.Value.Constant (Ast.Constant.Integer i2) ) ->
+                          Ok
+                            (ReduceResult.ReducedToVal
+                               (Ast.Value.Constant
+                                  (Ast.Constant.Integer (i1 % i2))))
+                      | Ast.BinaryOperator.EQ, v1, v2 ->
+                          Ok
+                            (ReduceResult.ReducedToVal
+                               (Ast.Value.Constant
+                                  (Ast.Constant.Boolean (Ast.Value.equal v1 v2))))
+                      | Ast.BinaryOperator.NEQ, v1, v2 ->
+                          Ok
+                            (ReduceResult.ReducedToVal
+                               (Ast.Value.Constant
+                                  (Ast.Constant.Boolean
+                                     (not (Ast.Value.equal v1 v2)))))
+                      | ( Ast.BinaryOperator.GTE,
+                          Ast.Value.Constant (Ast.Constant.Integer i1),
+                          Ast.Value.Constant (Ast.Constant.Integer i2) ) ->
+                          Ok
+                            (ReduceResult.ReducedToVal
+                               (Ast.Value.Constant
+                                  (Ast.Constant.Boolean (i1 >= i2))))
+                      | ( Ast.BinaryOperator.GT,
+                          Ast.Value.Constant (Ast.Constant.Integer i1),
+                          Ast.Value.Constant (Ast.Constant.Integer i2) ) ->
+                          Ok
+                            (ReduceResult.ReducedToVal
+                               (Ast.Value.Constant
+                                  (Ast.Constant.Boolean (i1 > i2))))
+                      | ( Ast.BinaryOperator.LT,
+                          Ast.Value.Constant (Ast.Constant.Integer i1),
+                          Ast.Value.Constant (Ast.Constant.Integer i2) ) ->
+                          Ok
+                            (ReduceResult.ReducedToVal
+                               (Ast.Value.Constant
+                                  (Ast.Constant.Boolean (i1 < i2))))
+                      | ( Ast.BinaryOperator.LTE,
+                          Ast.Value.Constant (Ast.Constant.Integer i1),
+                          Ast.Value.Constant (Ast.Constant.Integer i2) ) ->
+                          Ok
+                            (ReduceResult.ReducedToVal
+                               (Ast.Value.Constant
+                                  (Ast.Constant.Boolean (i1 <= i2))))
+                      | ( Ast.BinaryOperator.AND,
+                          Ast.Value.Constant (Ast.Constant.Boolean i1),
+                          Ast.Value.Constant (Ast.Constant.Boolean i2) ) ->
+                          Ok
+                            (ReduceResult.ReducedToVal
+                               (Ast.Value.Constant
+                                  (Ast.Constant.Boolean (i1 && i2))))
+                      | ( Ast.BinaryOperator.OR,
+                          Ast.Value.Constant (Ast.Constant.Boolean i1),
+                          Ast.Value.Constant (Ast.Constant.Boolean i2) ) ->
+                          Ok
+                            (ReduceResult.ReducedToVal
+                               (Ast.Value.Constant
+                                  (Ast.Constant.Boolean (i1 || i2))))
+                      | ( Ast.BinaryOperator.CHARSTRINGCONCAT,
+                          Ast.Value.Constant (Ast.Constant.Character c),
+                          Ast.Value.Constant (Ast.Constant.String s) ) ->
+                          Ok
+                            (ReducedToVal
+                               (Ast.Value.Constant
+                                  (Ast.Constant.String (String.of_char c ^ s))))
+                      | ( Ast.BinaryOperator.STRINGCONCAT,
+                          Ast.Value.Constant (Ast.Constant.String s),
+                          Ast.Value.Constant (Ast.Constant.String s2) ) ->
+                          Ok
+                            (ReducedToVal
+                               (Ast.Value.Constant
+                                  (Ast.Constant.String (s ^ s2))))
+                      | ( Ast.BinaryOperator.ASSIGN,
+                          Ast.Value.Constant (Ast.Constant.Reference r1),
+                          v ) ->
+                          r1 := v;
+                          Ok
+                            (ReducedToVal (Ast.Value.Constant Ast.Constant.Unit))
+                      | _, _, _ ->
+                          error
+                            "SingleStepReductionError: type mismatch at Binary \
+                             operator. [FATAL] should not happen! Type check \
+                             should have prevented this."
+                            (Ast.Expr.BinaryOp (op, expr1, expr2))
+                            [%sexp_of: Ast.Expr.t]))
       | Ast.Expr.Prod exprs -> (
           process_exprs exprs >>= fun (new_es, new_vs) ->
           if List.is_empty new_es then
@@ -682,7 +717,16 @@ let rec reduce ~top_level_context ~type_constr_context expr =
               | Some res_expr_or_error ->
                   res_expr_or_error >>= fun res_expr ->
                   Ok (ReduceResult.ReducedToExpr res_expr))
-      | Ast.Expr.EValue v -> Ok (ReduceResult.NotReduced v))
+      | Ast.Expr.EValue v -> Ok (ReduceResult.NotReduced v)
+      | Ast.Expr.Ref e ->
+          reduce ~top_level_context ~type_constr_context e
+          >>= ReduceResult.process
+                ~reduced:(fun reduced_e ->
+                  Ok (ReduceResult.ReducedToExpr (Ast.Expr.Ref reduced_e)))
+                ~not_reduced:(fun v ->
+                  Ok
+                    (ReduceResult.ReducedToVal
+                       (Ast.Value.Constant (Ast.Constant.Reference (ref v))))))
 
 let multi_step_reduce ~top_level_context ~type_constr_context ?(verbose = false)
     expr =

@@ -611,7 +611,22 @@ let generate_tests_for_interpreter interpreter =
                   None )))
           (List.last results)
   in
-
+  let test_imperative_seq_ref_assign_deref _ =
+    let program = "let b: int ref = ref 123;; b:= 1; !b;;" in
+    let res_opt = exec_program interpreter program in
+    match res_opt with
+    | None -> assert_string "Program Execution Failed"
+    | Some results ->
+        assert_equal
+          (Some
+             (Interpreter_common.TopLevelEvaluationResult.ExprValue
+                ( Ast.Typ.TInt,
+                  Ast.Value.Constant (Ast.Constant.Integer 1),
+                  None,
+                  None,
+                  None )))
+          (List.last results)
+  in
   let interpreter_suite =
     "interpreter_main_suite"
     >::: [
@@ -635,6 +650,8 @@ let generate_tests_for_interpreter interpreter =
            >:: test_datatype_mutually_recursive;
            "test_string" >:: test_string;
            "test_string_match" >:: test_string_match;
+           "test_imperative_seq_ref_assign_deref"
+           >:: test_imperative_seq_ref_assign_deref;
          ]
   in
   let test_intlist_map _ =

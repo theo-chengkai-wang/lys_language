@@ -141,7 +141,7 @@ and Constant : sig
     | Unit
     | Character of char
     | String of string
-    | Reference of Typ.t * (Value.t ref) (* Tag with type *)
+    | Reference of Value.t ref
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.Constant.t -> t

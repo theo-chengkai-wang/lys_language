@@ -108,7 +108,10 @@ and type_inference_expression meta_ctx ctx type_ctx e =
       | Ast.Constant.Unit -> Ok Ast.Typ.TUnit
       | Ast.Constant.Character _ -> Ok Ast.Typ.TChar
       | Ast.Constant.String _ -> Ok Ast.Typ.TString
-      | Ast.Constant.Reference (typ, _) -> Ok (Ast.Typ.TRef typ))
+      | Ast.Constant.Reference v_ref ->
+        (*Should never go here but let's allow this for debugging reasons*)
+          type_inference_expression meta_ctx ctx type_ctx
+            (Ast.Value.to_expr !v_ref))
   | Ast.Expr.UnaryOp (op, expr) -> (
       match op with
       | Ast.UnaryOperator.NEG ->
@@ -664,8 +667,8 @@ and type_inference_expression meta_ctx ctx type_ctx e =
         Ok (Ast.Typ.TBox ([], typ))
   | Ast.Expr.EValue v ->
       type_inference_expression meta_ctx ctx type_ctx (Ast.Value.to_expr v)
-  | Ast.Expr.Ref e ->
-      type_inference_expression meta_ctx ctx type_ctx e >>= fun typ ->
+  | Ast.Expr.Ref expr ->
+      type_inference_expression meta_ctx ctx type_ctx expr >>= fun typ ->
       Ok (Ast.Typ.TRef typ)
 
 let process_top_level meta_ctx ctx type_ctx = function
