@@ -113,7 +113,7 @@ let list_to_tuple l =
 
 %left PATTERN_OR
 
-%left SEMICOLON // for sequencing
+%right SEMICOLON // for sequencing
 
 %left DEFN_EQ // precedence for = signs in definitions
 // bool

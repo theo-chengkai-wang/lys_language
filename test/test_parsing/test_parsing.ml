@@ -734,11 +734,11 @@ let test_seq _ =
       Past.TopLevelDefn.Expression
         (Past.Expr.BinaryOp
            ( Past.BinaryOperator.SEQ,
+             Past.Expr.Identifier "a",
              Past.Expr.BinaryOp
                ( Past.BinaryOperator.SEQ,
-                 Past.Expr.Identifier "a",
-                 Past.Expr.Identifier "b" ),
-             Past.Expr.Identifier "c" ));
+                 Past.Expr.Identifier "b",
+                 Past.Expr.Identifier "c" ) ));
     ]
     (parse_program (Lexing.from_string "a;b;c;;"))
 

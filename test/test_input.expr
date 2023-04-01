@@ -1,4 +1,4 @@
 let a: unit = ();;
 let b: int ref = ref 123;;
-!b;;
-a;b;c;;
+a; b:= 1; !b;;
+b;;
