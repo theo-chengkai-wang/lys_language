@@ -35,6 +35,10 @@ let list_to_tuple l =
 %token AND_WORD "and"
 %token CHAR_typ
 %token UNIT_typ
+%token EOL ";;"
+%token REF
+%token DEREF "!"
+%token ASSIGN ":="
 %token UNIT
 %token TRUE
 %token FALSE 
@@ -109,6 +113,8 @@ let list_to_tuple l =
 
 %left PATTERN_OR
 
+%left SEMICOLON // for sequencing
+
 %left DEFN_EQ // precedence for = signs in definitions
 // bool
 %left AND OR
@@ -121,6 +127,11 @@ let list_to_tuple l =
 %right  "++"
 
 %nonassoc UMINUS
+// References = high priority, with Dereferencing = highest priority.
+%nonassoc REF
+%right ASSIGN
+%nonassoc DEREF
+
 // Want simple expressions to be at the highest priority
 %nonassoc SIMPLE_EXPR
 %nonassoc TRUE FALSE INT ID LEFT_PAREN
@@ -145,7 +156,7 @@ start: p = prog {p}
 
 prog: 
     | EOF {[]}
-    | t = top_level SEMICOLON SEMICOLON p = prog {t::p}
+    | t = top_level ";;" p = prog {t::p}
 
 datatype_decl_clause: c = CONSTR OF t = typ  {(c, Some t)} | c = CONSTR {(c, None)}
 
@@ -203,6 +214,8 @@ pattern_expr: p = pattern "->" e = expr {(p, e)};
 expr:
     | s = simple_expr {s}
     | a = application_expr {a}
+    | r = ref {r}
+    | i = imperative {i}
     | a = arith { a }
     | c = comp { c }
     | s = string_op { s }
@@ -248,6 +261,7 @@ typ:
     | INT_typ {Typ.TInt}
     | UNIT_typ {Typ.TUnit}
     | CHAR_typ {Typ.TChar}
+    | t = typ REF {Typ.TRef(t)}
     | STRING_typ {Typ.TString}
     | i = ID {Typ.TIdentifier (i)}
     | t1 = typ; "->"; t2 = typ /*%prec typ_FUNCTION_ARROW*/ {Typ.TFun (t1, t2)}
@@ -276,6 +290,14 @@ bool:
     | e1 = expr AND e2 = expr {Expr.BinaryOp (AND, e1, e2)}
     | e1 = expr OR e2 = expr {Expr.BinaryOp (OR, e1, e2)}
     | NOT e = expr {Expr.UnaryOp (NOT, e)};
+
+ref: 
+    | e1 = expr ASSIGN e2 = expr {Expr.BinaryOp(ASSIGN, e1, e2)}
+    | "!"e = expr {Expr.UnaryOp(DEREF, e)}
+    | REF e = expr {Expr.Ref(e)};
+
+imperative:
+    | e1 = expr ";" e2 = expr {Expr.BinaryOp(SEQ, e1, e2)};
 
 string_op:
     | e1 = expr "^" e2 = expr {Expr.BinaryOp (STRINGCONCAT, e1, e2)}

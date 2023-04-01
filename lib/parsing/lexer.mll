@@ -40,7 +40,11 @@ rule read =
     | "(*" {comment lexbuf}
     | '"' {read_string (Buffer.create 100) lexbuf }
     | "'" {character lexbuf}
+    | ";;" {EOL}
     | ";" {SEMICOLON}
+    | "ref" {REF}
+    | "!" {DEREF}
+    | ":=" {ASSIGN}
     | "true" {TRUE}
     | "false" {FALSE}
     | "bool" {BOOL_typ}

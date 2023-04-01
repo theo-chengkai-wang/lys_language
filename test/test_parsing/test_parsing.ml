@@ -703,6 +703,45 @@ let test_string_match _ =
        (Lexing.from_string
           "match x with\n    | a ++ as -> a\n    | \"\" -> 'd';;"))
 
+let test_deref _ =
+  assert_equal
+    [
+      Past.TopLevelDefn.Expression
+        (Past.Expr.UnaryOp (Past.UnaryOperator.DEREF, Past.Expr.Identifier "b"));
+    ]
+    (parse_program (Lexing.from_string "!b;;"))
+
+let test_ref_type _ =
+  assert_equal
+    [
+      Past.TopLevelDefn.Definition
+        ( ("a", Past.Typ.TRef Past.Typ.TInt),
+          Past.Expr.Ref (Past.Expr.Constant (Past.Constant.Integer 0)) );
+    ]
+    (parse_program (Lexing.from_string "let a:int ref = ref 0;;"))
+
+let test_ref _ =
+  assert_equal
+    [
+      Past.TopLevelDefn.Expression
+        (Past.Expr.Ref (Past.Expr.Constant (Past.Constant.Integer 123)));
+    ]
+    (parse_program (Lexing.from_string "ref 123;;"))
+
+let test_seq _ =
+  assert_equal
+    [
+      Past.TopLevelDefn.Expression
+        (Past.Expr.BinaryOp
+           ( Past.BinaryOperator.SEQ,
+             Past.Expr.BinaryOp
+               ( Past.BinaryOperator.SEQ,
+                 Past.Expr.Identifier "a",
+                 Past.Expr.Identifier "b" ),
+             Past.Expr.Identifier "c" ));
+    ]
+    (parse_program (Lexing.from_string "a;b;c;;"))
+
 (* Name the test cases and group them together *)
 let suite =
   "parsing_suite"
@@ -758,4 +797,8 @@ let suite =
          "test_string" >:: test_string;
          "test_string_operators" >:: test_string_operators;
          "test_string_match" >:: test_string_match;
+         "test_deref" >:: test_deref;
+         "test_ref_type" >:: test_ref_type;
+         "test_ref" >:: test_ref;
+         "test_seq" >:: test_seq;
        ]
