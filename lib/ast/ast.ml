@@ -218,6 +218,7 @@ and Typ : sig
     | TBox of Context.t * t
     | TProd of t list
     | TSum of t * t
+    | TRef of t
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.Typ.t -> t
@@ -233,6 +234,7 @@ end = struct
     | TBox of Context.t * t
     | TProd of t list
     | TSum of t * t
+    | TRef of t
   [@@deriving sexp, show, compare, equal]
 
   let rec of_past = function
@@ -246,6 +248,7 @@ end = struct
     | Past.Typ.TBox (ctx, t1) -> TBox (Context.of_past ctx, of_past t1)
     | Past.Typ.TProd ts -> TProd (List.map ts ~f:of_past)
     | Past.Typ.TSum (t1, t2) -> TSum (of_past t1, of_past t2)
+    | Past.Typ.TRef t -> TRef (of_past t)
 end
 
 and IdentifierDefn : sig
@@ -286,6 +289,8 @@ and BinaryOperator : sig
     | OR
     | CHARSTRINGCONCAT
     | STRINGCONCAT
+    | ASSIGN
+    | SEQ
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.BinaryOperator.t -> t
@@ -306,6 +311,8 @@ end = struct
     | OR
     | CHARSTRINGCONCAT
     | STRINGCONCAT
+    | ASSIGN
+    | SEQ
   [@@deriving sexp, show, compare, equal]
 
   let of_past = function
@@ -324,18 +331,21 @@ end = struct
     | Past.BinaryOperator.OR -> OR
     | Past.BinaryOperator.CHARSTRINGCONCAT -> CHARSTRINGCONCAT
     | Past.BinaryOperator.STRINGCONCAT -> STRINGCONCAT
+    | Past.BinaryOperator.ASSIGN -> ASSIGN
+    | Past.BinaryOperator.SEQ -> SEQ
 end
 
 and UnaryOperator : sig
-  type t = NEG | NOT [@@deriving sexp, show, compare, equal]
+  type t = NEG | NOT | DEREF [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.UnaryOperator.t -> t
 end = struct
-  type t = NEG | NOT [@@deriving sexp, show, compare, equal]
+  type t = NEG | NOT | DEREF [@@deriving sexp, show, compare, equal]
 
   let of_past = function
     | Past.UnaryOperator.NEG -> NEG
     | Past.UnaryOperator.NOT -> NOT
+    | Past.UnaryOperator.DEREF -> DEREF
 end
 
 and Constant : sig
@@ -345,6 +355,7 @@ and Constant : sig
     | Unit
     | Character of char
     | String of string
+    | Reference of Value.t ref
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.Constant.t -> t
@@ -355,6 +366,7 @@ end = struct
     | Unit
     | Character of char
     | String of string
+    | Reference of Value.t ref
   [@@deriving sexp, show, compare, equal]
 
   let of_past = function
@@ -449,6 +461,7 @@ and Expr : sig
     | Match of t * (Pattern.t * t) list
     | Lift of Typ.t * t
     | EValue of Value.t
+    | Ref of t
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.Expr.t -> t
@@ -500,6 +513,7 @@ end = struct
     | Match of t * (Pattern.t * t) list
     | Lift of Typ.t * t
     | EValue of Value.t
+    | Ref of t
   [@@deriving sexp, show, compare, equal]
 
   (* TODO: let rec pp_to_code expr = () *)
@@ -555,6 +569,7 @@ end = struct
             List.map pattns ~f:(fun (pattn, expr) ->
                 (Pattern.of_past pattn, of_past expr)) )
     | Past.Expr.Lift (typ, expr) -> Lift (Typ.of_past typ, of_past expr)
+    | Past.Expr.Ref e -> Ref (of_past e)
 
   let rec populate_index expr ~current_ast_level ~current_identifiers
       ~current_meta_ast_level ~current_meta_identifiers =
@@ -811,6 +826,10 @@ end = struct
         Value.to_expr v
         |> populate_index ~current_ast_level ~current_identifiers
              ~current_meta_ast_level ~current_meta_identifiers
+    | Ref e ->
+        populate_index ~current_ast_level ~current_identifiers
+          ~current_meta_ast_level ~current_meta_identifiers e
+        >>= fun expr -> Ok (Ref expr)
 
   let rec shift_indices expr ~obj_depth ~meta_depth ~obj_offset ~meta_offset =
     let open Or_error.Monad_infix in
@@ -951,6 +970,9 @@ end = struct
     | EValue v ->
         Value.to_expr v
         |> shift_indices ~obj_depth ~meta_depth ~obj_offset ~meta_offset
+    | Ref e ->
+        shift_indices ~obj_depth ~meta_depth ~obj_offset ~meta_offset e
+        >>= fun expr -> Ok (Ref expr)
 
   let rec to_val expr =
     let open Option.Monad_infix in

@@ -342,6 +342,46 @@ let adt_suite =
          >:: test_datatypes_mutually_recursive;
        ]
 
+let test_seq_refs _ =
+  let program =
+    "let a: unit = ();;\n\
+    \    let b: int ref = ref 123;;\n\
+    \    a; b:= 1; !b;;\n\
+    \    b;;"
+  in
+  assert_bool "Type check hasn't failed"
+    (Option.is_some (type_check_program_from_str program))
+
+let test_ref_type _ =
+  assert_equal
+    (Or_error.ok (type_infer_from_str "ref 123;;"))
+    (Some (TRef TInt))
+
+let test_deref_type _ =
+  assert_equal (Or_error.ok (type_infer_from_str "!(ref 123);;")) (Some TInt)
+
+let test_seq_type _ =
+  assert_equal (Or_error.ok (type_infer_from_str "();();1;;")) (Some TInt)
+
+let test_seq_type_wrong _ =
+  assert_equal (Or_error.ok (type_infer_from_str "();1;1;;")) None
+
+let imperative_suite =
+  "imperative_suite"
+  >::: [
+         "test_seq_refs" >:: test_seq_refs;
+         "test_ref_type" >:: test_ref_type;
+         "test_seq_type" >:: test_seq_type;
+         "test_seq_type_wrong" >:: test_seq_type_wrong;
+         "test_deref_type" >:: test_deref_type;
+       ]
+
 let suite =
   "typing_suite"
-  >::: [ cmtt_suite; standard_suite; example_programs_suite; adt_suite ]
+  >::: [
+         cmtt_suite;
+         standard_suite;
+         example_programs_suite;
+         adt_suite;
+         imperative_suite;
+       ]

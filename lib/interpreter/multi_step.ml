@@ -66,6 +66,9 @@ let rec multi_step_reduce ~top_level_context ~type_constr_context ~expr =
           Ok (Ast.Value.Constant (Ast.Constant.Integer (-i)))
       | Ast.UnaryOperator.NOT, Ast.Value.Constant (Ast.Constant.Boolean b) ->
           Ok (Ast.Value.Constant (Ast.Constant.Boolean (not b)))
+      | Ast.UnaryOperator.DEREF, Ast.Value.Constant (Ast.Constant.Reference r)
+        ->
+          Ok !r
       | _, _ ->
           error
             "EvaluationError: type mismatch at Unary operator. [FATAL] should \
@@ -75,74 +78,92 @@ let rec multi_step_reduce ~top_level_context ~type_constr_context ~expr =
   | Ast.Expr.BinaryOp (op, expr1, expr2) -> (
       multi_step_reduce ~top_level_context ~type_constr_context ~expr:expr1
       >>= fun v1 ->
-      multi_step_reduce ~top_level_context ~type_constr_context ~expr:expr2
-      >>= fun v2 ->
-      match (op, v1, v2) with
-      | ( Ast.BinaryOperator.ADD,
-          Ast.Value.Constant (Ast.Constant.Integer i1),
-          Ast.Value.Constant (Ast.Constant.Integer i2) ) ->
-          Ok (Ast.Value.Constant (Ast.Constant.Integer (i1 + i2)))
-      | ( Ast.BinaryOperator.SUB,
-          Ast.Value.Constant (Ast.Constant.Integer i1),
-          Ast.Value.Constant (Ast.Constant.Integer i2) ) ->
-          Ok (Ast.Value.Constant (Ast.Constant.Integer (i1 - i2)))
-      | ( Ast.BinaryOperator.MUL,
-          Ast.Value.Constant (Ast.Constant.Integer i1),
-          Ast.Value.Constant (Ast.Constant.Integer i2) ) ->
-          Ok (Ast.Value.Constant (Ast.Constant.Integer (i1 * i2)))
-      | ( Ast.BinaryOperator.DIV,
-          Ast.Value.Constant (Ast.Constant.Integer i1),
-          Ast.Value.Constant (Ast.Constant.Integer i2) ) ->
-          Ok (Ast.Value.Constant (Ast.Constant.Integer (i1 / i2)))
-      | ( Ast.BinaryOperator.MOD,
-          Ast.Value.Constant (Ast.Constant.Integer i1),
-          Ast.Value.Constant (Ast.Constant.Integer i2) ) ->
-          Ok (Ast.Value.Constant (Ast.Constant.Integer (i1 % i2)))
-      | Ast.BinaryOperator.EQ, v1, v2 ->
-          (* DEBUG print_endline (Printf.sprintf "Value 1: %s \n Value 2: %s \n" (Ast.Value.show v1) (Ast.Value.show v2)); *)
-          Ok (Ast.Value.Constant (Ast.Constant.Boolean (Ast.Value.equal v1 v2)))
-      | Ast.BinaryOperator.NEQ, v1, v2 ->
-          Ok
-            (Ast.Value.Constant
-               (Ast.Constant.Boolean (not (Ast.Value.equal v1 v2))))
-      | ( Ast.BinaryOperator.GTE,
-          Ast.Value.Constant (Ast.Constant.Integer i1),
-          Ast.Value.Constant (Ast.Constant.Integer i2) ) ->
-          Ok (Ast.Value.Constant (Ast.Constant.Boolean (i1 >= i2)))
-      | ( Ast.BinaryOperator.GT,
-          Ast.Value.Constant (Ast.Constant.Integer i1),
-          Ast.Value.Constant (Ast.Constant.Integer i2) ) ->
-          Ok (Ast.Value.Constant (Ast.Constant.Boolean (i1 > i2)))
-      | ( Ast.BinaryOperator.LT,
-          Ast.Value.Constant (Ast.Constant.Integer i1),
-          Ast.Value.Constant (Ast.Constant.Integer i2) ) ->
-          Ok (Ast.Value.Constant (Ast.Constant.Boolean (i1 < i2)))
-      | ( Ast.BinaryOperator.LTE,
-          Ast.Value.Constant (Ast.Constant.Integer i1),
-          Ast.Value.Constant (Ast.Constant.Integer i2) ) ->
-          Ok (Ast.Value.Constant (Ast.Constant.Boolean (i1 <= i2)))
-      | ( Ast.BinaryOperator.AND,
-          Ast.Value.Constant (Ast.Constant.Boolean i1),
-          Ast.Value.Constant (Ast.Constant.Boolean i2) ) ->
-          Ok (Ast.Value.Constant (Ast.Constant.Boolean (i1 && i2)))
-      | ( Ast.BinaryOperator.OR,
-          Ast.Value.Constant (Ast.Constant.Boolean i1),
-          Ast.Value.Constant (Ast.Constant.Boolean i2) ) ->
-          Ok (Ast.Value.Constant (Ast.Constant.Boolean (i1 || i2)))
-      | ( Ast.BinaryOperator.CHARSTRINGCONCAT,
-          Ast.Value.Constant (Ast.Constant.Character c),
-          Ast.Value.Constant (Ast.Constant.String s) ) ->
-          Ok (Ast.Value.Constant (Ast.Constant.String (String.of_char c ^ s)))
-      | ( Ast.BinaryOperator.STRINGCONCAT,
-          Ast.Value.Constant (Ast.Constant.String s),
-          Ast.Value.Constant (Ast.Constant.String s2) ) ->
-          Ok (Ast.Value.Constant (Ast.Constant.String (s ^ s2)))
-      | _, _, _ ->
-          error
-            "EvaluationError: type mismatch at Binary operator. [FATAL] should \
-             not happen! Type check should have prevented this."
-            (Ast.Expr.BinaryOp (op, expr1, expr2))
-            [%sexp_of: Ast.Expr.t])
+      (*Cut exection here and change semantics.*)
+      match (op, v1) with
+      | Ast.BinaryOperator.SEQ, Ast.Value.Constant Ast.Constant.Unit ->
+          multi_step_reduce ~top_level_context ~type_constr_context ~expr:expr2
+      | Ast.BinaryOperator.AND, Ast.Value.Constant (Ast.Constant.Boolean false)
+        ->
+          Ok (Ast.Value.Constant (Ast.Constant.Boolean false))
+      | Ast.BinaryOperator.OR, Ast.Value.Constant (Ast.Constant.Boolean true) ->
+          Ok (Ast.Value.Constant (Ast.Constant.Boolean true))
+      | _, _ -> (
+          multi_step_reduce ~top_level_context ~type_constr_context ~expr:expr2
+          >>= fun v2 ->
+          match (op, v1, v2) with
+          | ( Ast.BinaryOperator.ADD,
+              Ast.Value.Constant (Ast.Constant.Integer i1),
+              Ast.Value.Constant (Ast.Constant.Integer i2) ) ->
+              Ok (Ast.Value.Constant (Ast.Constant.Integer (i1 + i2)))
+          | ( Ast.BinaryOperator.SUB,
+              Ast.Value.Constant (Ast.Constant.Integer i1),
+              Ast.Value.Constant (Ast.Constant.Integer i2) ) ->
+              Ok (Ast.Value.Constant (Ast.Constant.Integer (i1 - i2)))
+          | ( Ast.BinaryOperator.MUL,
+              Ast.Value.Constant (Ast.Constant.Integer i1),
+              Ast.Value.Constant (Ast.Constant.Integer i2) ) ->
+              Ok (Ast.Value.Constant (Ast.Constant.Integer (i1 * i2)))
+          | ( Ast.BinaryOperator.DIV,
+              Ast.Value.Constant (Ast.Constant.Integer i1),
+              Ast.Value.Constant (Ast.Constant.Integer i2) ) ->
+              Ok (Ast.Value.Constant (Ast.Constant.Integer (i1 / i2)))
+          | ( Ast.BinaryOperator.MOD,
+              Ast.Value.Constant (Ast.Constant.Integer i1),
+              Ast.Value.Constant (Ast.Constant.Integer i2) ) ->
+              Ok (Ast.Value.Constant (Ast.Constant.Integer (i1 % i2)))
+          | Ast.BinaryOperator.EQ, v1, v2 ->
+              (* DEBUG print_endline (Printf.sprintf "Value 1: %s \n Value 2: %s \n" (Ast.Value.show v1) (Ast.Value.show v2)); *)
+              Ok
+                (Ast.Value.Constant
+                   (Ast.Constant.Boolean (Ast.Value.equal v1 v2)))
+          | Ast.BinaryOperator.NEQ, v1, v2 ->
+              Ok
+                (Ast.Value.Constant
+                   (Ast.Constant.Boolean (not (Ast.Value.equal v1 v2))))
+          | ( Ast.BinaryOperator.GTE,
+              Ast.Value.Constant (Ast.Constant.Integer i1),
+              Ast.Value.Constant (Ast.Constant.Integer i2) ) ->
+              Ok (Ast.Value.Constant (Ast.Constant.Boolean (i1 >= i2)))
+          | ( Ast.BinaryOperator.GT,
+              Ast.Value.Constant (Ast.Constant.Integer i1),
+              Ast.Value.Constant (Ast.Constant.Integer i2) ) ->
+              Ok (Ast.Value.Constant (Ast.Constant.Boolean (i1 > i2)))
+          | ( Ast.BinaryOperator.LT,
+              Ast.Value.Constant (Ast.Constant.Integer i1),
+              Ast.Value.Constant (Ast.Constant.Integer i2) ) ->
+              Ok (Ast.Value.Constant (Ast.Constant.Boolean (i1 < i2)))
+          | ( Ast.BinaryOperator.LTE,
+              Ast.Value.Constant (Ast.Constant.Integer i1),
+              Ast.Value.Constant (Ast.Constant.Integer i2) ) ->
+              Ok (Ast.Value.Constant (Ast.Constant.Boolean (i1 <= i2)))
+          | ( Ast.BinaryOperator.AND,
+              Ast.Value.Constant (Ast.Constant.Boolean i1),
+              Ast.Value.Constant (Ast.Constant.Boolean i2) ) ->
+              Ok (Ast.Value.Constant (Ast.Constant.Boolean (i1 && i2)))
+          | ( Ast.BinaryOperator.OR,
+              Ast.Value.Constant (Ast.Constant.Boolean i1),
+              Ast.Value.Constant (Ast.Constant.Boolean i2) ) ->
+              Ok (Ast.Value.Constant (Ast.Constant.Boolean (i1 || i2)))
+          | ( Ast.BinaryOperator.CHARSTRINGCONCAT,
+              Ast.Value.Constant (Ast.Constant.Character c),
+              Ast.Value.Constant (Ast.Constant.String s) ) ->
+              Ok
+                (Ast.Value.Constant (Ast.Constant.String (String.of_char c ^ s)))
+          | ( Ast.BinaryOperator.STRINGCONCAT,
+              Ast.Value.Constant (Ast.Constant.String s),
+              Ast.Value.Constant (Ast.Constant.String s2) ) ->
+              Ok (Ast.Value.Constant (Ast.Constant.String (s ^ s2)))
+          | ( Ast.BinaryOperator.ASSIGN,
+              Ast.Value.Constant (Ast.Constant.Reference r1),
+              v ) ->
+              r1 := v;
+              Ok (Ast.Value.Constant Ast.Constant.Unit)
+          | _, _, _ ->
+              error
+                "EvaluationError: type mismatch at Binary operator. [FATAL] \
+                 should not happen! Type check should have prevented this."
+                (Ast.Expr.BinaryOp (op, expr1, expr2))
+                [%sexp_of: Ast.Expr.t]))
   | Ast.Expr.Prod exprs ->
       List.map exprs ~f:(fun expr ->
           multi_step_reduce ~top_level_context ~type_constr_context ~expr)
@@ -491,6 +512,10 @@ let rec multi_step_reduce ~top_level_context ~type_constr_context ~expr =
             [%sexp_of: Ast.Expr.t]
       | Some res -> res)
   | Ast.Expr.EValue v -> Ok v
+  | Ast.Expr.Ref e ->
+      multi_step_reduce ~top_level_context ~type_constr_context ~expr:e
+      (* Reference creation *)
+      >>= fun v -> Ok (Ast.Value.Constant (Ast.Constant.Reference (ref v)))
 
 let evaluate_top_level_defn ?(top_level_context = EvaluationContext.empty)
     ?(type_constr_context = TypeConstrContext.empty) ?(time_exec = false)

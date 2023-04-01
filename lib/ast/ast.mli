@@ -86,6 +86,7 @@ and Typ : sig
     | TBox of Context.t * t
     | TProd of t list
     | TSum of t * t
+    | TRef of t
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.Typ.t -> t
@@ -120,13 +121,15 @@ and BinaryOperator : sig
     | OR
     | CHARSTRINGCONCAT
     | STRINGCONCAT
+    | ASSIGN
+    | SEQ
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.BinaryOperator.t -> t
 end
 
 and UnaryOperator : sig
-  type t = NEG | NOT [@@deriving sexp, show, compare, equal]
+  type t = NEG | NOT | DEREF [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.UnaryOperator.t -> t
 end
@@ -138,6 +141,7 @@ and Constant : sig
     | Unit
     | Character of char
     | String of string
+    | Reference of Value.t ref
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.Constant.t -> t
@@ -190,6 +194,7 @@ and Expr : sig
     | Match of t * (Pattern.t * t) list
     | Lift of Typ.t * t
     | EValue of Value.t
+    | Ref of t
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.Expr.t -> t

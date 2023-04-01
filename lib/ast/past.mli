@@ -20,6 +20,7 @@ and Typ : sig
     | TBox of Context.t * t
     | TProd of t list
     | TSum of t * t
+    | TRef of t
   [@@deriving sexp, show, equal, compare]
 end
 
@@ -48,11 +49,13 @@ and BinaryOperator : sig
     | OR
     | CHARSTRINGCONCAT
     | STRINGCONCAT
+    | ASSIGN
+    | SEQ
   [@@deriving sexp, show, equal, compare]
 end
 
 and UnaryOperator : sig
-  type t = NEG | NOT [@@deriving sexp, show, equal, compare]
+  type t = NEG | NOT | DEREF [@@deriving sexp, show, equal, compare]
 end
 
 and Constant : sig
@@ -102,6 +105,7 @@ and Expr : sig
     | Constr of Constructor.t * t option (* Constr e*)
     | Match of t * (Pattern.t * t) list
     | Lift of Typ.t * t
+    | Ref of t (* ref e *)
   [@@deriving sexp, show, equal, compare]
 end
 

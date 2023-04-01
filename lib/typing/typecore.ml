@@ -107,7 +107,11 @@ and type_inference_expression meta_ctx ctx type_ctx e =
       | Ast.Constant.Integer _ -> Ok Ast.Typ.TInt
       | Ast.Constant.Unit -> Ok Ast.Typ.TUnit
       | Ast.Constant.Character _ -> Ok Ast.Typ.TChar
-      | Ast.Constant.String _ -> Ok Ast.Typ.TString)
+      | Ast.Constant.String _ -> Ok Ast.Typ.TString
+      | Ast.Constant.Reference v_ref ->
+        (*Should never go here but let's allow this for debugging reasons*)
+          type_inference_expression meta_ctx ctx type_ctx
+            (Ast.Value.to_expr !v_ref))
   | Ast.Expr.UnaryOp (op, expr) -> (
       match op with
       | Ast.UnaryOperator.NEG ->
@@ -115,7 +119,16 @@ and type_inference_expression meta_ctx ctx type_ctx e =
           >>= fun () -> Ok Ast.Typ.TInt
       | Ast.UnaryOperator.NOT ->
           type_check_expression meta_ctx ctx type_ctx expr Ast.Typ.TBool
-          >>= fun () -> Ok Ast.Typ.TBool)
+          >>= fun () -> Ok Ast.Typ.TBool
+      | Ast.UnaryOperator.DEREF -> (
+          type_inference_expression meta_ctx ctx type_ctx expr >>= fun typ ->
+          match typ with
+          | Ast.Typ.TRef typ -> Ok typ
+          | _ ->
+              Or_error.error
+                "TypeInferenceError: Dereferencing a non-reference value \
+                 (expr, typ)"
+                (expr, typ) [%sexp_of: Ast.Expr.t * Ast.Typ.t]))
   | Ast.Expr.BinaryOp (op, expr, expr2) -> (
       let check_both typ_to_check ok_typ =
         type_check_expression meta_ctx ctx type_ctx expr typ_to_check
@@ -172,7 +185,27 @@ and type_inference_expression meta_ctx ctx type_ctx e =
           type_check_expression meta_ctx ctx type_ctx expr2 Ast.Typ.TString
           >>= fun () -> Ok Ast.Typ.TString
       | Ast.BinaryOperator.STRINGCONCAT ->
-          check_both Ast.Typ.TString Ast.Typ.TString)
+          check_both Ast.Typ.TString Ast.Typ.TString
+      | Ast.BinaryOperator.SEQ ->
+          type_check_expression meta_ctx ctx type_ctx expr Ast.Typ.TUnit
+          >>= fun () -> type_inference_expression meta_ctx ctx type_ctx expr2
+      | Ast.BinaryOperator.ASSIGN -> (
+          type_inference_expression meta_ctx ctx type_ctx expr >>= fun t1 ->
+          match t1 with
+          | Ast.Typ.TRef typ ->
+              (* Now check typ of second value *)
+              ( type_check_expression meta_ctx ctx type_ctx expr2 typ
+              >>= fun () -> Ok Ast.Typ.TUnit )
+              |> fun or_error ->
+              Or_error.tag_arg or_error
+                "TypeInferenceError: Assignment type mismatch: expected type \
+                 (1), got different type. (expected_type, expr)"
+                (typ, expr2) [%sexp_of: Ast.Typ.t * Ast.Expr.t]
+          | _ ->
+              Or_error.error
+                "TypeInferenceError: Assigning to non-reference value (expr, \
+                 typ)"
+                (expr, t1) [%sexp_of: Ast.Expr.t * Ast.Typ.t]))
   | Ast.Expr.Prod exprs ->
       List.map exprs ~f:(type_inference_expression meta_ctx ctx type_ctx)
       |> Or_error.combine_errors
@@ -634,6 +667,9 @@ and type_inference_expression meta_ctx ctx type_ctx e =
         Ok (Ast.Typ.TBox ([], typ))
   | Ast.Expr.EValue v ->
       type_inference_expression meta_ctx ctx type_ctx (Ast.Value.to_expr v)
+  | Ast.Expr.Ref expr ->
+      type_inference_expression meta_ctx ctx type_ctx expr >>= fun typ ->
+      Ok (Ast.Typ.TRef typ)
 
 let process_top_level meta_ctx ctx type_ctx = function
   | Ast.TopLevelDefn.Definition (iddef, e) ->
