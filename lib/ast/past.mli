@@ -106,6 +106,7 @@ and Expr : sig
     | Match of t * (Pattern.t * t) list
     | Lift of Typ.t * t
     | Ref of t (* ref e *)
+    | While of t * t (*while p do e done*)
   [@@deriving sexp, show, equal, compare]
 end
 

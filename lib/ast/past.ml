@@ -172,6 +172,7 @@ and Expr : sig
     | Match of t * (Pattern.t * t) list
     | Lift of Typ.t * t (* lift[typ] e*)
     | Ref of t
+    | While of t * t (*while p do e done*)
   [@@deriving sexp, show, equal, compare]
 end = struct
   type t =
@@ -204,6 +205,7 @@ end = struct
       (*match e with pattern -> ... | ... -> ... | ... -> ... | ...*)
     | Lift of Typ.t * t
     | Ref of t
+    | While of t * t (*while p do e done*)
   [@@deriving sexp, show, equal, compare]
 end
 

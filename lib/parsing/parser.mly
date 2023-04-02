@@ -88,6 +88,9 @@ let list_to_tuple l =
 %token COLON ":"
 // %token SKIPLINE "//" // TODO: DEAL WITH COMMENTS?
 %token PATTERN_OR "|"
+%token WHILE
+%token DO
+%token DONE
 // %token EOL
 %token EOF
 %token DIR_RESET
@@ -104,6 +107,11 @@ let list_to_tuple l =
 
 // Bracket
 %nonassoc LEFT_BRACKET RIGHT_BRACKET
+
+// while
+%nonassoc WHILE
+%nonassoc DO
+%nonassoc DONE
 
 // typ arrow
 // %nonassoc typ_FUNCTION_ARROW
@@ -297,7 +305,8 @@ ref:
     | REF e = expr {Expr.Ref(e)};
 
 imperative:
-    | e1 = expr ";" e2 = expr {Expr.BinaryOp(SEQ, e1, e2)};
+    | e1 = expr ";" e2 = expr {Expr.BinaryOp(SEQ, e1, e2)}
+    | WHILE p = expr DO e2 = expr DONE {Expr.While(p, e2)};
 
 string_op:
     | e1 = expr "^" e2 = expr {Expr.BinaryOp (STRINGCONCAT, e1, e2)}

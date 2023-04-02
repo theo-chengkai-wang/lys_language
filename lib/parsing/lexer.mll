@@ -53,6 +53,9 @@ rule read =
     | "char" {CHAR_typ}
     | "unit" {UNIT_typ}
     | "not" {NOT}
+    | "while" {WHILE}
+    | "do" {DO}
+    | "done" {DONE}
     | "&&" {AND}
     | "||" {OR}
     | "lift" {LIFT}
