@@ -516,6 +516,19 @@ let rec multi_step_reduce ~top_level_context ~type_constr_context ~expr =
       multi_step_reduce ~top_level_context ~type_constr_context ~expr:e
       (* Reference creation *)
       >>= fun v -> Ok (Ast.Value.Constant (Ast.Constant.Reference (ref v)))
+  | Ast.Expr.While (p, e) ->
+      multi_step_reduce ~top_level_context ~type_constr_context
+        ~expr:
+          (Ast.Expr.IfThenElse
+             ( p,
+               Ast.Expr.BinaryOp
+                 (Ast.BinaryOperator.SEQ, e, Ast.Expr.While (p, e)),
+               Ast.Expr.Constant Ast.Constant.Unit ))
+      |> fun or_error ->
+      Or_error.tag_arg or_error
+        "EvaluationError: FATAL: while loop predicate is not a boolean \
+         (predicate)"
+        p [%sexp_of: Ast.Expr.t]
 
 let evaluate_top_level_defn ?(top_level_context = EvaluationContext.empty)
     ?(type_constr_context = TypeConstrContext.empty) ?(time_exec = false)

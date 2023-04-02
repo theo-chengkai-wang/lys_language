@@ -7,7 +7,9 @@ let fib: int -> int = fun (n:int) ->
     while (!counter <= n) do
         tmp := !fib_n_1;
         fib_n_1 := !tmp + !fib_n_2;
-        fib_n_2 := !tmp
+        fib_n_2 := !tmp;
+        counter := !counter + 1
     done;
     !fib_n_1;;
 
+(fib 0, fib 1, fib 5);;

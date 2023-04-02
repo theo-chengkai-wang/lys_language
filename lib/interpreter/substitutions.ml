@@ -180,6 +180,11 @@ let rec substitute_aux expr_subst_for id_str current_depth current_meta_depth
   | Ast.Expr.Ref e ->
       substitute_aux expr_subst_for id_str current_depth current_meta_depth e
       >>= fun e -> Ok (Ast.Expr.Ref e)
+  | Ast.Expr.While (p, e) ->
+      substitute_aux expr_subst_for id_str current_depth current_meta_depth p
+      >>= fun p ->
+      substitute_aux expr_subst_for id_str current_depth current_meta_depth e
+      >>= fun e -> Ok (Ast.Expr.While (p, e))
 
 let substitute expr_subst_for id expr_subst_in =
   (*Assume that the id has De Bruijn index 0*)
@@ -343,6 +348,11 @@ let rec sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth
   | Ast.Expr.Ref e ->
       sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth e
       >>= fun e -> Ok (Ast.Expr.Ref e)
+  | Ast.Expr.While (p, e) ->
+      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth p
+      >>= fun p ->
+      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth e
+      >>= fun e -> Ok (Ast.Expr.While (p, e))
 
 let sim_substitute_from_zipped_list expr_id_zipped expr_subst_in =
   sim_substitute_aux expr_id_zipped 0 0 expr_subst_in
@@ -541,6 +551,11 @@ let rec meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth
   | Ast.Expr.Ref e ->
       meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth e
       >>= fun e -> Ok (Ast.Expr.Ref e)
+  | Ast.Expr.While (p, e) ->
+      meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth p
+      >>= fun p ->
+      meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth e
+      >>= fun e -> Ok (Ast.Expr.While (p, e))
 
 let meta_substitute ctx expr meta_id expr_subst_in =
   let meta_id_str = Ast.MetaIdentifier.get_name meta_id in

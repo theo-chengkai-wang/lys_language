@@ -726,7 +726,15 @@ let rec reduce ~top_level_context ~type_constr_context expr =
                 ~not_reduced:(fun v ->
                   Ok
                     (ReduceResult.ReducedToVal
-                       (Ast.Value.Constant (Ast.Constant.Reference (ref v))))))
+                       (Ast.Value.Constant (Ast.Constant.Reference (ref v)))))
+      | Ast.Expr.While (p, e) ->
+          Ok
+            (ReduceResult.ReducedToExpr
+               (Ast.Expr.IfThenElse
+                  ( p,
+                    Ast.Expr.BinaryOp
+                      (Ast.BinaryOperator.SEQ, e, Ast.Expr.While (p, e)),
+                    Ast.Expr.Constant Ast.Constant.Unit ))))
 
 let multi_step_reduce ~top_level_context ~type_constr_context ?(verbose = false)
     expr =

@@ -380,8 +380,9 @@ let test_while_with_fib _ =
           \    while (!counter <= n) do\n\
           \        tmp := !fib_n_1;\n\
           \        fib_n_1 := !tmp + !fib_n_2;\n\
-          \        fib_n_2 := !tmp\n\
-          \    done;\n\
+          \        fib_n_2 := !tmp;\n\
+           counter := !counter + 1\n\
+          \              done;\n\
           \    !fib_n_1;;\n"))
     (Some (Ast.Typ.TFun (Ast.Typ.TInt, Ast.Typ.TInt)))
 
