@@ -1035,7 +1035,11 @@ end = struct
     | Constr of Constructor.t * t option
   [@@deriving sexp, show, compare, equal]
 
-  let to_expr = function
+  let rec to_expr = function
+    (*This function does not preserve semantics for impure terms, but rather converts to an intensional representation*)
+    | Constant (Constant.Reference r) ->
+        (*Conversion to intensional representation*)
+        Expr.Ref (to_expr !r)
     | Constant c -> Expr.Constant c
     | Prod xs -> Expr.Prod (List.map xs ~f:(fun x -> Expr.EValue x))
     | Left (t1, t2, v) -> Expr.Left (t1, t2, Expr.EValue v)
