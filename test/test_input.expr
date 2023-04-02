@@ -1,15 +1,5 @@
-let fib: int -> int = fun (n:int) ->
-    if n <= 1 then n else
-    let fib_n_2: int ref = ref 0 in
-    let fib_n_1: int ref = ref 1 in
-    let counter: int ref = ref 2 in
-    let tmp: int ref = ref 0 in 
-    while (!counter <= n) do
-        tmp := !fib_n_1;
-        fib_n_1 := !tmp + !fib_n_2;
-        fib_n_2 := !tmp;
-        counter := !counter + 1
-    done;
-    !fib_n_1;;
-
-(fib 0, fib 1, fib 5);;
+let a: int array = [|1, 2, 3|];;
+len (a);;
+len a;;
+a.(1);;
+a.(1) <- 421 * 134 + 2;;

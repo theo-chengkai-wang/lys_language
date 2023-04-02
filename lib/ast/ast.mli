@@ -123,13 +123,15 @@ and BinaryOperator : sig
     | STRINGCONCAT
     | ASSIGN
     | SEQ
+    | ARRAY_INDEX
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.BinaryOperator.t -> t
 end
 
 and UnaryOperator : sig
-  type t = NEG | NOT | DEREF [@@deriving sexp, show, compare, equal]
+  type t = NEG | NOT | DEREF | ARRAY_LEN
+  [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.UnaryOperator.t -> t
 end
@@ -196,6 +198,8 @@ and Expr : sig
     | EValue of Value.t
     | Ref of t
     | While of t * t
+    | Array of t list
+    | ArrayAssign of t * t * t
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.Expr.t -> t
