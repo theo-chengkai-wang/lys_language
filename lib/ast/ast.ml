@@ -219,6 +219,7 @@ and Typ : sig
     | TProd of t list
     | TSum of t * t
     | TRef of t
+    | TArray of t
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.Typ.t -> t
@@ -235,6 +236,7 @@ end = struct
     | TProd of t list
     | TSum of t * t
     | TRef of t
+    | TArray of t
   [@@deriving sexp, show, compare, equal]
 
   let rec of_past = function
@@ -249,6 +251,7 @@ end = struct
     | Past.Typ.TProd ts -> TProd (List.map ts ~f:of_past)
     | Past.Typ.TSum (t1, t2) -> TSum (of_past t1, of_past t2)
     | Past.Typ.TRef t -> TRef (of_past t)
+    | Past.Typ.TArray t -> TArray (of_past t)
 end
 
 and IdentifierDefn : sig
@@ -853,7 +856,23 @@ end = struct
         populate_index ~current_ast_level ~current_identifiers
           ~current_meta_ast_level ~current_meta_identifiers e
         >>= fun e -> Ok (While (p, e))
-  (* | Array (l)  *)
+    | Array es ->
+        List.map es
+          ~f:
+            (populate_index ~current_ast_level ~current_identifiers
+               ~current_meta_ast_level ~current_meta_identifiers)
+        |> Or_error.combine_errors
+        >>= fun es -> Ok (Array es)
+    | ArrayAssign (e1, e2, e3) ->
+        populate_index ~current_ast_level ~current_identifiers
+          ~current_meta_ast_level ~current_meta_identifiers e1
+        >>= fun e1 ->
+        populate_index ~current_ast_level ~current_identifiers
+          ~current_meta_ast_level ~current_meta_identifiers e2
+        >>= fun e2 ->
+        populate_index ~current_ast_level ~current_identifiers
+          ~current_meta_ast_level ~current_meta_identifiers e3
+        >>= fun e3 -> Ok (ArrayAssign (e1, e2, e3))
 
   let rec shift_indices expr ~obj_depth ~meta_depth ~obj_offset ~meta_offset =
     let open Or_error.Monad_infix in
@@ -1002,6 +1021,18 @@ end = struct
         >>= fun p ->
         shift_indices ~obj_depth ~meta_depth ~obj_offset ~meta_offset e
         >>= fun e -> Ok (While (p, e))
+    | Array es ->
+        List.map es
+          ~f:(shift_indices ~obj_depth ~meta_depth ~obj_offset ~meta_offset)
+        |> Or_error.combine_errors
+        >>= fun es -> Ok (Array es)
+    | ArrayAssign (e1, e2, e3) ->
+        shift_indices ~obj_depth ~meta_depth ~obj_offset ~meta_offset e1
+        >>= fun e1 ->
+        shift_indices ~obj_depth ~meta_depth ~obj_offset ~meta_offset e2
+        >>= fun e2 ->
+        shift_indices ~obj_depth ~meta_depth ~obj_offset ~meta_offset e3
+        >>= fun e3 -> Ok (ArrayAssign (e1, e2, e3))
 
   let rec to_val expr =
     let open Option.Monad_infix in

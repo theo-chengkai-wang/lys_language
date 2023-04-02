@@ -680,6 +680,7 @@ and type_inference_expression meta_ctx ctx type_ctx e =
       |> Or_error.tag
            ~tag:"TypeInferenceError: Expected unit type body for while loops"
       >>= fun () -> Ok Ast.Typ.TUnit
+  (* | Ast.Expr.Array (es) -> Or_error.unimplemented "TODO" *)
 
 let process_top_level meta_ctx ctx type_ctx = function
   | Ast.TopLevelDefn.Definition (iddef, e) ->

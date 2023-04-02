@@ -87,6 +87,7 @@ and Typ : sig
     | TProd of t list
     | TSum of t * t
     | TRef of t
+    | TArray of t
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.Typ.t -> t
