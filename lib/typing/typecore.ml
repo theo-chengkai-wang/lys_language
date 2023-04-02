@@ -109,7 +109,7 @@ and type_inference_expression meta_ctx ctx type_ctx e =
       | Ast.Constant.Character _ -> Ok Ast.Typ.TChar
       | Ast.Constant.String _ -> Ok Ast.Typ.TString
       | Ast.Constant.Reference v_ref ->
-        (*Should never go here but let's allow this for debugging reasons*)
+          (*Should never go here but let's allow this for debugging reasons*)
           type_inference_expression meta_ctx ctx type_ctx
             (Ast.Value.to_expr !v_ref))
   | Ast.Expr.UnaryOp (op, expr) -> (
@@ -670,6 +670,16 @@ and type_inference_expression meta_ctx ctx type_ctx e =
   | Ast.Expr.Ref expr ->
       type_inference_expression meta_ctx ctx type_ctx expr >>= fun typ ->
       Ok (Ast.Typ.TRef typ)
+  | Ast.Expr.While (p, e) ->
+      type_check_expression meta_ctx ctx type_ctx p Ast.Typ.TBool
+      |> Or_error.tag
+           ~tag:
+             "TypeInferenceError: Expected bool type for while loop predicate."
+      >>= fun () ->
+      type_check_expression meta_ctx ctx type_ctx e Ast.Typ.TUnit
+      |> Or_error.tag
+           ~tag:"TypeInferenceError: Expected unit type body for while loops"
+      >>= fun () -> Ok Ast.Typ.TUnit
 
 let process_top_level meta_ctx ctx type_ctx = function
   | Ast.TopLevelDefn.Definition (iddef, e) ->

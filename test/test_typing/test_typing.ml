@@ -366,6 +366,25 @@ let test_seq_type _ =
 let test_seq_type_wrong _ =
   assert_equal (Or_error.ok (type_infer_from_str "();1;1;;")) None
 
+let test_while_with_fib _ =
+  assert_equal
+    (Or_error.ok
+       (type_infer_from_str
+          "\n\
+          \  fun (n:int) ->\n\
+          \    if n <= 1 then n else\n\
+          \    let fib_n_2: int ref = ref 0 in\n\
+          \    let fib_n_1: int ref = ref 1 in\n\
+          \    let counter: int ref = ref 2 in\n\
+          \    let tmp: int ref = ref 0 in \n\
+          \    while (!counter <= n) do\n\
+          \        tmp := !fib_n_1;\n\
+          \        fib_n_1 := !tmp + !fib_n_2;\n\
+          \        fib_n_2 := !tmp\n\
+          \    done;\n\
+          \    !fib_n_1;;\n"))
+    (Some (Ast.Typ.TFun (Ast.Typ.TInt, Ast.Typ.TInt)))
+
 let imperative_suite =
   "imperative_suite"
   >::: [
@@ -374,6 +393,7 @@ let imperative_suite =
          "test_seq_type" >:: test_seq_type;
          "test_seq_type_wrong" >:: test_seq_type_wrong;
          "test_deref_type" >:: test_deref_type;
+         "test_while_with_fib" >:: test_while_with_fib;
        ]
 
 let suite =

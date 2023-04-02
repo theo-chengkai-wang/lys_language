@@ -1,2 +1,13 @@
-while p do e done;;
-while d > 0 do (); something_else done;;
+let fib: int -> int = fun (n:int) ->
+    if n <= 1 then n else
+    let fib_n_2: int ref = ref 0 in
+    let fib_n_1: int ref = ref 1 in
+    let counter: int ref = ref 2 in
+    let tmp: int ref = ref 0 in 
+    while (!counter <= n) do
+        tmp := !fib_n_1;
+        fib_n_1 := !tmp + !fib_n_2;
+        fib_n_2 := !tmp
+    done;
+    !fib_n_1;;
+

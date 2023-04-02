@@ -759,6 +759,20 @@ let test_while _ =
     (parse_program
        (Lexing.from_string "while d > 0 do (); something_else done;;"))
 
+let test_seq_precedence _ =
+  assert_equal
+    [
+      Past.TopLevelDefn.Expression
+        (Past.Expr.LetBinding
+           ( ("a", Past.Typ.TInt),
+             Past.Expr.Constant (Past.Constant.Integer 0),
+             Past.Expr.BinaryOp
+               ( Past.BinaryOperator.SEQ,
+                 Past.Expr.Identifier "b",
+                 Past.Expr.Identifier "c" ) ));
+    ]
+    (parse_program (Lexing.from_string "let a: int = 0 in b; c;;"))
+
 (* Name the test cases and group them together *)
 let suite =
   "parsing_suite"
@@ -819,4 +833,5 @@ let suite =
          "test_ref" >:: test_ref;
          "test_seq" >:: test_seq;
          "test_while" >:: test_while;
+         "test_seq_precedence" >:: test_seq_precedence;
        ]

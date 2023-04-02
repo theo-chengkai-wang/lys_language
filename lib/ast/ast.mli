@@ -195,6 +195,7 @@ and Expr : sig
     | Lift of Typ.t * t
     | EValue of Value.t
     | Ref of t
+    | While of t * t
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.Expr.t -> t

@@ -108,10 +108,9 @@ let list_to_tuple l =
 // Bracket
 %nonassoc LEFT_BRACKET RIGHT_BRACKET
 
-// while
-%nonassoc WHILE
-%nonassoc DO
-%nonassoc DONE
+// Let/in
+%nonassoc LET
+%right IN
 
 // typ arrow
 // %nonassoc typ_FUNCTION_ARROW
@@ -121,9 +120,16 @@ let list_to_tuple l =
 
 %left PATTERN_OR
 
-%right SEMICOLON // for sequencing
 
 %left DEFN_EQ // precedence for = signs in definitions
+
+// Imperative constructs
+%nonassoc WHILE
+%nonassoc DO
+%nonassoc DONE
+%right SEMICOLON // for sequencing
+%right ASSIGN
+
 // bool
 %left AND OR
 %nonassoc NOT
@@ -137,7 +143,6 @@ let list_to_tuple l =
 %nonassoc UMINUS
 // References = high priority, with Dereferencing = highest priority.
 %nonassoc REF
-%right ASSIGN
 %nonassoc DEREF
 
 // Want simple expressions to be at the highest priority

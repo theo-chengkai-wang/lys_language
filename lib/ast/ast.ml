@@ -462,6 +462,7 @@ and Expr : sig
     | Lift of Typ.t * t
     | EValue of Value.t
     | Ref of t
+    | While of t * t
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.Expr.t -> t
@@ -514,6 +515,7 @@ end = struct
     | Lift of Typ.t * t
     | EValue of Value.t
     | Ref of t
+    | While of t * t
   [@@deriving sexp, show, compare, equal]
 
   (* TODO: let rec pp_to_code expr = () *)
@@ -570,6 +572,7 @@ end = struct
                 (Pattern.of_past pattn, of_past expr)) )
     | Past.Expr.Lift (typ, expr) -> Lift (Typ.of_past typ, of_past expr)
     | Past.Expr.Ref e -> Ref (of_past e)
+    | Past.Expr.While (p, e) -> While (of_past p, of_past e)
 
   let rec populate_index expr ~current_ast_level ~current_identifiers
       ~current_meta_ast_level ~current_meta_identifiers =
@@ -830,6 +833,13 @@ end = struct
         populate_index ~current_ast_level ~current_identifiers
           ~current_meta_ast_level ~current_meta_identifiers e
         >>= fun expr -> Ok (Ref expr)
+    | While (p, e) ->
+        populate_index ~current_ast_level ~current_identifiers
+          ~current_meta_ast_level ~current_meta_identifiers p
+        >>= fun p ->
+        populate_index ~current_ast_level ~current_identifiers
+          ~current_meta_ast_level ~current_meta_identifiers e
+        >>= fun e -> Ok (While (p, e))
 
   let rec shift_indices expr ~obj_depth ~meta_depth ~obj_offset ~meta_offset =
     let open Or_error.Monad_infix in
@@ -973,6 +983,11 @@ end = struct
     | Ref e ->
         shift_indices ~obj_depth ~meta_depth ~obj_offset ~meta_offset e
         >>= fun expr -> Ok (Ref expr)
+    | While (p, e) ->
+        shift_indices ~obj_depth ~meta_depth ~obj_offset ~meta_offset p
+        >>= fun p ->
+        shift_indices ~obj_depth ~meta_depth ~obj_offset ~meta_offset e
+        >>= fun e -> Ok (While (p, e))
 
   let rec to_val expr =
     let open Option.Monad_infix in
