@@ -745,14 +745,16 @@ let rec reduce ~top_level_context ~type_constr_context expr =
                       (Ast.BinaryOperator.SEQ, e, Ast.Expr.While (p, e)),
                     Ast.Expr.Constant Ast.Constant.Unit )))
       | Ast.Expr.Array es -> (
-          process_exprs es >>= fun (new_es, _) ->
+          process_exprs es >>= fun (new_es, new_vs) ->
           if List.is_empty new_es then
-            Or_error.error_string
-              "SingleStepReductionError: [FATAL] array can't be empty."
+            (* Not reduced in the first place *)
+            Ok
+              (ReduceResult.NotReduced
+                 (Ast.Value.Constant (Ast.Constant.Array (Array.of_list new_vs))))
           else
             (* Check if all are values *)
             match convert_to_values new_es with
-            | None -> Ok (ReduceResult.ReducedToExpr (Ast.Expr.Prod new_es))
+            | None -> Ok (ReduceResult.ReducedToExpr (Ast.Expr.Array new_es))
             | Some vs ->
                 Ok
                   (ReduceResult.ReducedToVal

@@ -1,6 +1,2 @@
 let a: int array = [|1, 2, 3|];;
-len (a);;
-len a;;
-a.(1);;
-a.(1) <- 421 * 134 + 2;;
-a.(1);;
+lift[int array] a;;
