@@ -32,13 +32,19 @@ let list_to_tuple l =
 %token BOOL_typ
 %token INT_typ
 %token STRING_typ
+%token ARR_typ
 %token AND_WORD "and"
 %token CHAR_typ
 %token UNIT_typ
+%token ARR_OPEN
+%token ARR_CLOSE
 %token EOL ";;"
 %token REF
 %token DEREF "!"
 %token ASSIGN ":="
+%token DOT "."
+%token ARR_LEN
+%token LEFT_ARROW "<-"
 %token UNIT
 %token TRUE
 %token FALSE 
@@ -88,6 +94,9 @@ let list_to_tuple l =
 %token COLON ":"
 // %token SKIPLINE "//" // TODO: DEAL WITH COMMENTS?
 %token PATTERN_OR "|"
+%token WHILE
+%token DO
+%token DONE
 // %token EOL
 %token EOF
 %token DIR_RESET
@@ -105,6 +114,10 @@ let list_to_tuple l =
 // Bracket
 %nonassoc LEFT_BRACKET RIGHT_BRACKET
 
+// Let/in
+%nonassoc LET
+%right IN
+
 // typ arrow
 // %nonassoc typ_FUNCTION_ARROW
 // // Match with
@@ -113,9 +126,17 @@ let list_to_tuple l =
 
 %left PATTERN_OR
 
-%right SEMICOLON // for sequencing
 
 %left DEFN_EQ // precedence for = signs in definitions
+
+// Imperative constructs
+%nonassoc WHILE
+%nonassoc DO
+%nonassoc DONE
+%right SEMICOLON // for sequencing
+%right ASSIGN
+%right LEFT_ARROW
+
 // bool
 %left AND OR
 %nonassoc NOT
@@ -129,12 +150,12 @@ let list_to_tuple l =
 %nonassoc UMINUS
 // References = high priority, with Dereferencing = highest priority.
 %nonassoc REF
-%right ASSIGN
 %nonassoc DEREF
-
+%left DOT
+%nonassoc ARR_LEN
 // Want simple expressions to be at the highest priority
 %nonassoc SIMPLE_EXPR
-%nonassoc TRUE FALSE INT ID LEFT_PAREN
+%nonassoc TRUE FALSE INT ID LEFT_PAREN ARR_OPEN
 
 // %start <lys_ast.Ast.program> prog
 // TODO temporarily just do expressions
@@ -215,6 +236,7 @@ expr:
     | s = simple_expr {s}
     | a = application_expr {a}
     | r = ref {r}
+    | a = array {a}
     | i = imperative {i}
     | a = arith { a }
     | c = comp { c }
@@ -261,6 +283,7 @@ typ:
     | INT_typ {Typ.TInt}
     | UNIT_typ {Typ.TUnit}
     | CHAR_typ {Typ.TChar}
+    | t = typ ARR_typ {Typ.TArray (t)}
     | t = typ REF {Typ.TRef(t)}
     | STRING_typ {Typ.TString}
     | i = ID {Typ.TIdentifier (i)}
@@ -297,7 +320,14 @@ ref:
     | REF e = expr {Expr.Ref(e)};
 
 imperative:
-    | e1 = expr ";" e2 = expr {Expr.BinaryOp(SEQ, e1, e2)};
+    | e1 = expr ";" e2 = expr {Expr.BinaryOp(SEQ, e1, e2)}
+    | WHILE p = expr DO e2 = expr DONE {Expr.While(p, e2)};
+
+array:
+    | ARR_OPEN l = separated_list (",", expr) ARR_CLOSE {Expr.Array (l)}
+    | e1 = expr ".""(" e2 = expr ")" {Expr.BinaryOp (ARRAY_INDEX, e1, e2)}
+    | ARR_LEN e = simple_expr {Expr.UnaryOp (ARRAY_LEN, e)}
+    | e1 = expr ".""(" e2 = expr ")" "<-" e3 = expr {Expr.ArrayAssign (e1, e2, e3)}
 
 string_op:
     | e1 = expr "^" e2 = expr {Expr.BinaryOp (STRINGCONCAT, e1, e2)}

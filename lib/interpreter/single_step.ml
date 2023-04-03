@@ -61,7 +61,6 @@ let rec reduce ~top_level_context ~type_constr_context expr =
         Ast.Expr.to_val e >>= fun v ->
         convert_to_values es >>= fun vs -> Some (v :: vs)
   in
-
   match Ast.Expr.to_val expr with
   | Some v -> Ok (ReduceResult.NotReduced v)
   | None -> (
@@ -140,6 +139,12 @@ let rec reduce ~top_level_context ~type_constr_context expr =
               | ( Ast.UnaryOperator.DEREF,
                   Ast.Value.Constant (Ast.Constant.Reference r) ) ->
                   Ok (ReduceResult.ReducedToVal !r)
+              | ( Ast.UnaryOperator.ARRAY_LEN,
+                  Ast.Value.Constant (Ast.Constant.Array arr) ) ->
+                  Ok
+                    (ReduceResult.ReducedToVal
+                       (Ast.Value.Constant
+                          (Ast.Constant.Integer (Array.length arr))))
               | _, _ ->
                   error
                     "SingleStepReductionError: type mismatch at Unary \
@@ -285,6 +290,10 @@ let rec reduce ~top_level_context ~type_constr_context expr =
                           r1 := v;
                           Ok
                             (ReducedToVal (Ast.Value.Constant Ast.Constant.Unit))
+                      | ( Ast.BinaryOperator.ARRAY_INDEX,
+                          Ast.Value.Constant (Ast.Constant.Array arr),
+                          Ast.Value.Constant (Ast.Constant.Integer index) ) ->
+                          Ok (ReducedToVal arr.(index))
                       | _, _, _ ->
                           error
                             "SingleStepReductionError: type mismatch at Binary \
@@ -553,7 +562,7 @@ let rec reduce ~top_level_context ~type_constr_context expr =
             ~reduced:(fun new_e ->
               Ok (ReduceResult.ReducedToExpr (Ast.Expr.Lift (t, new_e))))
             ~not_reduced:(fun v ->
-              let expr_v = Ast.Value.to_expr v in
+              let expr_v = Ast.Value.to_expr_intensional v in
               Ok (ReduceResult.ReducedToVal (Ast.Value.Box ([], expr_v))))
       | Ast.Expr.Constr (constr, e_opt) -> (
           if
@@ -726,7 +735,95 @@ let rec reduce ~top_level_context ~type_constr_context expr =
                 ~not_reduced:(fun v ->
                   Ok
                     (ReduceResult.ReducedToVal
-                       (Ast.Value.Constant (Ast.Constant.Reference (ref v))))))
+                       (Ast.Value.Constant (Ast.Constant.Reference (ref v)))))
+      | Ast.Expr.While (p, e) ->
+          Ok
+            (ReduceResult.ReducedToExpr
+               (Ast.Expr.IfThenElse
+                  ( p,
+                    Ast.Expr.BinaryOp
+                      (Ast.BinaryOperator.SEQ, e, Ast.Expr.While (p, e)),
+                    Ast.Expr.Constant Ast.Constant.Unit )))
+      | Ast.Expr.Array es -> (
+          process_exprs es >>= fun (new_es, new_vs) ->
+          if List.is_empty new_es then
+            (* Not reduced in the first place *)
+            Ok
+              (ReduceResult.NotReduced
+                 (Ast.Value.Constant (Ast.Constant.Array (Array.of_list new_vs))))
+          else
+            (* Check if all are values *)
+            match convert_to_values new_es with
+            | None -> Ok (ReduceResult.ReducedToExpr (Ast.Expr.Array new_es))
+            | Some vs ->
+                Ok
+                  (ReduceResult.ReducedToVal
+                     (Ast.Value.Constant (Ast.Constant.Array (Array.of_list vs))))
+          )
+      | Ast.Expr.ArrayAssign (arr, index, expr) ->
+          (*TODO: Check that this works.*)
+          (*Reduce array*)
+          reduce ~top_level_context ~type_constr_context arr
+          >>= ReduceResult.process
+                ~reduced:(fun e ->
+                  Ok
+                    (ReduceResult.ReducedToExpr
+                       (Ast.Expr.ArrayAssign (e, index, expr))))
+                ~not_reduced:(fun arr_v ->
+                  (*Array check*)
+                  match arr_v with
+                  | Ast.Value.Constant (Ast.Constant.Array impl_arr) ->
+                      (*Reduce index*)
+                      reduce ~top_level_context ~type_constr_context index
+                      >>= ReduceResult.process
+                            ~reduced:(fun index_e ->
+                              Ok
+                                (ReduceResult.ReducedToExpr
+                                   (Ast.Expr.ArrayAssign
+                                      (Ast.Value.to_expr arr_v, index_e, expr))))
+                            ~not_reduced:(fun index_v ->
+                              (*Index check*)
+                              match index_v with
+                              | Ast.Value.Constant
+                                  (Ast.Constant.Integer index_i) ->
+                                  if
+                                    index_i < 0
+                                    || index_i > Array.length impl_arr
+                                  then
+                                    Or_error.error
+                                      "SingleStepReductionError: index out of \
+                                       bounds [array_len, index]"
+                                      (Array.length impl_arr, index_i)
+                                      [%sexp_of: int * int]
+                                  else
+                                    (*Reduce expr*)
+                                    reduce ~top_level_context
+                                      ~type_constr_context expr
+                                    >>= ReduceResult.process
+                                          ~reduced:(fun expr_e ->
+                                            Ok
+                                              (ReduceResult.ReducedToExpr
+                                                 (Ast.Expr.ArrayAssign
+                                                    ( Ast.Value.to_expr arr_v,
+                                                      Ast.Value.to_expr index_v,
+                                                      expr_e ))))
+                                          ~not_reduced:(fun expr_v ->
+                                            (*Set value in array and done.*)
+                                            impl_arr.(index_i) <- expr_v;
+                                            Ok
+                                              (ReduceResult.ReducedToVal
+                                                 (Ast.Value.Constant
+                                                    Ast.Constant.Unit)))
+                              | _ ->
+                                  Or_error.error
+                                    "SingleStepReductionError: FATAL: array \
+                                     index is not an integer [index]"
+                                    index [%sexp_of: Ast.Expr.t])
+                  | _ ->
+                      Or_error.error
+                        "SingleStepReductionError: FATAL: arr is not an array \
+                         [arr]"
+                        arr [%sexp_of: Ast.Expr.t]))
 
 let multi_step_reduce ~top_level_context ~type_constr_context ?(verbose = false)
     expr =

@@ -45,6 +45,12 @@ rule read =
     | "ref" {REF}
     | "!" {DEREF}
     | ":=" {ASSIGN}
+    | "[|" {ARR_OPEN}
+    | "|]" {ARR_CLOSE}
+    | "array" {ARR_typ}
+    | "." {DOT}
+    | "len" {ARR_LEN}
+    | "<-" {LEFT_ARROW}
     | "true" {TRUE}
     | "false" {FALSE}
     | "bool" {BOOL_typ}
@@ -53,6 +59,9 @@ rule read =
     | "char" {CHAR_typ}
     | "unit" {UNIT_typ}
     | "not" {NOT}
+    | "while" {WHILE}
+    | "do" {DO}
+    | "done" {DONE}
     | "&&" {AND}
     | "||" {OR}
     | "lift" {LIFT}

@@ -109,7 +109,7 @@ and type_inference_expression meta_ctx ctx type_ctx e =
       | Ast.Constant.Character _ -> Ok Ast.Typ.TChar
       | Ast.Constant.String _ -> Ok Ast.Typ.TString
       | Ast.Constant.Reference v_ref ->
-        (*Should never go here but let's allow this for debugging reasons*)
+          (*Should never go here but let's allow this for debugging reasons*)
           type_inference_expression meta_ctx ctx type_ctx
             (Ast.Value.to_expr !v_ref))
   | Ast.Expr.UnaryOp (op, expr) -> (
@@ -127,6 +127,14 @@ and type_inference_expression meta_ctx ctx type_ctx e =
           | _ ->
               Or_error.error
                 "TypeInferenceError: Dereferencing a non-reference value \
+                 (expr, typ)"
+                (expr, typ) [%sexp_of: Ast.Expr.t * Ast.Typ.t])
+      | Ast.UnaryOperator.ARRAY_LEN -> (
+          type_inference_expression meta_ctx ctx type_ctx expr >>= function
+          | Ast.Typ.TArray _ -> Ok Ast.Typ.TInt
+          | typ ->
+              Or_error.error
+                "TypeInferenceError: Getting length of a non-array value \
                  (expr, typ)"
                 (expr, typ) [%sexp_of: Ast.Expr.t * Ast.Typ.t]))
   | Ast.Expr.BinaryOp (op, expr, expr2) -> (
@@ -205,7 +213,18 @@ and type_inference_expression meta_ctx ctx type_ctx e =
               Or_error.error
                 "TypeInferenceError: Assigning to non-reference value (expr, \
                  typ)"
-                (expr, t1) [%sexp_of: Ast.Expr.t * Ast.Typ.t]))
+                (expr, t1) [%sexp_of: Ast.Expr.t * Ast.Typ.t])
+      | Ast.BinaryOperator.ARRAY_INDEX -> (
+          type_inference_expression meta_ctx ctx type_ctx expr >>= function
+          | Ast.Typ.TArray val_typ ->
+              type_check_expression meta_ctx ctx type_ctx expr2 Ast.Typ.TInt
+              |> Or_error.tag
+                   ~tag:"TypeInferenceError: array index not of int type"
+              >>= fun () -> Ok val_typ
+          | _ ->
+              Or_error.error
+                "TypeInferenceError: Can't index on non-array values [arr]" expr
+                [%sexp_of: Ast.Expr.t]))
   | Ast.Expr.Prod exprs ->
       List.map exprs ~f:(type_inference_expression meta_ctx ctx type_ctx)
       |> Or_error.combine_errors
@@ -670,6 +689,50 @@ and type_inference_expression meta_ctx ctx type_ctx e =
   | Ast.Expr.Ref expr ->
       type_inference_expression meta_ctx ctx type_ctx expr >>= fun typ ->
       Ok (Ast.Typ.TRef typ)
+  | Ast.Expr.While (p, e) ->
+      type_check_expression meta_ctx ctx type_ctx p Ast.Typ.TBool
+      |> Or_error.tag
+           ~tag:
+             "TypeInferenceError: Expected bool type for while loop predicate."
+      >>= fun () ->
+      type_check_expression meta_ctx ctx type_ctx e Ast.Typ.TUnit
+      |> Or_error.tag
+           ~tag:"TypeInferenceError: Expected unit type body for while loops"
+      >>= fun () -> Ok Ast.Typ.TUnit
+  | Ast.Expr.Array es -> (
+      match es with
+      | [] ->
+          Or_error.error "TypeInferenceError: Array is empty"
+            (Ast.Expr.Array es) [%sexp_of: Ast.Expr.t]
+      | x :: xs ->
+          type_inference_expression meta_ctx ctx type_ctx x >>= fun x_typ ->
+          (* Check that all other ones are of the same type *)
+          List.map xs ~f:(fun x ->
+              type_check_expression meta_ctx ctx type_ctx x x_typ)
+          |> Or_error.combine_errors_unit
+          >>= fun () -> Ok (Ast.Typ.TArray x_typ))
+  | Ast.Expr.ArrayAssign (arr, index, e) -> (
+      type_inference_expression meta_ctx ctx type_ctx arr >>= function
+      | Ast.Typ.TArray val_typ ->
+          type_check_expression meta_ctx ctx type_ctx index Ast.Typ.TInt
+          |> fun or_error ->
+          Or_error.tag_arg or_error
+            "TypeInferenceError: At Array Assignment: index not of type int \
+             [index]"
+            index [%sexp_of: Ast.Expr.t]
+          >>= fun () ->
+          type_check_expression meta_ctx ctx type_ctx e val_typ
+          |> fun or_error ->
+          Or_error.tag_arg or_error
+            "TypeInferenceError: At Array Assignment: type mismatch between \
+             expression and array [arr, expression]"
+            (arr, e) [%sexp_of: Ast.Expr.t * Ast.Expr.t]
+          >>= fun () -> Ok Ast.Typ.TUnit
+      | _ ->
+          Or_error.error
+            "TypeInferenceError: At Array Assignment: arr not of array type \
+             [arr]"
+            arr [%sexp_of: Ast.Expr.t])
 
 let process_top_level meta_ctx ctx type_ctx = function
   | Ast.TopLevelDefn.Definition (iddef, e) ->

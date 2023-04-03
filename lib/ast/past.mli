@@ -21,6 +21,7 @@ and Typ : sig
     | TProd of t list
     | TSum of t * t
     | TRef of t
+    | TArray of t
   [@@deriving sexp, show, equal, compare]
 end
 
@@ -51,15 +52,21 @@ and BinaryOperator : sig
     | STRINGCONCAT
     | ASSIGN
     | SEQ
+    | ARRAY_INDEX
   [@@deriving sexp, show, equal, compare]
 end
 
 and UnaryOperator : sig
-  type t = NEG | NOT | DEREF [@@deriving sexp, show, equal, compare]
+  type t = NEG | NOT | DEREF | ARRAY_LEN [@@deriving sexp, show, equal, compare]
 end
 
 and Constant : sig
-  type t = Integer of int | Boolean of bool | Unit | Character of char | String of string
+  type t =
+    | Integer of int
+    | Boolean of bool
+    | Unit
+    | Character of char
+    | String of string
   [@@deriving sexp, show, equal, compare]
 end
 
@@ -106,6 +113,9 @@ and Expr : sig
     | Match of t * (Pattern.t * t) list
     | Lift of Typ.t * t
     | Ref of t (* ref e *)
+    | While of t * t (*while p do e done*)
+    | Array of t list (* list representation because just syntactic *)
+    | ArrayAssign of t * t * t (* arr.(i) <- e *)
   [@@deriving sexp, show, equal, compare]
 end
 

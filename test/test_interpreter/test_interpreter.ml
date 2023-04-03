@@ -402,27 +402,26 @@ let generate_tests_for_interpreter interpreter =
                       Ast.Expr.Constr
                         ( Ast.Constructor.of_string "Br",
                           Some
-                            (Ast.Expr.EValue
-                               (Ast.Value.Prod
-                                  [
-                                    Ast.Value.Constant (Ast.Constant.Integer 1);
-                                    Ast.Value.Constr
-                                      (Ast.Constructor.of_string "Lf", None);
-                                    Ast.Value.Constr
-                                      ( Ast.Constructor.of_string "Br",
-                                        Some
-                                          (Ast.Value.Prod
-                                             [
-                                               Ast.Value.Constant
-                                                 (Ast.Constant.Integer 2);
-                                               Ast.Value.Constr
-                                                 ( Ast.Constructor.of_string "Lf",
-                                                   None );
-                                               Ast.Value.Constr
-                                                 ( Ast.Constructor.of_string "Lf",
-                                                   None );
-                                             ]) );
-                                  ])) ) ),
+                            (Ast.Expr.Prod
+                               [
+                                 Ast.Expr.Constant (Ast.Constant.Integer 1);
+                                 Ast.Expr.Constr
+                                   (Ast.Constructor.of_string "Lf", None);
+                                 Ast.Expr.Constr
+                                   ( Ast.Constructor.of_string "Br",
+                                     Some
+                                       (Ast.Expr.Prod
+                                          [
+                                            Ast.Expr.Constant
+                                              (Ast.Constant.Integer 2);
+                                            Ast.Expr.Constr
+                                              ( Ast.Constructor.of_string "Lf",
+                                                None );
+                                            Ast.Expr.Constr
+                                              ( Ast.Constructor.of_string "Lf",
+                                                None );
+                                          ]) );
+                               ]) ) ),
                   None,
                   None,
                   None )))
@@ -627,6 +626,118 @@ let generate_tests_for_interpreter interpreter =
                   None )))
           (List.last results)
   in
+  let test_imperative_while_fib _ =
+    let program =
+      "let fib: int -> int = fun (n:int) ->\n\
+      \      if n <= 1 then n else\n\
+      \      let fib_n_2: int ref = ref 0 in\n\
+      \      let fib_n_1: int ref = ref 1 in\n\
+      \      let counter: int ref = ref 2 in\n\
+      \      let tmp: int ref = ref 0 in \n\
+      \      while (!counter <= n) do\n\
+      \          tmp := !fib_n_1;\n\
+      \          fib_n_1 := !tmp + !fib_n_2;\n\
+      \          fib_n_2 := !tmp;\n\
+      \          counter := !counter + 1\n\
+      \      done;\n\
+      \      !fib_n_1;;\n\
+      \  \n\
+      \    (fib 0, fib 1, fib 5, fib 10);; \n\
+      \    "
+    in
+    print_endline "Start";
+    let res_opt = exec_program interpreter program in
+    print_endline "end";
+    match res_opt with
+    | None -> assert_string "Program Execution Failed"
+    | Some results ->
+        assert_equal
+          (Some
+             (Interpreter_common.TopLevelEvaluationResult.ExprValue
+                ( Ast.Typ.TProd
+                    [ Ast.Typ.TInt; Ast.Typ.TInt; Ast.Typ.TInt; Ast.Typ.TInt ],
+                  Ast.Value.Prod
+                    [
+                      Ast.Value.Constant (Ast.Constant.Integer 0);
+                      Ast.Value.Constant (Ast.Constant.Integer 1);
+                      Ast.Value.Constant (Ast.Constant.Integer 5);
+                      Ast.Value.Constant (Ast.Constant.Integer 55);
+                    ],
+                  None,
+                  None,
+                  None )))
+          (List.last results)
+  in
+  let test_array_len _ =
+    (* Coarse test *)
+    let program = "let a: int array = [|1, 2, 3|];; len (a);;" in
+    let res_opt = exec_program interpreter program in
+    match res_opt with
+    | None -> assert_string "Program Execution Failed"
+    | Some results ->
+        assert_equal
+          (Some
+             (Interpreter_common.TopLevelEvaluationResult.ExprValue
+                ( Ast.Typ.TInt,
+                  Ast.Value.Constant (Ast.Constant.Integer 3),
+                  None,
+                  None,
+                  None )))
+          (List.last results)
+  in
+  let test_array_get_set _ =
+    (* Coarse test *)
+    let program =
+      "let a: int array = [|1, 2, 3|];;a.(1);; a.(1) <- 421 * 134 + 2;; a.(1);;"
+    in
+    let res_opt = exec_program interpreter program in
+    match res_opt with
+    | None -> assert_string "Program Execution Failed"
+    | Some results ->
+        assert_equal
+          (Some
+             (Interpreter_common.TopLevelEvaluationResult.ExprValue
+                ( Ast.Typ.TInt,
+                  Ast.Value.Constant (Ast.Constant.Integer 2),
+                  None,
+                  None,
+                  None )))
+          (List.nth results 1);
+        assert_equal
+          (Some
+             (Interpreter_common.TopLevelEvaluationResult.ExprValue
+                ( Ast.Typ.TInt,
+                  Ast.Value.Constant (Ast.Constant.Integer 56416),
+                  None,
+                  None,
+                  None )))
+          (List.last results)
+  in
+  let test_array_lift _ =
+    let program =
+      "let a: int array = [|1, 2, 3|];;\n      lift[int array] a;;"
+    in
+    let res_opt = exec_program interpreter program in
+    match res_opt with
+    | None -> assert_string "Program Execution Failed"
+    | Some results ->
+        assert_equal
+          (Some
+             (Interpreter_common.TopLevelEvaluationResult.ExprValue
+                ( Ast.Typ.TBox ([], Ast.Typ.TArray Ast.Typ.TInt),
+                  Ast.Value.Box
+                    ( [],
+                      Ast.Expr.Array
+                        [
+                          Ast.Expr.Constant (Ast.Constant.Integer 1);
+                          Ast.Expr.Constant (Ast.Constant.Integer 2);
+                          Ast.Expr.Constant (Ast.Constant.Integer 3);
+                        ] ),
+                  None,
+                  None,
+                  None )))
+          (List.last results)
+  in
   let interpreter_suite =
     "interpreter_main_suite"
     >::: [
@@ -652,6 +763,10 @@ let generate_tests_for_interpreter interpreter =
            "test_string_match" >:: test_string_match;
            "test_imperative_seq_ref_assign_deref"
            >:: test_imperative_seq_ref_assign_deref;
+           "test_imperative_while_fib" >:: test_imperative_while_fib;
+           "test_array_len" >:: test_array_len;
+           "test_array_get_set" >:: test_array_get_set;
+           "test_array_lift" >:: test_array_lift;
          ]
   in
   let test_intlist_map _ =

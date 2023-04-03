@@ -87,6 +87,7 @@ and Typ : sig
     | TProd of t list
     | TSum of t * t
     | TRef of t
+    | TArray of t
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.Typ.t -> t
@@ -123,13 +124,15 @@ and BinaryOperator : sig
     | STRINGCONCAT
     | ASSIGN
     | SEQ
+    | ARRAY_INDEX
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.BinaryOperator.t -> t
 end
 
 and UnaryOperator : sig
-  type t = NEG | NOT | DEREF [@@deriving sexp, show, compare, equal]
+  type t = NEG | NOT | DEREF | ARRAY_LEN
+  [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.UnaryOperator.t -> t
 end
@@ -142,6 +145,7 @@ and Constant : sig
     | Character of char
     | String of string
     | Reference of Value.t ref
+    | Array of Value.t array
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.Constant.t -> t
@@ -195,6 +199,9 @@ and Expr : sig
     | Lift of Typ.t * t
     | EValue of Value.t
     | Ref of t
+    | While of t * t
+    | Array of t list
+    | ArrayAssign of t * t * t
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.Expr.t -> t
@@ -230,6 +237,7 @@ and Value : sig
   [@@deriving sexp, show, compare, equal]
 
   val to_expr : Value.t -> Expr.t
+  val to_expr_intensional : Value.t -> Expr.t
 end
 
 and Directive : sig

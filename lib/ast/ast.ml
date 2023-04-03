@@ -219,6 +219,7 @@ and Typ : sig
     | TProd of t list
     | TSum of t * t
     | TRef of t
+    | TArray of t
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.Typ.t -> t
@@ -235,6 +236,7 @@ end = struct
     | TProd of t list
     | TSum of t * t
     | TRef of t
+    | TArray of t
   [@@deriving sexp, show, compare, equal]
 
   let rec of_past = function
@@ -249,6 +251,7 @@ end = struct
     | Past.Typ.TProd ts -> TProd (List.map ts ~f:of_past)
     | Past.Typ.TSum (t1, t2) -> TSum (of_past t1, of_past t2)
     | Past.Typ.TRef t -> TRef (of_past t)
+    | Past.Typ.TArray t -> TArray (of_past t)
 end
 
 and IdentifierDefn : sig
@@ -291,6 +294,7 @@ and BinaryOperator : sig
     | STRINGCONCAT
     | ASSIGN
     | SEQ
+    | ARRAY_INDEX
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.BinaryOperator.t -> t
@@ -313,6 +317,7 @@ end = struct
     | STRINGCONCAT
     | ASSIGN
     | SEQ
+    | ARRAY_INDEX
   [@@deriving sexp, show, compare, equal]
 
   let of_past = function
@@ -333,19 +338,23 @@ end = struct
     | Past.BinaryOperator.STRINGCONCAT -> STRINGCONCAT
     | Past.BinaryOperator.ASSIGN -> ASSIGN
     | Past.BinaryOperator.SEQ -> SEQ
+    | Past.BinaryOperator.ARRAY_INDEX -> ARRAY_INDEX
 end
 
 and UnaryOperator : sig
-  type t = NEG | NOT | DEREF [@@deriving sexp, show, compare, equal]
+  type t = NEG | NOT | DEREF | ARRAY_LEN
+  [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.UnaryOperator.t -> t
 end = struct
-  type t = NEG | NOT | DEREF [@@deriving sexp, show, compare, equal]
+  type t = NEG | NOT | DEREF | ARRAY_LEN
+  [@@deriving sexp, show, compare, equal]
 
   let of_past = function
     | Past.UnaryOperator.NEG -> NEG
     | Past.UnaryOperator.NOT -> NOT
     | Past.UnaryOperator.DEREF -> DEREF
+    | Past.UnaryOperator.ARRAY_LEN -> ARRAY_LEN
 end
 
 and Constant : sig
@@ -356,6 +365,7 @@ and Constant : sig
     | Character of char
     | String of string
     | Reference of Value.t ref
+    | Array of Value.t array
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.Constant.t -> t
@@ -367,6 +377,7 @@ end = struct
     | Character of char
     | String of string
     | Reference of Value.t ref
+    | Array of Value.t array
   [@@deriving sexp, show, compare, equal]
 
   let of_past = function
@@ -462,6 +473,9 @@ and Expr : sig
     | Lift of Typ.t * t
     | EValue of Value.t
     | Ref of t
+    | While of t * t
+    | Array of t list
+    | ArrayAssign of t * t * t
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.Expr.t -> t
@@ -514,6 +528,9 @@ end = struct
     | Lift of Typ.t * t
     | EValue of Value.t
     | Ref of t
+    | While of t * t
+    | Array of t list
+    | ArrayAssign of t * t * t
   [@@deriving sexp, show, compare, equal]
 
   (* TODO: let rec pp_to_code expr = () *)
@@ -570,6 +587,10 @@ end = struct
                 (Pattern.of_past pattn, of_past expr)) )
     | Past.Expr.Lift (typ, expr) -> Lift (Typ.of_past typ, of_past expr)
     | Past.Expr.Ref e -> Ref (of_past e)
+    | Past.Expr.While (p, e) -> While (of_past p, of_past e)
+    | Past.Expr.Array es -> Array (List.map es ~f:of_past)
+    | Past.Expr.ArrayAssign (arr, index, assign_to) ->
+        ArrayAssign (of_past arr, of_past index, of_past assign_to)
 
   let rec populate_index expr ~current_ast_level ~current_identifiers
       ~current_meta_ast_level ~current_meta_identifiers =
@@ -830,6 +851,30 @@ end = struct
         populate_index ~current_ast_level ~current_identifiers
           ~current_meta_ast_level ~current_meta_identifiers e
         >>= fun expr -> Ok (Ref expr)
+    | While (p, e) ->
+        populate_index ~current_ast_level ~current_identifiers
+          ~current_meta_ast_level ~current_meta_identifiers p
+        >>= fun p ->
+        populate_index ~current_ast_level ~current_identifiers
+          ~current_meta_ast_level ~current_meta_identifiers e
+        >>= fun e -> Ok (While (p, e))
+    | Array es ->
+        List.map es
+          ~f:
+            (populate_index ~current_ast_level ~current_identifiers
+               ~current_meta_ast_level ~current_meta_identifiers)
+        |> Or_error.combine_errors
+        >>= fun es -> Ok (Array es)
+    | ArrayAssign (e1, e2, e3) ->
+        populate_index ~current_ast_level ~current_identifiers
+          ~current_meta_ast_level ~current_meta_identifiers e1
+        >>= fun e1 ->
+        populate_index ~current_ast_level ~current_identifiers
+          ~current_meta_ast_level ~current_meta_identifiers e2
+        >>= fun e2 ->
+        populate_index ~current_ast_level ~current_identifiers
+          ~current_meta_ast_level ~current_meta_identifiers e3
+        >>= fun e3 -> Ok (ArrayAssign (e1, e2, e3))
 
   let rec shift_indices expr ~obj_depth ~meta_depth ~obj_offset ~meta_offset =
     let open Or_error.Monad_infix in
@@ -973,6 +1018,23 @@ end = struct
     | Ref e ->
         shift_indices ~obj_depth ~meta_depth ~obj_offset ~meta_offset e
         >>= fun expr -> Ok (Ref expr)
+    | While (p, e) ->
+        shift_indices ~obj_depth ~meta_depth ~obj_offset ~meta_offset p
+        >>= fun p ->
+        shift_indices ~obj_depth ~meta_depth ~obj_offset ~meta_offset e
+        >>= fun e -> Ok (While (p, e))
+    | Array es ->
+        List.map es
+          ~f:(shift_indices ~obj_depth ~meta_depth ~obj_offset ~meta_offset)
+        |> Or_error.combine_errors
+        >>= fun es -> Ok (Array es)
+    | ArrayAssign (e1, e2, e3) ->
+        shift_indices ~obj_depth ~meta_depth ~obj_offset ~meta_offset e1
+        >>= fun e1 ->
+        shift_indices ~obj_depth ~meta_depth ~obj_offset ~meta_offset e2
+        >>= fun e2 ->
+        shift_indices ~obj_depth ~meta_depth ~obj_offset ~meta_offset e3
+        >>= fun e3 -> Ok (ArrayAssign (e1, e2, e3))
 
   let rec to_val expr =
     let open Option.Monad_infix in
@@ -1009,6 +1071,7 @@ and Value : sig
   [@@deriving sexp, show, compare, equal]
 
   val to_expr : Value.t -> Expr.t
+  val to_expr_intensional : Value.t -> Expr.t
 end = struct
   type t =
     | Constant of Constant.t (*c*)
@@ -1028,6 +1091,24 @@ end = struct
     | Lambda (iddef, expr) -> Expr.Lambda (iddef, expr)
     | Box (ctx, expr) -> Expr.Box (ctx, expr)
     | Constr (constr, Some v) -> Expr.Constr (constr, Some (Expr.EValue v))
+    | Constr (constr, None) -> Expr.Constr (constr, None)
+
+  let rec to_expr_intensional = function
+    (*This function does not preserve semantics for impure terms, but rather converts to an intensional representation*)
+    (*Also, this function converts to an expression *completely*.*)
+    | Constant (Constant.Reference r) ->
+        (*Conversion to intensional representation*)
+        Expr.Ref (to_expr_intensional !r)
+    | Constant (Constant.Array arr) ->
+        Expr.Array (arr |> Array.map ~f:to_expr_intensional |> Array.to_list)
+    | Constant c -> Expr.Constant c
+    | Prod xs -> Expr.Prod (List.map xs ~f:to_expr_intensional)
+    | Left (t1, t2, v) -> Expr.Left (t1, t2, to_expr_intensional v)
+    | Right (t1, t2, v) -> Expr.Right (t1, t2, to_expr_intensional v)
+    | Lambda (iddef, expr) -> Expr.Lambda (iddef, expr)
+    | Box (ctx, expr) -> Expr.Box (ctx, expr)
+    | Constr (constr, Some v) ->
+        Expr.Constr (constr, Some (to_expr_intensional v))
     | Constr (constr, None) -> Expr.Constr (constr, None)
 end
 
