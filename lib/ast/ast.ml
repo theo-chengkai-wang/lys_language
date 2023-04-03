@@ -1071,6 +1071,7 @@ and Value : sig
   [@@deriving sexp, show, compare, equal]
 
   val to_expr : Value.t -> Expr.t
+  val to_expr_intensional : Value.t -> Expr.t
 end = struct
   type t =
     | Constant of Constant.t (*c*)
@@ -1082,13 +1083,7 @@ end = struct
     | Constr of Constructor.t * t option
   [@@deriving sexp, show, compare, equal]
 
-  let rec to_expr = function
-    (*This function does not preserve semantics for impure terms, but rather converts to an intensional representation*)
-    | Constant (Constant.Reference r) ->
-        (*Conversion to intensional representation*)
-        Expr.Ref (to_expr !r)
-    | Constant (Constant.Array arr) ->
-        Expr.Array (arr |> Array.map ~f:to_expr |> Array.to_list)
+  let to_expr = function
     | Constant c -> Expr.Constant c
     | Prod xs -> Expr.Prod (List.map xs ~f:(fun x -> Expr.EValue x))
     | Left (t1, t2, v) -> Expr.Left (t1, t2, Expr.EValue v)
@@ -1096,6 +1091,24 @@ end = struct
     | Lambda (iddef, expr) -> Expr.Lambda (iddef, expr)
     | Box (ctx, expr) -> Expr.Box (ctx, expr)
     | Constr (constr, Some v) -> Expr.Constr (constr, Some (Expr.EValue v))
+    | Constr (constr, None) -> Expr.Constr (constr, None)
+
+  let rec to_expr_intensional = function
+    (*This function does not preserve semantics for impure terms, but rather converts to an intensional representation*)
+    (*Also, this function converts to an expression *completely*.*)
+    | Constant (Constant.Reference r) ->
+        (*Conversion to intensional representation*)
+        Expr.Ref (to_expr_intensional !r)
+    | Constant (Constant.Array arr) ->
+        Expr.Array (arr |> Array.map ~f:to_expr_intensional |> Array.to_list)
+    | Constant c -> Expr.Constant c
+    | Prod xs -> Expr.Prod (List.map xs ~f:to_expr_intensional)
+    | Left (t1, t2, v) -> Expr.Left (t1, t2, to_expr_intensional v)
+    | Right (t1, t2, v) -> Expr.Right (t1, t2, to_expr_intensional v)
+    | Lambda (iddef, expr) -> Expr.Lambda (iddef, expr)
+    | Box (ctx, expr) -> Expr.Box (ctx, expr)
+    | Constr (constr, Some v) ->
+        Expr.Constr (constr, Some (to_expr_intensional v))
     | Constr (constr, None) -> Expr.Constr (constr, None)
 end
 

@@ -402,27 +402,26 @@ let generate_tests_for_interpreter interpreter =
                       Ast.Expr.Constr
                         ( Ast.Constructor.of_string "Br",
                           Some
-                            (Ast.Expr.EValue
-                               (Ast.Value.Prod
-                                  [
-                                    Ast.Value.Constant (Ast.Constant.Integer 1);
-                                    Ast.Value.Constr
-                                      (Ast.Constructor.of_string "Lf", None);
-                                    Ast.Value.Constr
-                                      ( Ast.Constructor.of_string "Br",
-                                        Some
-                                          (Ast.Value.Prod
-                                             [
-                                               Ast.Value.Constant
-                                                 (Ast.Constant.Integer 2);
-                                               Ast.Value.Constr
-                                                 ( Ast.Constructor.of_string "Lf",
-                                                   None );
-                                               Ast.Value.Constr
-                                                 ( Ast.Constructor.of_string "Lf",
-                                                   None );
-                                             ]) );
-                                  ])) ) ),
+                            (Ast.Expr.Prod
+                               [
+                                 Ast.Expr.Constant (Ast.Constant.Integer 1);
+                                 Ast.Expr.Constr
+                                   (Ast.Constructor.of_string "Lf", None);
+                                 Ast.Expr.Constr
+                                   ( Ast.Constructor.of_string "Br",
+                                     Some
+                                       (Ast.Expr.Prod
+                                          [
+                                            Ast.Expr.Constant
+                                              (Ast.Constant.Integer 2);
+                                            Ast.Expr.Constr
+                                              ( Ast.Constructor.of_string "Lf",
+                                                None );
+                                            Ast.Expr.Constr
+                                              ( Ast.Constructor.of_string "Lf",
+                                                None );
+                                          ]) );
+                               ]) ) ),
                   None,
                   None,
                   None )))

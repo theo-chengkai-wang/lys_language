@@ -237,6 +237,7 @@ and Value : sig
   [@@deriving sexp, show, compare, equal]
 
   val to_expr : Value.t -> Expr.t
+  val to_expr_intensional : Value.t -> Expr.t
 end
 
 and Directive : sig

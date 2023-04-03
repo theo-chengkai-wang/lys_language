@@ -61,7 +61,6 @@ let rec reduce ~top_level_context ~type_constr_context expr =
         Ast.Expr.to_val e >>= fun v ->
         convert_to_values es >>= fun vs -> Some (v :: vs)
   in
-
   match Ast.Expr.to_val expr with
   | Some v -> Ok (ReduceResult.NotReduced v)
   | None -> (
@@ -553,7 +552,7 @@ let rec reduce ~top_level_context ~type_constr_context expr =
             ~reduced:(fun new_e ->
               Ok (ReduceResult.ReducedToExpr (Ast.Expr.Lift (t, new_e))))
             ~not_reduced:(fun v ->
-              let expr_v = Ast.Value.to_expr v in
+              let expr_v = Ast.Value.to_expr_intensional v in
               Ok (ReduceResult.ReducedToVal (Ast.Value.Box ([], expr_v))))
       | Ast.Expr.Constr (constr, e_opt) -> (
           if

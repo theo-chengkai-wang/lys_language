@@ -360,7 +360,7 @@ let rec multi_step_reduce ~top_level_context ~type_constr_context ~expr =
   | Ast.Expr.Lift (_, expr) ->
       multi_step_reduce ~top_level_context ~type_constr_context ~expr
       >>= fun v ->
-      let expr_v = Ast.Value.to_expr v in
+      let expr_v = Ast.Value.to_expr_intensional v in
       Ok (Ast.Value.Box ([], expr_v))
   | Ast.Expr.Constr (constr, e_opt) -> (
       if

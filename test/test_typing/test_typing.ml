@@ -368,6 +368,7 @@ let test_seq_type_wrong _ =
 
 let test_while_with_fib _ =
   assert_equal
+    (Some (Ast.Typ.TFun (Ast.Typ.TInt, Ast.Typ.TInt)))
     (Or_error.ok
        (type_infer_from_str
           "\n\
@@ -384,7 +385,22 @@ let test_while_with_fib _ =
            counter := !counter + 1\n\
           \              done;\n\
           \    !fib_n_1;;\n"))
-    (Some (Ast.Typ.TFun (Ast.Typ.TInt, Ast.Typ.TInt)))
+
+let test_array _ =
+  assert_equal (Some (Ast.Typ.TArray Ast.Typ.TInt))
+    (Or_error.ok (type_infer_from_str "[|1, 2, 3|];;"))
+
+let test_array_assign _ =
+  assert_equal (Some Ast.Typ.TUnit)
+    (Or_error.ok (type_infer_from_str "([|1, 2, 3|]).(2) <- 123;;"))
+
+let test_array_len _ =
+  assert_equal (Some Ast.Typ.TInt)
+    (Or_error.ok (type_infer_from_str "len ([|1, 2, 3|]);;"))
+
+let test_array_index _ =
+  assert_equal (Some Ast.Typ.TInt)
+    (Or_error.ok (type_infer_from_str "([|1, 2, 3|]).(2);;"))
 
 let imperative_suite =
   "imperative_suite"
@@ -395,6 +411,10 @@ let imperative_suite =
          "test_seq_type_wrong" >:: test_seq_type_wrong;
          "test_deref_type" >:: test_deref_type;
          "test_while_with_fib" >:: test_while_with_fib;
+         "test_array" >:: test_array;
+         "test_array_assign" >:: test_array_assign;
+         "test_array_len" >:: test_array_len;
+         "test_array_index" >:: test_array_index;
        ]
 
 let suite =
