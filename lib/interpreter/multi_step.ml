@@ -69,6 +69,9 @@ let rec multi_step_reduce ~top_level_context ~type_constr_context ~expr =
       | Ast.UnaryOperator.DEREF, Ast.Value.Constant (Ast.Constant.Reference r)
         ->
           Ok !r
+      | Ast.UnaryOperator.ARRAY_LEN, Ast.Value.Constant (Ast.Constant.Array arr)
+        ->
+          Ok (Ast.Value.Constant (Ast.Constant.Integer (Array.length arr)))
       | _, _ ->
           error
             "EvaluationError: type mismatch at Unary operator. [FATAL] should \
@@ -158,6 +161,15 @@ let rec multi_step_reduce ~top_level_context ~type_constr_context ~expr =
               v ) ->
               r1 := v;
               Ok (Ast.Value.Constant Ast.Constant.Unit)
+          | ( Ast.BinaryOperator.ARRAY_INDEX,
+              Ast.Value.Constant (Ast.Constant.Array arr),
+              Ast.Value.Constant (Ast.Constant.Integer i) ) ->
+              if i < 0 || i > Array.length arr then
+                Or_error.error
+                  "EvaluationError: index out of bounds [array_len, index]"
+                  (Array.length arr, i)
+                  [%sexp_of: int * int]
+              else Ok arr.(i)
           | _, _, _ ->
               error
                 "EvaluationError: type mismatch at Binary operator. [FATAL] \
@@ -529,6 +541,37 @@ let rec multi_step_reduce ~top_level_context ~type_constr_context ~expr =
         "EvaluationError: FATAL: while loop predicate is not a boolean \
          (predicate)"
         p [%sexp_of: Ast.Expr.t]
+  | Array es ->
+      List.map es ~f:(fun expr ->
+          multi_step_reduce ~top_level_context ~type_constr_context ~expr)
+      |> Or_error.combine_errors
+      >>= fun values ->
+      Ok (Ast.Value.Constant (Ast.Constant.Array (Array.of_list values)))
+  | ArrayAssign (arr, index, expr) -> (
+      (*TODO: Check that this works.*)
+      multi_step_reduce ~top_level_context ~type_constr_context ~expr:arr
+      >>= function
+      | Ast.Value.Constant (Ast.Constant.Array impl_arr) -> (
+          multi_step_reduce ~top_level_context ~type_constr_context ~expr:index
+          >>= function
+          | Ast.Value.Constant (Ast.Constant.Integer i) ->
+              if i < 0 || i > Array.length impl_arr then
+                Or_error.error
+                  "EvaluationError: index out of bounds [array_len, index]"
+                  (Array.length impl_arr, i)
+                  [%sexp_of: int * int]
+              else
+                multi_step_reduce ~top_level_context ~type_constr_context ~expr
+                >>= fun v ->
+                impl_arr.(i) <- v;
+                Ok (Ast.Value.Constant Ast.Constant.Unit)
+          | _ ->
+              Or_error.error
+                "EvaluationError: FATAL: array index is not an integer [index]"
+                index [%sexp_of: Ast.Expr.t])
+      | _ ->
+          Or_error.error "EvaluationError: FATAL: arr is not an array [arr]" arr
+            [%sexp_of: Ast.Expr.t])
 
 let evaluate_top_level_defn ?(top_level_context = EvaluationContext.empty)
     ?(type_constr_context = TypeConstrContext.empty) ?(time_exec = false)
