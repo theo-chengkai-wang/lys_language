@@ -145,6 +145,7 @@ and Constant : sig
     | Character of char
     | String of string
     | Reference of Value.t ref
+    | Array of Value.t array
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.Constant.t -> t

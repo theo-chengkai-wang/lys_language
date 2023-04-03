@@ -365,6 +365,7 @@ and Constant : sig
     | Character of char
     | String of string
     | Reference of Value.t ref
+    | Array of Value.t array
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.Constant.t -> t
@@ -376,6 +377,7 @@ end = struct
     | Character of char
     | String of string
     | Reference of Value.t ref
+    | Array of Value.t array
   [@@deriving sexp, show, compare, equal]
 
   let of_past = function
@@ -1085,6 +1087,8 @@ end = struct
     | Constant (Constant.Reference r) ->
         (*Conversion to intensional representation*)
         Expr.Ref (to_expr !r)
+    | Constant (Constant.Array arr) ->
+        Expr.Array (arr |> Array.map ~f:to_expr |> Array.to_list)
     | Constant c -> Expr.Constant c
     | Prod xs -> Expr.Prod (List.map xs ~f:(fun x -> Expr.EValue x))
     | Left (t1, t2, v) -> Expr.Left (t1, t2, Expr.EValue v)
