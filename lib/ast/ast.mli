@@ -99,6 +99,31 @@ and IdentifierDefn : sig
   val of_past : Past.IdentifierDefn.t -> t
 end
 
+and RefCell : sig
+  type t [@@deriving sexp, show, equal, compare]
+
+  val get_id : t -> int64
+  val of_value : Value.t -> t
+  val deref : t -> Value.t
+  val assign : t -> Value.t -> unit
+
+  (*Aliases*)
+  val ref : Value.t -> t
+  val ( ! ) : t -> Value.t
+  val ( := ) : t -> Value.t -> unit
+end
+
+and ArrayCell : sig
+  type t [@@deriving sexp, show, equal, compare]
+
+  val get_id : t -> int64
+  val of_list : Value.t list -> t
+  val get : t -> int -> Value.t
+  val set : t -> int -> Value.t -> unit
+  val to_list : t -> Value.t list
+  val length : t -> int
+end
+
 and Context : sig
   type t = IdentifierDefn.t list [@@deriving sexp, show, compare, equal]
 
@@ -144,8 +169,8 @@ and Constant : sig
     | Unit
     | Character of char
     | String of string
-    | Reference of Value.t ref
-    | Array of Value.t array
+    | Reference of RefCell.t
+    | Array of ArrayCell.t
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.Constant.t -> t

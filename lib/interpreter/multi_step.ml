@@ -68,10 +68,13 @@ let rec multi_step_reduce ~top_level_context ~type_constr_context ~expr =
           Ok (Ast.Value.Constant (Ast.Constant.Boolean (not b)))
       | Ast.UnaryOperator.DEREF, Ast.Value.Constant (Ast.Constant.Reference r)
         ->
+          let open Ast.RefCell in
           Ok !r
       | Ast.UnaryOperator.ARRAY_LEN, Ast.Value.Constant (Ast.Constant.Array arr)
         ->
-          Ok (Ast.Value.Constant (Ast.Constant.Integer (Array.length arr)))
+          Ok
+            (Ast.Value.Constant
+               (Ast.Constant.Integer (Ast.ArrayCell.length arr)))
       | _, _ ->
           error
             "EvaluationError: type mismatch at Unary operator. [FATAL] should \
@@ -159,17 +162,18 @@ let rec multi_step_reduce ~top_level_context ~type_constr_context ~expr =
           | ( Ast.BinaryOperator.ASSIGN,
               Ast.Value.Constant (Ast.Constant.Reference r1),
               v ) ->
+              let open Ast.RefCell in
               r1 := v;
               Ok (Ast.Value.Constant Ast.Constant.Unit)
           | ( Ast.BinaryOperator.ARRAY_INDEX,
               Ast.Value.Constant (Ast.Constant.Array arr),
               Ast.Value.Constant (Ast.Constant.Integer i) ) ->
-              if i < 0 || i > Array.length arr then
+              if i < 0 || i > Ast.ArrayCell.length arr then
                 Or_error.error
                   "EvaluationError: index out of bounds [array_len, index]"
-                  (Array.length arr, i)
+                  (Ast.ArrayCell.length arr, i)
                   [%sexp_of: int * int]
-              else Ok arr.(i)
+              else Ok (Ast.ArrayCell.get arr i) (* else Ok arr.(i) *)
           | _, _, _ ->
               error
                 "EvaluationError: type mismatch at Binary operator. [FATAL] \
@@ -527,7 +531,8 @@ let rec multi_step_reduce ~top_level_context ~type_constr_context ~expr =
   | Ast.Expr.Ref e ->
       multi_step_reduce ~top_level_context ~type_constr_context ~expr:e
       (* Reference creation *)
-      >>= fun v -> Ok (Ast.Value.Constant (Ast.Constant.Reference (ref v)))
+      >>= fun v ->
+      Ok (Ast.Value.Constant (Ast.Constant.Reference (Ast.RefCell.ref v)))
   | Ast.Expr.While (p, e) ->
       multi_step_reduce ~top_level_context ~type_constr_context
         ~expr:
@@ -541,13 +546,14 @@ let rec multi_step_reduce ~top_level_context ~type_constr_context ~expr =
         "EvaluationError: FATAL: while loop predicate is not a boolean \
          (predicate)"
         p [%sexp_of: Ast.Expr.t]
-  | Array es ->
+  | Ast.Expr.Array es ->
       List.map es ~f:(fun expr ->
           multi_step_reduce ~top_level_context ~type_constr_context ~expr)
       |> Or_error.combine_errors
       >>= fun values ->
-      Ok (Ast.Value.Constant (Ast.Constant.Array (Array.of_list values)))
-  | ArrayAssign (arr, index, expr) -> (
+      Ok
+        (Ast.Value.Constant (Ast.Constant.Array (Ast.ArrayCell.of_list values)))
+  | Ast.Expr.ArrayAssign (arr, index, expr) -> (
       (*TODO: Check that this works.*)
       multi_step_reduce ~top_level_context ~type_constr_context ~expr:arr
       >>= function
@@ -555,15 +561,16 @@ let rec multi_step_reduce ~top_level_context ~type_constr_context ~expr =
           multi_step_reduce ~top_level_context ~type_constr_context ~expr:index
           >>= function
           | Ast.Value.Constant (Ast.Constant.Integer i) ->
-              if i < 0 || i > Array.length impl_arr then
+              if i < 0 || i > Ast.ArrayCell.length impl_arr then
                 Or_error.error
                   "EvaluationError: index out of bounds [array_len, index]"
-                  (Array.length impl_arr, i)
+                  (Ast.ArrayCell.length impl_arr, i)
                   [%sexp_of: int * int]
               else
                 multi_step_reduce ~top_level_context ~type_constr_context ~expr
                 >>= fun v ->
-                impl_arr.(i) <- v;
+                (* impl_arr.(i) <- v; *)
+                Ast.ArrayCell.set impl_arr i v;
                 Ok (Ast.Value.Constant Ast.Constant.Unit)
           | _ ->
               Or_error.error

@@ -846,9 +846,45 @@ let generate_tests_for_interpreter interpreter =
                   None )))
           (List.last results)
   in
+  let test_arr_equality _ =
+    let program = "let a: int array = [|1, 2, 3|];;\n a = [|1, 2, 3|];;" in
+    let res_opt = exec_program interpreter program in
+    match res_opt with
+    | None -> assert_string "Program Execution Failed"
+    | Some results ->
+        assert_equal
+          (Some
+             (Interpreter_common.TopLevelEvaluationResult.ExprValue
+                ( Ast.Typ.TBool,
+                  Ast.Value.Constant (Ast.Constant.Boolean false),
+                  None,
+                  None,
+                  None )))
+          (List.last results)
+  in
+  let test_ref_equality _ =
+    let program = "let a: int ref = ref 2;;\n a = ref 2;;" in
+    let res_opt = exec_program interpreter program in
+    match res_opt with
+    | None -> assert_string "Program Execution Failed"
+    | Some results ->
+        assert_equal
+          (Some
+             (Interpreter_common.TopLevelEvaluationResult.ExprValue
+                ( Ast.Typ.TBool,
+                  Ast.Value.Constant (Ast.Constant.Boolean false),
+                  None,
+                  None,
+                  None )))
+          (List.last results)
+  in
   let interpreter_regression_suite =
     "interpreter_regression_suite"
-    >::: [ "test_intlist_map" >:: test_intlist_map ]
+    >::: [
+           "test_intlist_map" >:: test_intlist_map;
+           "test_arr_equality" >:: test_arr_equality;
+           "test_ref_equality" >:: test_ref_equality;
+         ]
   in
   let suite =
     Printf.sprintf "interpreter_suite(%s)" (Interpreter.show interpreter)
