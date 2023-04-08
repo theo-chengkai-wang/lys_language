@@ -185,6 +185,19 @@ let rec substitute_aux expr_subst_for id_str current_depth current_meta_depth
       >>= fun p ->
       substitute_aux expr_subst_for id_str current_depth current_meta_depth e
       >>= fun e -> Ok (Ast.Expr.While (p, e))
+  | Ast.Expr.Array exprs ->
+      List.map exprs
+        ~f:
+          (substitute_aux expr_subst_for id_str current_depth current_meta_depth)
+      |> Or_error.combine_errors
+      >>= fun exprs -> Ok (Ast.Expr.Array exprs)
+  | Ast.Expr.ArrayAssign (e1, e2, e3) ->
+      substitute_aux expr_subst_for id_str current_depth current_meta_depth e1
+      >>= fun e1 ->
+      substitute_aux expr_subst_for id_str current_depth current_meta_depth e2
+      >>= fun e2 ->
+      substitute_aux expr_subst_for id_str current_depth current_meta_depth e3
+      >>= fun e3 -> Ok (Ast.Expr.ArrayAssign (e1, e2, e3))
 
 let substitute expr_subst_for id expr_subst_in =
   (*Assume that the id has De Bruijn index 0*)
@@ -353,6 +366,19 @@ let rec sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth
       >>= fun p ->
       sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth e
       >>= fun e -> Ok (Ast.Expr.While (p, e))
+  | Ast.Expr.Array exprs ->
+      List.map exprs
+        ~f:
+          (sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth)
+      |> Or_error.combine_errors
+      >>= fun exprs -> Ok (Ast.Expr.Array exprs)
+  | Ast.Expr.ArrayAssign (e1, e2, e3) ->
+      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth e1
+      >>= fun e1 ->
+      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth e2
+      >>= fun e2 ->
+      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth e3
+      >>= fun e3 -> Ok (Ast.Expr.ArrayAssign (e1, e2, e3))
 
 let sim_substitute_from_zipped_list expr_id_zipped expr_subst_in =
   sim_substitute_aux expr_id_zipped 0 0 expr_subst_in
@@ -556,6 +582,19 @@ let rec meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth
       >>= fun p ->
       meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth e
       >>= fun e -> Ok (Ast.Expr.While (p, e))
+  | Ast.Expr.Array exprs ->
+      List.map exprs
+        ~f:
+          (meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth)
+      |> Or_error.combine_errors
+      >>= fun exprs -> Ok (Ast.Expr.Array exprs)
+  | Ast.Expr.ArrayAssign (e1, e2, e3) ->
+      meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth e1
+      >>= fun e1 ->
+      meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth e2
+      >>= fun e2 ->
+      meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth e3
+      >>= fun e3 -> Ok (Ast.Expr.ArrayAssign (e1, e2, e3))
 
 let meta_substitute ctx expr meta_id expr_subst_in =
   let meta_id_str = Ast.MetaIdentifier.get_name meta_id in
