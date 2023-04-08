@@ -108,10 +108,9 @@ and type_inference_expression meta_ctx ctx type_ctx e =
       | Ast.Constant.Unit -> Ok Ast.Typ.TUnit
       | Ast.Constant.Character _ -> Ok Ast.Typ.TChar
       | Ast.Constant.String _ -> Ok Ast.Typ.TString
-      | Ast.Constant.Reference v_ref ->
-          (*Should never go here but let's allow this for debugging reasons*)
-          type_inference_expression meta_ctx ctx type_ctx
-            (Ast.Value.to_expr !v_ref))
+      | _ ->
+          error "TypeInferenceError: Can't type check a reference or an array constant" c
+            [%sexp_of: Ast.Constant.t])
   | Ast.Expr.UnaryOp (op, expr) -> (
       match op with
       | Ast.UnaryOperator.NEG ->

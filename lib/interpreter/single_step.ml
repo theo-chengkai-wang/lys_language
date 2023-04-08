@@ -138,13 +138,14 @@ let rec reduce ~top_level_context ~type_constr_context expr =
                        (Ast.Value.Constant (Ast.Constant.Boolean (not b))))
               | ( Ast.UnaryOperator.DEREF,
                   Ast.Value.Constant (Ast.Constant.Reference r) ) ->
+                  let open Ast.RefCell in
                   Ok (ReduceResult.ReducedToVal !r)
               | ( Ast.UnaryOperator.ARRAY_LEN,
                   Ast.Value.Constant (Ast.Constant.Array arr) ) ->
                   Ok
                     (ReduceResult.ReducedToVal
                        (Ast.Value.Constant
-                          (Ast.Constant.Integer (Array.length arr))))
+                          (Ast.Constant.Integer (Ast.ArrayCell.length arr))))
               | _, _ ->
                   error
                     "SingleStepReductionError: type mismatch at Unary \
@@ -287,13 +288,15 @@ let rec reduce ~top_level_context ~type_constr_context expr =
                       | ( Ast.BinaryOperator.ASSIGN,
                           Ast.Value.Constant (Ast.Constant.Reference r1),
                           v ) ->
+                          let open Ast.RefCell in
                           r1 := v;
                           Ok
                             (ReducedToVal (Ast.Value.Constant Ast.Constant.Unit))
                       | ( Ast.BinaryOperator.ARRAY_INDEX,
                           Ast.Value.Constant (Ast.Constant.Array arr),
                           Ast.Value.Constant (Ast.Constant.Integer index) ) ->
-                          Ok (ReducedToVal arr.(index))
+                          Ok (ReducedToVal (Ast.ArrayCell.get arr index))
+                          (*arr.(index)*)
                       | _, _, _ ->
                           error
                             "SingleStepReductionError: type mismatch at Binary \
@@ -735,7 +738,8 @@ let rec reduce ~top_level_context ~type_constr_context expr =
                 ~not_reduced:(fun v ->
                   Ok
                     (ReduceResult.ReducedToVal
-                       (Ast.Value.Constant (Ast.Constant.Reference (ref v)))))
+                       (Ast.Value.Constant
+                          (Ast.Constant.Reference (Ast.RefCell.ref v)))))
       | Ast.Expr.While (p, e) ->
           Ok
             (ReduceResult.ReducedToExpr
@@ -750,7 +754,8 @@ let rec reduce ~top_level_context ~type_constr_context expr =
             (* Not reduced in the first place *)
             Ok
               (ReduceResult.NotReduced
-                 (Ast.Value.Constant (Ast.Constant.Array (Array.of_list new_vs))))
+                 (Ast.Value.Constant
+                    (Ast.Constant.Array (Ast.ArrayCell.of_list new_vs))))
           else
             (* Check if all are values *)
             match convert_to_values new_es with
@@ -758,8 +763,8 @@ let rec reduce ~top_level_context ~type_constr_context expr =
             | Some vs ->
                 Ok
                   (ReduceResult.ReducedToVal
-                     (Ast.Value.Constant (Ast.Constant.Array (Array.of_list vs))))
-          )
+                     (Ast.Value.Constant
+                        (Ast.Constant.Array (Ast.ArrayCell.of_list vs)))))
       | Ast.Expr.ArrayAssign (arr, index, expr) ->
           (*TODO: Check that this works.*)
           (*Reduce array*)
@@ -788,12 +793,12 @@ let rec reduce ~top_level_context ~type_constr_context expr =
                                   (Ast.Constant.Integer index_i) ->
                                   if
                                     index_i < 0
-                                    || index_i > Array.length impl_arr
+                                    || index_i > Ast.ArrayCell.length impl_arr
                                   then
                                     Or_error.error
                                       "SingleStepReductionError: index out of \
                                        bounds [array_len, index]"
-                                      (Array.length impl_arr, index_i)
+                                      (Ast.ArrayCell.length impl_arr, index_i)
                                       [%sexp_of: int * int]
                                   else
                                     (*Reduce expr*)
@@ -809,7 +814,9 @@ let rec reduce ~top_level_context ~type_constr_context expr =
                                                       expr_e ))))
                                           ~not_reduced:(fun expr_v ->
                                             (*Set value in array and done.*)
-                                            impl_arr.(index_i) <- expr_v;
+                                            (* impl_arr.(index_i) <- expr_v; *)
+                                            Ast.ArrayCell.set impl_arr index_i
+                                              expr_v;
                                             Ok
                                               (ReduceResult.ReducedToVal
                                                  (Ast.Value.Constant

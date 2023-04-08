@@ -264,6 +264,64 @@ end = struct
   let of_past (id, t1) = (ObjIdentifier.of_past id, Typ.of_past t1)
 end
 
+and RefCell : sig
+  type t [@@deriving sexp, show, equal, compare]
+
+  val get_id : t -> int64
+  val of_value : Value.t -> t
+  val deref : t -> Value.t
+  val assign : t -> Value.t -> unit
+
+  (*Aliases*)
+  val ref : Value.t -> t
+  val ( ! ) : t -> Value.t
+  val ( := ) : t -> Value.t -> unit
+end = struct
+  type t = int64 * (Value.t ref[@compare.ignore] [@equal.ignore])
+  [@@deriving sexp, show, equal, compare]
+
+  let counter : int64 ref = ref Int64.zero
+  let get_id (id, _) = id
+
+  let of_value v =
+    let c = !counter in
+    counter := Int64.succ !counter;
+    (c, ref v)
+
+  let deref (_, r) = !r
+  let assign (_, r) v = r := v
+  let ref = of_value
+  let ( ! ) = deref
+  let ( := ) = assign
+end
+
+and ArrayCell : sig
+  type t [@@deriving sexp, show, equal, compare]
+
+  val get_id : t -> int64
+  val of_list : Value.t list -> t
+  val get : t -> int -> Value.t
+  val set : t -> int -> Value.t -> unit
+  val to_list : t -> Value.t list
+  val length : t -> int
+end = struct
+  type t = int64 * (Value.t array[@compare.ignore] [@equal.ignore])
+  [@@deriving sexp, show, equal, compare]
+
+  let counter : int64 ref = ref Int64.zero
+  let get_id (id, _) = id
+
+  let of_list vs =
+    let c = !counter in
+    counter := Int64.succ !counter;
+    (c, Array.of_list vs)
+
+  let get (_, arr) i = arr.(i)
+  let set (_, arr) i v = arr.(i) <- v
+  let to_list (_, arr) = Array.to_list arr
+  let length (_, arr) = Array.length arr
+end
+
 and Context : sig
   type t = IdentifierDefn.t list [@@deriving sexp, show, compare, equal]
 
@@ -364,8 +422,8 @@ and Constant : sig
     | Unit
     | Character of char
     | String of string
-    | Reference of Value.t ref
-    | Array of Value.t array
+    | Reference of RefCell.t
+    | Array of ArrayCell.t
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.Constant.t -> t
@@ -376,8 +434,8 @@ end = struct
     | Unit
     | Character of char
     | String of string
-    | Reference of Value.t ref
-    | Array of Value.t array
+    | Reference of RefCell.t
+    | Array of ArrayCell.t
   [@@deriving sexp, show, compare, equal]
 
   let of_past = function
@@ -1098,9 +1156,10 @@ end = struct
     (*Also, this function converts to an expression *completely*.*)
     | Constant (Constant.Reference r) ->
         (*Conversion to intensional representation*)
+        let open RefCell in
         Expr.Ref (to_expr_intensional !r)
     | Constant (Constant.Array arr) ->
-        Expr.Array (arr |> Array.map ~f:to_expr_intensional |> Array.to_list)
+        Expr.Array (arr |> ArrayCell.to_list |> List.map ~f:to_expr_intensional)
     | Constant c -> Expr.Constant c
     | Prod xs -> Expr.Prod (List.map xs ~f:to_expr_intensional)
     | Left (t1, t2, v) -> Expr.Left (t1, t2, to_expr_intensional v)
