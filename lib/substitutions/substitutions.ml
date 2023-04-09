@@ -710,8 +710,7 @@ and type_type_substitute (t_sub_for : Ast.Typ.t) (v : Ast.TypeVar.t)
         Ast.TypeVar.shift ~depth:current_depth ~offset:(-1) id
         |> fun or_error ->
         Or_error.tag_arg or_error
-          "TypeSubstitutionError: Error in shifting (substituting for id, on type \
-           id2) (id, id2)"
+          "TypeSubstitutionError: Error in shifting (doing [t/'a]'b) ('a, 'b)"
           (v, id) [%sexp_of: Ast.TypeVar.t * Ast.TypeVar.t]
         >>= fun id -> Ok (Ast.Typ.TVar id)
       else
@@ -719,7 +718,7 @@ and type_type_substitute (t_sub_for : Ast.Typ.t) (v : Ast.TypeVar.t)
         |> Ast.Typ.shift_indices ~type_depth:0 ~type_offset:current_depth
         >>= fun t_sub_for -> Ok t_sub_for
   | Ast.Typ.TForall (id, typ) ->
-      type_type_substitute ~current_depth:(current_depth + 1) t_sub_for id typ
+      type_type_substitute ~current_depth:(current_depth + 1) t_sub_for v typ
       >>= fun typ -> Ok (Ast.Typ.TForall (id, typ))
 
 and type_term_substitute t_sub_for v ?(current_depth = 0) expr_subst_in =
