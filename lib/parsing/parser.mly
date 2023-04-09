@@ -113,8 +113,9 @@ let list_to_tuple l =
 %left typ_SUM typ_PRODUCT
 
 // Functions
-%right "->"
 %right DOT_BIG_LAMBDA
+%nonassoc forall
+%right "->"
 
 // Bracket
 %nonassoc LEFT_BRACKET RIGHT_BRACKET
@@ -293,7 +294,7 @@ typ:
     | CHAR_typ {Typ.TChar}
     | t = typ ARR_typ {Typ.TArray (t)}
     | t = typ REF {Typ.TRef(t)}
-    | FORALL v = TYPEVAR DOT t=typ {Typ.TForall (v, t)} // Polymorphic stuff
+    | FORALL v = TYPEVAR DOT t=typ %prec DOT_BIG_LAMBDA {Typ.TForall (v, t)} // Polymorphic stuff
     | v = TYPEVAR {Typ.TVar (v)}
     | STRING_typ {Typ.TString}
     | i = ID {Typ.TIdentifier (i)}
