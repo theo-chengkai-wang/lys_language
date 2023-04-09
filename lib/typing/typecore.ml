@@ -1,5 +1,6 @@
 open Core
 open Lys_ast
+open Lys_substitutions
 open Lys_utils
 (*
   TODO: Maybe instead of doing 1 pass, do 2 passes to distinguish Past->Ast and Type checking AST.   
@@ -65,6 +66,49 @@ let includes_function_type
     ?(types_visited : TypSet.t = TypSet.empty) typ =
   let res, _ = includes_function_type_aux ~type_ctx ~types_visited typ in
   res
+
+let rec is_valid_type type_ctx typevar_ctx typ =
+  let open Or_error.Monad_infix in
+  match typ with
+  | Ast.Typ.TUnit -> Ok ()
+  | Ast.Typ.TBool -> Ok ()
+  | Ast.Typ.TInt -> Ok ()
+  | Ast.Typ.TChar -> Ok ()
+  | Ast.Typ.TString -> Ok ()
+  | Ast.Typ.TIdentifier id -> (
+      match
+        Typing_context.TypeConstrTypingContext.get_constr_from_typ type_ctx id
+      with
+      | None ->
+          Or_error.error
+            "TypeValidityCheckError: The given type is invalid: unbound type \
+             identifier (tid)"
+            id [%sexp_of: Ast.TypeIdentifier.t]
+      | Some _ -> Ok ())
+  | Ast.Typ.TFun (t1, t2) | Ast.Typ.TSum (t1, t2) ->
+      is_valid_type type_ctx typevar_ctx t1 >>= fun () ->
+      is_valid_type type_ctx typevar_ctx t2
+  | Ast.Typ.TBox (ctx, t) ->
+      List.map ~f:(fun (_, typ) -> is_valid_type type_ctx typevar_ctx typ) ctx
+      |> Or_error.combine_errors_unit
+      >>= fun () -> is_valid_type type_ctx typevar_ctx t
+  | Ast.Typ.TProd tlist ->
+      List.map tlist ~f:(fun t -> is_valid_type type_ctx typevar_ctx t)
+      |> Or_error.combine_errors_unit
+  | Ast.Typ.TRef t | Ast.Typ.TArray t -> is_valid_type type_ctx typevar_ctx t
+  | Ast.Typ.TVar id ->
+      if Typing_context.PolyTypeVarContext.is_in_context typevar_ctx id then
+        Ok ()
+      else
+        error
+          "TypeValidityCheckError: The given type is invalid: unbound type var \
+           '[v]"
+          id [%sexp_of: Ast.TypeVar.t]
+  | Ast.Typ.TForall (id, typ) ->
+      let new_typevar_context =
+        Typing_context.PolyTypeVarContext.add_mapping typevar_ctx id ()
+      in
+      is_valid_type type_ctx new_typevar_context typ
 
 let rec type_check_expression meta_ctx ctx
     (type_ctx : Typing_context.TypeConstrTypingContext.t)
@@ -783,7 +827,20 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx e =
       in
       type_inference_expression meta_ctx ctx type_ctx new_typevar_ctx e
       >>= fun typ -> Ok (Ast.Typ.TForall (v, typ))
-  | Ast.Expr.TypeApply (e, t) -> Or_error.unimplemented "Not implemented"
+  | Ast.Expr.TypeApply (e, t) -> (
+      type_inference_expression meta_ctx ctx type_ctx typevar_ctx e
+      >>= fun e_typ ->
+      (* Check is right type (big lambda) *)
+      match e_typ with
+      | Ast.Typ.TForall (v, typ) ->
+        (* Check type validity *)
+          is_valid_type type_ctx typevar_ctx t >>= fun () ->
+          Substitutions.type_type_substitute e_typ v typ
+      | _ ->
+          error
+            "TypeInferenceError: At type apply, the left operand must be a big \
+             lambda term. (left, right)"
+            (e, t) [%sexp_of: Ast.Expr.t * Ast.Typ.t])
 
 let process_top_level meta_ctx ctx type_ctx typevar_ctx = function
   | Ast.TopLevelDefn.Definition (iddef, e) ->
