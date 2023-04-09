@@ -12,6 +12,8 @@ module MetaTypingContext :
   Context.NaiveContext.S with type Key.t = Ast.MetaIdentifier.t =
   Context.NaiveContext.Make (Ast.MetaIdentifier)
 
+module PolyTypeVarContext = Set.Make (Ast.TypeVar)
+
 module type TypeConstrTypingContext_type = sig
   type constr_record = {
     constr : Ast.Constructor.t;

@@ -8,6 +8,8 @@ module ObjTypingContext :
 module MetaTypingContext :
   Context.NaiveContext.S with type Key.t = Ast.MetaIdentifier.t
 
+module PolyTypeVarContext : Set.S with type Elt.t = Ast.TypeVar.t [@@deriving show]
+
 module type TypeConstrTypingContext_type = sig
   type constr_record = {
     constr : Ast.Constructor.t;
@@ -16,7 +18,7 @@ module type TypeConstrTypingContext_type = sig
   }
   [@@deriving sexp, show, equal, compare]
 
-  type t  [@@deriving sexp, equal, compare]
+  type t [@@deriving sexp, equal, compare]
 
   val add_typ_from_decl :
     t ->
@@ -28,7 +30,7 @@ module type TypeConstrTypingContext_type = sig
   (*None means type doesn't exist, Some [] means type exists but is empty*)
 
   val get_typ_from_constr : t -> Ast.Constructor.t -> constr_record option
-  val empty: t
+  val empty : t
 end
 
-module TypeConstrTypingContext: TypeConstrTypingContext_type
+module TypeConstrTypingContext : TypeConstrTypingContext_type

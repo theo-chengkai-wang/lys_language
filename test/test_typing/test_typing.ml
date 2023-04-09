@@ -20,9 +20,10 @@ let type_infer
     ?obj_context:(obj_ctx =
         Typing_context.ObjTypingContext.create_empty_context ())
     ?type_context:(typ_ctx = Typing_context.TypeConstrTypingContext.empty)
+    ?typevar_context:(typevar_ctx = Typing_context.PolyTypeVarContext.empty)
     lexbuf =
   lexbuf |> parse_expr_exn |> Ast.Expr.of_past
-  |> Lys_typing.Typecore.type_inference_expression meta_ctx obj_ctx typ_ctx
+  |> Lys_typing.Typecore.type_inference_expression meta_ctx obj_ctx typ_ctx typevar_ctx
 
 let type_infer_from_str
     ?meta_context:(meta_ctx =
