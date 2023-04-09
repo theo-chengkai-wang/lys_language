@@ -15,6 +15,11 @@ module rec Identifier : Identifier_type = struct
   type t = string [@@deriving sexp, show, equal, compare]
 end
 
+and TypeVar : Identifier_type = struct
+  (*Convention is that 'a gets translated to Identifier "a"*)
+  type t = string [@@deriving sexp, show, equal, compare]
+end
+
 and Typ : sig
   type t =
     | TUnit
@@ -29,6 +34,8 @@ and Typ : sig
     | TSum of t * t
     | TRef of t
     | TArray of t
+    | TVar of TypeVar.t
+    | TForall of TypeVar.t * t
   [@@deriving sexp, show, equal, compare]
 end = struct
   type t =
@@ -44,6 +51,8 @@ end = struct
     | TSum of t * t
     | TRef of t
     | TArray of t
+    | TVar of TypeVar.t
+    | TForall of TypeVar.t * t
   [@@deriving sexp, show, equal, compare]
 end
 
@@ -104,9 +113,11 @@ end = struct
 end
 
 and UnaryOperator : sig
-  type t = NEG | NOT | DEREF | ARRAY_LEN [@@deriving sexp, show, equal, compare]
+  type t = NEG | NOT | DEREF | ARRAY_LEN
+  [@@deriving sexp, show, equal, compare]
 end = struct
-  type t = NEG | NOT | DEREF | ARRAY_LEN [@@deriving sexp, show, equal, compare]
+  type t = NEG | NOT | DEREF | ARRAY_LEN
+  [@@deriving sexp, show, equal, compare]
 end
 
 and Constant : sig
@@ -189,6 +200,8 @@ and Expr : sig
     | While of t * t (*while p do e done*)
     | Array of t list (* list representation because just syntactic *)
     | ArrayAssign of t * t * t (* arr.(i) <- e *)
+    | BigLambda of TypeVar.t * t
+    | TypeApply of t * Typ.t
   (*|arr|*) [@@deriving sexp, show, equal, compare]
 end = struct
   type t =
@@ -224,6 +237,8 @@ end = struct
     | While of t * t (*while p do e done*)
     | Array of t list (* list representation because just syntactic *)
     | ArrayAssign of t * t * t (* arr.(i) <- e  ternary operator *)
+    | BigLambda of TypeVar.t * t
+    | TypeApply of t * Typ.t
   [@@deriving sexp, show, equal, compare]
 end
 

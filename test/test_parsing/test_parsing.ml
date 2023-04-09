@@ -773,6 +773,46 @@ let test_seq_precedence _ =
     ]
     (parse_program (Lexing.from_string "let a: int = 0 in b; c;;"))
 
+let test_type_app _ =
+  assert_equal
+    [
+      Past.TopLevelDefn.Expression
+        (Past.Expr.Application
+           ( Past.Expr.Application
+               ( Past.Expr.TypeApply
+                   ( Past.Expr.Application
+                       ( Past.Expr.TypeApply
+                           (Past.Expr.Identifier "f", Past.Typ.TInt),
+                         Past.Expr.Identifier "s" ),
+                     Past.Typ.TInt ),
+                 Past.Expr.Identifier "d" ),
+             Past.Expr.Identifier "e" ));
+    ]
+    (parse_program (Lexing.from_string "f [int] s [int] d e;;"))
+
+let test_big_lambda _ =
+  assert_equal
+    [
+      Past.TopLevelDefn.Expression
+        (Past.Expr.BigLambda ("a", Past.Expr.Identifier "e"));
+      Past.TopLevelDefn.Expression
+        (Past.Expr.BigLambda
+           ( "a",
+             Past.Expr.BinaryOp
+               ( Past.BinaryOperator.ARRAY_INDEX,
+                 Past.Expr.Identifier "b",
+                 Past.Expr.Identifier "i" ) ));
+      Past.TopLevelDefn.Expression
+        (Past.Expr.BigLambda
+           ( "a",
+             Past.Expr.LetBinding
+               ( ("a", Past.Typ.TVar "a"),
+                 Past.Expr.Constant (Past.Constant.Integer 0),
+                 Past.Expr.Identifier "b" ) ));
+    ]
+    (parse_program
+       (Lexing.from_string "'a. e;;\n  'a. b.(i);;\n  'a. let a: 'a = 0 in b;;"))
+
 (* Name the test cases and group them together *)
 let suite =
   "parsing_suite"
@@ -834,4 +874,6 @@ let suite =
          "test_seq" >:: test_seq;
          "test_while" >:: test_while;
          "test_seq_precedence" >:: test_seq_precedence;
+         "test_type_app" >:: test_type_app;
+         "test_big_lambda" >:: test_big_lambda;
        ]

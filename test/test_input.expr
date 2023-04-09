@@ -1,2 +1,5 @@
-let a: int array = [|1, 2, 3|];;
-lift[int array] a;;
+'a. e;;
+'a. b.(i);;
+'a. let a: 'a = 0 in b;;
+
+f [int] s [int] d e;;

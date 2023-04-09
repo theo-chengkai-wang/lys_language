@@ -29,6 +29,7 @@ let list_to_tuple l =
 %token <string> CONSTR
 %token <char> CHAR
 %token <string> STRING
+%token <string> TYPEVAR
 %token BOOL_typ
 %token INT_typ
 %token STRING_typ
@@ -36,6 +37,9 @@ let list_to_tuple l =
 %token AND_WORD "and"
 %token CHAR_typ
 %token UNIT_typ
+%token FORALL
+%token EXISTS
+%token QUOTE
 %token ARR_OPEN
 %token ARR_CLOSE
 %token EOL ";;"
@@ -110,6 +114,7 @@ let list_to_tuple l =
 
 // Functions
 %right "->"
+%right DOT_BIG_LAMBDA
 
 // Bracket
 %nonassoc LEFT_BRACKET RIGHT_BRACKET
@@ -208,11 +213,12 @@ simple_expr:
     | c = constant {Expr.Constant c}
     | i = identifier {Expr.Identifier i}
     | LEFT_PAREN e1=expr COMMA l = separated_nonempty_list(COMMA, expr) RIGHT_PAREN {Expr.Prod (e1::l)} (*Hack to ensure at least 2 things*)
-    | e = simple_expr; LEFT_BRACKET i = INT RIGHT_BRACKET {Expr.Nth(e, i)}
 
 application_expr:
+    | s = application_expr; "[" t = typ "]" {Expr.TypeApply (s, t)}
+    | s = simple_expr; "[" t = typ "]" {Expr.TypeApply (s, t)}
     | s1 = application_expr; s2 = simple_expr  {Expr.Application (s1, s2)}
-    | s1 = simple_expr; s2 = simple_expr {Expr.Application (s1, s2)};
+    | s1 = simple_expr; s2 = simple_expr {Expr.Application (s1, s2)}
 
 pattern: 
     | UNDERSCORE {Pattern.Wildcard}
@@ -248,6 +254,8 @@ expr:
     (* bigger constructs *)
     | IF e1 = expr THEN e2 = expr ELSE e3=expr {Expr.IfThenElse (e1, e2, e3)}
     | FUN arg = id_typ_declaration "->" e = expr {Expr.Lambda (arg, e)}
+    | v = TYPEVAR DOT e = expr %prec DOT_BIG_LAMBDA {Expr.BigLambda (v, e)}
+    | e = simple_expr; LEFT_BRACKET i = INT RIGHT_BRACKET {Expr.Nth(e, i)}
     // | FST e = expr {Expr.Fst e}
     // | SND e = expr {Expr.Snd e}
     | INL LEFT_BRACKET t1=typ COMMA t2=typ RIGHT_BRACKET e = expr {Expr.Left (t1, t2, e)}
@@ -285,6 +293,8 @@ typ:
     | CHAR_typ {Typ.TChar}
     | t = typ ARR_typ {Typ.TArray (t)}
     | t = typ REF {Typ.TRef(t)}
+    | FORALL v = TYPEVAR DOT t=typ {Typ.TForall (v, t)} // Polymorphic stuff
+    | v = TYPEVAR {Typ.TVar (v)}
     | STRING_typ {Typ.TString}
     | i = ID {Typ.TIdentifier (i)}
     | t1 = typ; "->"; t2 = typ /*%prec typ_FUNCTION_ARROW*/ {Typ.TFun (t1, t2)}

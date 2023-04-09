@@ -7,7 +7,7 @@ module Constructor : sig
 end
 
 module rec Identifier : Identifier_type
-
+and TypeVar: Identifier_type
 and Typ : sig
   type t =
     | TUnit
@@ -22,6 +22,8 @@ and Typ : sig
     | TSum of t * t
     | TRef of t
     | TArray of t
+    | TVar of TypeVar.t
+    | TForall of TypeVar.t * t
   [@@deriving sexp, show, equal, compare]
 end
 
@@ -116,6 +118,8 @@ and Expr : sig
     | While of t * t (*while p do e done*)
     | Array of t list (* list representation because just syntactic *)
     | ArrayAssign of t * t * t (* arr.(i) <- e *)
+    | BigLambda of TypeVar.t * t
+    | TypeApply of t * Typ.t
   [@@deriving sexp, show, equal, compare]
 end
 
