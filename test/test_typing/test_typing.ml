@@ -20,7 +20,7 @@ let type_infer
     ?obj_context:(obj_ctx =
         Typing_context.ObjTypingContext.create_empty_context ())
     ?type_context:(typ_ctx = Typing_context.TypeConstrTypingContext.empty)
-    ?typevar_context:(typevar_ctx = Typing_context.PolyTypeVarContext.empty)
+    ?typevar_context:(typevar_ctx = Typing_context.PolyTypeVarContext.create_empty_context ())
     lexbuf =
   lexbuf |> parse_expr_exn |> Ast.Expr.of_past
   |> Lys_typing.Typecore.type_inference_expression meta_ctx obj_ctx typ_ctx typevar_ctx

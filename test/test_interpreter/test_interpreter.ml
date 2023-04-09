@@ -7,8 +7,8 @@ open Core
 
 let exec_program interpreter str =
   str |> Lexing.from_string |> Lex_and_parse.parse_program
-  |> Ast.Program.of_past |> Typecore.type_check_program |> ok_exn
-  |> Ast.TypedProgram.populate_index |> ok_exn
+  |> Ast.Program.of_past |> Ast.Program.populate_index |> ok_exn
+  |> Typecore.type_check_program |> ok_exn
   |> Interpreter.evaluate_program ~interpreter
   |> Or_error.ok
 

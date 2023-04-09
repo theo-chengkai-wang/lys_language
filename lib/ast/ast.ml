@@ -1433,6 +1433,7 @@ and TopLevelDefn : sig
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.TopLevelDefn.t -> t
+  val populate_index : t -> t Or_error.t
 end = struct
   (*Note added type for defns (not useful for now but useful for when adding inference) and exprs for the REPL*)
   type t =
@@ -1467,16 +1468,90 @@ end = struct
                         (Constructor.of_past constr, Some (Typ.of_past typ))) ))
         in
         DatatypeDecl new_id_contr_typ_list_list
+
+  let populate_index =
+    let open Or_error.Monad_infix in
+    function
+    | Definition ((id, typ2), expr) ->
+        Typ.populate_index typ2 ~current_type_ast_level:0
+          ~current_typevars:String_map.empty
+        >>= fun typ2 ->
+        Expr.populate_index expr ~current_ast_level:0
+          ~current_identifiers:String_map.empty ~current_meta_ast_level:0
+          ~current_meta_identifiers:String_map.empty ~current_type_ast_level:0
+          ~current_typevars:String_map.empty
+        >>= fun expr -> Ok (Definition ((id, typ2), expr))
+    | RecursiveDefinition ((id, typ2), expr) ->
+        Typ.populate_index typ2 ~current_type_ast_level:0
+          ~current_typevars:String_map.empty
+        >>= fun typ2 ->
+        let new_current_identifiers =
+          String_map.set String_map.empty
+            ~key:(ObjIdentifier.get_name id)
+            ~data:0
+        in
+        Expr.populate_index expr ~current_ast_level:1
+          ~current_identifiers:new_current_identifiers ~current_meta_ast_level:0
+          ~current_meta_identifiers:String_map.empty ~current_type_ast_level:0
+          ~current_typevars:String_map.empty
+        >>= fun expr -> Ok (RecursiveDefinition ((id, typ2), expr))
+    | MutualRecursiveDefinition typ_iddef_e_list ->
+        let new_current_identifiers =
+          List.fold typ_iddef_e_list ~init:String_map.empty
+            ~f:(fun acc ((id, _), _) ->
+              String_map.set acc ~key:(ObjIdentifier.get_name id) ~data:0)
+        in
+        List.map typ_iddef_e_list ~f:(fun (iddef, e) ->
+            IdentifierDefn.populate_index iddef ~current_type_ast_level:0
+              ~current_typevars:String_map.empty
+            >>= fun iddef ->
+            Expr.populate_index e ~current_ast_level:1
+              ~current_identifiers:new_current_identifiers
+              ~current_meta_ast_level:0
+              ~current_meta_identifiers:String_map.empty
+              ~current_type_ast_level:0 ~current_typevars:String_map.empty
+            >>= fun e -> Ok (iddef, e))
+        |> Or_error.combine_errors
+        >>= fun typ_iddef_e_list ->
+        Ok (MutualRecursiveDefinition typ_iddef_e_list)
+    | Expression expr ->
+        Expr.populate_index expr ~current_ast_level:0
+          ~current_identifiers:String_map.empty ~current_meta_ast_level:0
+          ~current_meta_identifiers:String_map.empty ~current_type_ast_level:0
+          ~current_typevars:String_map.empty
+        >>= fun expr -> Ok (Expression expr)
+    | Directive d -> Ok (Directive d)
+    | DatatypeDecl id_constr_typ_list_list ->
+        (*
+            TODO: Modify here for Polymorphic ADT
+        *)
+        List.map id_constr_typ_list_list ~f:(fun (typ_id, constr_typ_list) ->
+            List.map constr_typ_list ~f:(fun (constr, typ_opt) ->
+                match typ_opt with
+                | None -> Ok (constr, None)
+                | Some typ ->
+                    Typ.populate_index typ ~current_type_ast_level:0
+                      ~current_typevars:String_map.empty
+                    >>= fun typ -> Ok (constr, Some typ))
+            |> Or_error.combine_errors
+            >>= fun constr_typ_list -> Ok (typ_id, constr_typ_list))
+        |> Or_error.combine_errors
+        >>= fun id_constr_typ_list_list ->
+        Ok (DatatypeDecl id_constr_typ_list_list)
 end
 
 and Program : sig
   type t = TopLevelDefn.t list [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.Program.t -> t
+  val populate_index : t -> t Or_error.t
 end = struct
   type t = TopLevelDefn.t list [@@deriving sexp, show, compare, equal]
 
   let of_past progs = List.map progs ~f:TopLevelDefn.of_past
+
+  let populate_index program =
+    List.map program ~f:TopLevelDefn.populate_index |> Or_error.combine_errors
 end
 
 module TypedTopLevelDefn : sig
@@ -1490,7 +1565,6 @@ module TypedTopLevelDefn : sig
         (TypeIdentifier.t * (Constructor.t * Typ.t option) list) list
   [@@deriving sexp, show, compare, equal]
 
-  val populate_index : t -> t Or_error.t
   val convert_from_untyped_without_typecheck : TopLevelDefn.t -> t
 end = struct
   (*Note added type for defns (not useful for now but useful for when adding inference) and exprs for the REPL*)
@@ -1503,52 +1577,6 @@ end = struct
     | DatatypeDecl of
         (TypeIdentifier.t * (Constructor.t * Typ.t option) list) list
   [@@deriving sexp, show, compare, equal]
-
-  let populate_index typed_defn =
-    let open Or_error.Monad_infix in
-    match typed_defn with
-    | Definition (typ, (id, typ2), expr) ->
-        Expr.populate_index expr ~current_ast_level:0
-          ~current_identifiers:String_map.empty ~current_meta_ast_level:0
-          ~current_meta_identifiers:String_map.empty ~current_type_ast_level:0
-          ~current_typevars:String_map.empty
-        >>= fun expr -> Ok (Definition (typ, (id, typ2), expr))
-    | RecursiveDefinition (typ, (id, typ2), expr) ->
-        let new_current_identifiers =
-          String_map.set String_map.empty
-            ~key:(ObjIdentifier.get_name id)
-            ~data:0
-        in
-        Expr.populate_index expr ~current_ast_level:1
-          ~current_identifiers:new_current_identifiers ~current_meta_ast_level:0
-          ~current_meta_identifiers:String_map.empty ~current_type_ast_level:0
-          ~current_typevars:String_map.empty
-        >>= fun expr -> Ok (RecursiveDefinition (typ, (id, typ2), expr))
-    | MutualRecursiveDefinition typ_iddef_e_list ->
-        let new_current_identifiers =
-          List.fold typ_iddef_e_list ~init:String_map.empty
-            ~f:(fun acc (_, (id, _), _) ->
-              String_map.set acc ~key:(ObjIdentifier.get_name id) ~data:0)
-        in
-        List.map typ_iddef_e_list ~f:(fun (typ, iddef, e) ->
-            Expr.populate_index e ~current_ast_level:1
-              ~current_identifiers:new_current_identifiers
-              ~current_meta_ast_level:0
-              ~current_meta_identifiers:String_map.empty
-              ~current_type_ast_level:0 ~current_typevars:String_map.empty
-            >>= fun e -> Ok (typ, iddef, e))
-        |> Or_error.combine_errors
-        >>= fun typ_iddef_e_list ->
-        Ok (MutualRecursiveDefinition typ_iddef_e_list)
-    | Expression (typ, expr) ->
-        Expr.populate_index expr ~current_ast_level:0
-          ~current_identifiers:String_map.empty ~current_meta_ast_level:0
-          ~current_meta_identifiers:String_map.empty ~current_type_ast_level:0
-          ~current_typevars:String_map.empty
-        >>= fun expr -> Ok (Expression (typ, expr))
-    | Directive d -> Ok (Directive d)
-    | DatatypeDecl id_constr_typ_list_list ->
-        Ok (DatatypeDecl id_constr_typ_list_list)
 
   let convert_from_untyped_without_typecheck = function
     | TopLevelDefn.Definition (iddef, e) -> Definition (Typ.TUnit, iddef, e)
@@ -1566,14 +1594,9 @@ end
 module TypedProgram : sig
   type t = TypedTopLevelDefn.t list [@@deriving sexp, show, compare, equal]
 
-  val populate_index : t -> t Or_error.t
   val convert_from_untyped_without_typecheck : Program.t -> t
 end = struct
   type t = TypedTopLevelDefn.t list [@@deriving sexp, show, compare, equal]
-
-  let populate_index program =
-    List.map program ~f:TypedTopLevelDefn.populate_index
-    |> Or_error.combine_errors
 
   let convert_from_untyped_without_typecheck =
     List.map ~f:TypedTopLevelDefn.convert_from_untyped_without_typecheck

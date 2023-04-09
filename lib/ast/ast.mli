@@ -85,8 +85,13 @@ and Typ : sig
 
   val of_past : Past.Typ.t -> t
 
-  val populate_index: t -> current_type_ast_level:int -> current_typevars:int String_map.t -> t Or_error.t
-  val shift_indices: t -> type_depth:int -> type_offset:int -> t Or_error.t
+  val populate_index :
+    t ->
+    current_type_ast_level:int ->
+    current_typevars:int String_map.t ->
+    t Or_error.t
+
+  val shift_indices : t -> type_depth:int -> type_offset:int -> t Or_error.t
 end
 
 and IdentifierDefn : sig
@@ -285,12 +290,14 @@ and TopLevelDefn : sig
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.TopLevelDefn.t -> t
+  val populate_index : t -> t Or_error.t
 end
 
 and Program : sig
   type t = TopLevelDefn.t list [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.Program.t -> t
+  val populate_index : t -> t Or_error.t
 end
 
 module TypedTopLevelDefn : sig
@@ -304,13 +311,11 @@ module TypedTopLevelDefn : sig
         (TypeIdentifier.t * (Constructor.t * Typ.t option) list) list
   [@@deriving sexp, show, compare, equal]
 
-  val populate_index : t -> t Or_error.t
   val convert_from_untyped_without_typecheck : TopLevelDefn.t -> t
 end
 
 module TypedProgram : sig
   type t = TypedTopLevelDefn.t list [@@deriving sexp, show, compare, equal]
 
-  val populate_index : t -> t Or_error.t
   val convert_from_untyped_without_typecheck : Program.t -> t
 end

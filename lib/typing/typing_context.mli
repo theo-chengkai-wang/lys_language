@@ -2,13 +2,33 @@ open Lys_utils
 open Lys_ast
 open Core
 
-module ObjTypingContext :
-  Context.NaiveContext.S with type Key.t = Ast.ObjIdentifier.t
+module type TypingContext_type = sig
+  module Key : sig
+    type t [@@deriving sexp, equal, compare]
+
+    val get_name : t -> string
+    val of_string : string -> t
+  end
+
+  type 'b t [@@deriving sexp, equal, compare]
+
+  val create_empty_context : unit -> 'b t
+  val add_mapping : 'b t -> Key.t -> 'b -> 'b t
+
+  (* val delete_last_mapping : 'b t -> Key.t -> 'b t *)
+  val get_last_mapping : 'b t -> Key.t -> 'b option
+  val add_all_mappings : 'b t -> (Key.t * 'b) list -> 'b t
+  val is_in_context : 'b t -> Key.t -> bool
+  val get_all_mappings_as_list : 'b t -> (Key.t * 'b) list
+end
+
+module ObjTypingContext : TypingContext_type with module Key = Ast.ObjIdentifier
 
 module MetaTypingContext :
-  Context.NaiveContext.S with type Key.t = Ast.MetaIdentifier.t
+  TypingContext_type with module Key = Ast.MetaIdentifier
 
-module PolyTypeVarContext : Set.S with type Elt.t = Ast.TypeVar.t [@@deriving show]
+module PolyTypeVarContext : TypingContext_type with module Key = Ast.TypeVar
+[@@deriving show]
 
 module type TypeConstrTypingContext_type = sig
   type constr_record = {

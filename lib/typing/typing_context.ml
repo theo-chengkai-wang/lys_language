@@ -2,17 +2,62 @@ open Lys_utils
 open Lys_ast
 open Core
 
+module type TypingContext_type = sig
+  module Key : sig
+    type t [@@deriving sexp, equal, compare]
+
+    val get_name : t -> string
+    val of_string : string -> t
+  end
+
+  type 'b t [@@deriving sexp, equal, compare]
+
+  val create_empty_context : unit -> 'b t
+  val add_mapping : 'b t -> Key.t -> 'b -> 'b t
+
+  (* val delete_last_mapping : 'b t -> Key.t -> 'b t *)
+  val get_last_mapping : 'b t -> Key.t -> 'b option
+  val add_all_mappings : 'b t -> (Key.t * 'b) list -> 'b t
+  val is_in_context : 'b t -> Key.t -> bool
+  val get_all_mappings_as_list : 'b t -> (Key.t * 'b) list
+end
+
+module TypingContext : functor (IdModule : Ast.Identifier_type) ->
+  TypingContext_type with module Key = IdModule =
+functor
+  (IdModule : Ast.Identifier_type)
+  ->
+  struct
+    module Inner = Context.NaiveContext.Make (String)
+    module Key = IdModule
+
+    type 'b t = 'b Inner.t [@@deriving sexp, equal, compare]
+
+    let create_empty_context = Inner.create_empty_context
+    let add_mapping ctx v = v |> Key.get_name |> Inner.add_mapping ctx
+    let get_last_mapping ctx v = v |> Key.get_name |> Inner.get_last_mapping ctx
+
+    let add_all_mappings ctx kvs =
+      List.map ~f:(fun (k, v) -> (Key.get_name k, v)) kvs
+      |> Inner.add_all_mappings ctx
+
+    let is_in_context ctx k = k |> Key.get_name |> Inner.is_in_context ctx
+
+    let get_all_mappings_as_list ctx =
+      Inner.get_all_mappings_as_list ctx
+      |> List.map ~f:(fun (k, v) -> (Key.of_string k, v))
+  end
+
 module ObjTypingContext :
-  Context.NaiveContext.S
-  (* NOTE: WE MODEL SNOC-LISTS VIA ITS REVERSE: CONS LISTS *)
-    with type Key.t = Ast.ObjIdentifier.t =
-  Context.NaiveContext.Make (Ast.ObjIdentifier)
+  TypingContext_type with module Key = Ast.ObjIdentifier =
+  TypingContext (Ast.ObjIdentifier)
 
 module MetaTypingContext :
-  Context.NaiveContext.S with type Key.t = Ast.MetaIdentifier.t =
-  Context.NaiveContext.Make (Ast.MetaIdentifier)
+  TypingContext_type with module Key = Ast.MetaIdentifier =
+  TypingContext (Ast.MetaIdentifier)
 
-module PolyTypeVarContext = Set.Make (Ast.TypeVar)
+module PolyTypeVarContext : TypingContext_type with module Key = Ast.TypeVar =
+  TypingContext (Ast.TypeVar)
 
 module type TypeConstrTypingContext_type = sig
   type constr_record = {

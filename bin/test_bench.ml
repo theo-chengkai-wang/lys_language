@@ -27,8 +27,9 @@ let loop str () =
   let current_meta_identifiers =
     String_map.empty |> String_map.set ~key:"u" ~data:0
   in
-  Ast.Expr.populate_index e ~current_ast_level:1 ~current_meta_ast_level:1
-    ~current_identifiers ~current_meta_identifiers
+  let current_typevars = String_map.empty in 
+  Ast.Expr.populate_index e ~current_ast_level:1 ~current_meta_ast_level:1 ~current_type_ast_level:1
+    ~current_identifiers ~current_meta_identifiers  ~current_typevars
   |> ok_exn
   |> (*Do something*)
   (fun expr ->
@@ -71,8 +72,8 @@ let loop3 str () =
   str |> Lexing.from_string |> Lex_and_parse.parse_program
   (* |> Ast.Program.of_past
      |> Ast.TypedProgram.convert_from_untyped_without_typecheck *)
-  |> Ast.Program.of_past
-  |> Typecore.type_check_program |> ok_exn |> Ast.TypedProgram.populate_index |> ok_exn |> Interpreter.evaluate_program
+  |> Ast.Program.of_past |> Ast.Program.populate_index |> ok_exn 
+  |> Typecore.type_check_program |> ok_exn |> Interpreter.evaluate_program
   |> ok_exn
   |> fun l ->
   let _ =

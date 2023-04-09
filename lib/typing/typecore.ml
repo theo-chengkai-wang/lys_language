@@ -73,7 +73,7 @@ let includes_function_type
   |  *)
 
 let rec type_check_expression meta_ctx ctx
-    (type_ctx : Typing_context.TypeConstrTypingContext.t) (typevar_ctx: Typing_context.PolyTypeVarContext.t) expr typ =
+    (type_ctx : Typing_context.TypeConstrTypingContext.t) (typevar_ctx: unit Typing_context.PolyTypeVarContext.t) expr typ =
   let open Or_error.Monad_infix in
   type_inference_expression meta_ctx ctx type_ctx typevar_ctx expr >>= fun inferred_typ ->
   if Ast.Typ.equal typ inferred_typ then Ok ()
@@ -739,7 +739,7 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx e =
              [arr]"
             arr [%sexp_of: Ast.Expr.t])
   | Ast.Expr.BigLambda (v, e) -> 
-    let new_typevar_ctx = Typing_context.PolyTypeVarContext.add typevar_ctx v in
+    let new_typevar_ctx = Typing_context.PolyTypeVarContext.add_mapping typevar_ctx v () in
     type_inference_expression meta_ctx ctx type_ctx new_typevar_ctx e
     >>= fun typ -> Ok (Ast.Typ.TForall (v, typ))
   | Ast.Expr.TypeApply (e, t) -> Or_error.unimplemented "Not implemented"
@@ -834,5 +834,5 @@ let type_check_program
     ?(meta_ctx = Typing_context.MetaTypingContext.create_empty_context ())
     ?(obj_ctx = Typing_context.ObjTypingContext.create_empty_context ())
     ?(type_ctx = Typing_context.TypeConstrTypingContext.empty)
-    ?(typevar_ctx = Typing_context.PolyTypeVarContext.empty) program =
+    ?(typevar_ctx = Typing_context.PolyTypeVarContext.create_empty_context ()) program =
   program |> type_check_program_aux meta_ctx obj_ctx type_ctx typevar_ctx

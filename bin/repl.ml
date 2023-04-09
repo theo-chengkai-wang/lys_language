@@ -6,13 +6,14 @@ open Lys_interpreter
 
 let loop interpreter lexbuf context typ_context () =
   lexbuf |> Lex_and_parse.parse_program |> Ast.Program.of_past
+  |> Ast.Program.populate_index |> ok_exn
   |> Typecore.type_check_program
        ~obj_ctx:
          (Interpreter_common.EvaluationContext.to_typing_obj_context context)
        ~type_ctx:
          (Interpreter_common.TypeConstrContext.to_typeconstrtypingcontext
             typ_context)
-  |> ok_exn |> Ast.TypedProgram.populate_index |> ok_exn
+  |> ok_exn
   |> Interpreter.evaluate_top_level_defns ~top_level_context:context
        ~type_constr_context:typ_context ~interpreter
   |> ok_exn
