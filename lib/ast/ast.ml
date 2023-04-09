@@ -961,6 +961,14 @@ end = struct
         populate_index ~current_ast_level ~current_identifiers
           ~current_meta_ast_level ~current_meta_identifiers e3
         >>= fun e3 -> Ok (ArrayAssign (e1, e2, e3))
+    | BigLambda (v, e) ->
+        populate_index ~current_ast_level ~current_identifiers
+          ~current_meta_ast_level ~current_meta_identifiers e
+        >>= fun e -> Ok (BigLambda (v, e))
+    | TypeApply (e, t) ->
+        populate_index ~current_ast_level ~current_identifiers
+          ~current_meta_ast_level ~current_meta_identifiers e
+        >>= fun e -> Ok (TypeApply (e, t))
 
   let rec shift_indices expr ~obj_depth ~meta_depth ~obj_offset ~meta_offset =
     let open Or_error.Monad_infix in
@@ -1121,6 +1129,12 @@ end = struct
         >>= fun e2 ->
         shift_indices ~obj_depth ~meta_depth ~obj_offset ~meta_offset e3
         >>= fun e3 -> Ok (ArrayAssign (e1, e2, e3))
+    | BigLambda (v, e) ->
+        shift_indices ~obj_depth ~meta_depth ~obj_offset ~meta_offset e
+        >>= fun e -> Ok (BigLambda (v, e))
+    | TypeApply (e, t) ->
+        shift_indices ~obj_depth ~meta_depth ~obj_offset ~meta_offset e
+        >>= fun e -> Ok (TypeApply (e, t))
 
   let rec to_val expr =
     let open Option.Monad_infix in

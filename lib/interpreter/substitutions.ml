@@ -198,6 +198,12 @@ let rec substitute_aux expr_subst_for id_str current_depth current_meta_depth
       >>= fun e2 ->
       substitute_aux expr_subst_for id_str current_depth current_meta_depth e3
       >>= fun e3 -> Ok (Ast.Expr.ArrayAssign (e1, e2, e3))
+  | Ast.Expr.BigLambda (v, e) ->
+      substitute_aux expr_subst_for id_str current_depth current_meta_depth e
+      >>= fun e -> Ok (Ast.Expr.BigLambda (v, e))
+  | Ast.Expr.TypeApply (e, t) ->
+      substitute_aux expr_subst_for id_str current_depth current_meta_depth e
+      >>= fun e -> Ok (Ast.Expr.TypeApply (e, t))
 
 let substitute expr_subst_for id expr_subst_in =
   (*Assume that the id has De Bruijn index 0*)
@@ -379,6 +385,12 @@ let rec sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth
       >>= fun e2 ->
       sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth e3
       >>= fun e3 -> Ok (Ast.Expr.ArrayAssign (e1, e2, e3))
+  | Ast.Expr.BigLambda (v, e) ->
+      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth e
+      >>= fun e -> Ok (Ast.Expr.BigLambda (v, e))
+  | Ast.Expr.TypeApply (e, t) ->
+      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth e
+      >>= fun e -> Ok (Ast.Expr.TypeApply (e, t))
 
 let sim_substitute_from_zipped_list expr_id_zipped expr_subst_in =
   sim_substitute_aux expr_id_zipped 0 0 expr_subst_in
@@ -595,6 +607,12 @@ let rec meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth
       >>= fun e2 ->
       meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth e3
       >>= fun e3 -> Ok (Ast.Expr.ArrayAssign (e1, e2, e3))
+  | Ast.Expr.BigLambda (v, e) ->
+      meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth e
+      >>= fun e -> Ok (Ast.Expr.BigLambda (v, e))
+  | Ast.Expr.TypeApply (e, t) ->
+      meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth e
+      >>= fun e -> Ok (Ast.Expr.TypeApply (e, t))
 
 let meta_substitute ctx expr meta_id expr_subst_in =
   let meta_id_str = Ast.MetaIdentifier.get_name meta_id in
