@@ -239,8 +239,10 @@ let rec sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth
         | Some (expr, id) ->
             (* In the expr to sub in, shift obj DB indices by the current_depth to preserve consistency of the DB indices.
                Shift meta-indices too*)
-            Ast.Expr.shift_indices expr ~obj_depth:0 ~meta_depth:0
+            Ast.Expr.shift_indices expr ~obj_depth:0 ~meta_depth:0 ~type_depth:0
               ~obj_offset:current_depth ~meta_offset:current_meta_depth
+              ~type_offset:0
+            (* TODO: Correct here to have proper type substitution *)
             |> Or_error.tag
                  ~tag:
                    (Printf.sprintf
@@ -556,7 +558,8 @@ let rec meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth
       else
         expr_subst_for
         |> Ast.Expr.shift_indices ~obj_depth:0 ~meta_depth:0 ~obj_offset:0
-             ~meta_offset:current_meta_depth
+             ~type_depth:0 ~meta_offset:current_meta_depth ~type_offset:0
+        (* TODO: Correct here to have proper type sub *)
         >>= fun expr_subst_for ->
         sim_substitute exprs_in_subs ctx expr_subst_for |> fun or_error ->
         Or_error.tag_arg or_error
