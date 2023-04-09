@@ -116,16 +116,20 @@ let rec is_valid_type_for_recursion typ =
   | Ast.Typ.TForall (_, typ) -> is_valid_type_for_recursion typ
   | _ ->
       error
-        "RecursionTypeCheckError: let rec declaration must have function type or be \
-         of polymorphic function type."
+        "RecursionTypeCheckError: let rec declaration must have function type \
+         or be of polymorphic function type."
         () [%sexp_of: unit]
 
 let rec type_check_expression meta_ctx ctx
     (type_ctx : Typing_context.TypeConstrTypingContext.t)
     (typevar_ctx : unit Typing_context.PolyTypeVarContext.t) expr typ =
   let open Or_error.Monad_infix in
+  is_valid_type type_ctx typevar_ctx typ >>= fun () ->
   type_inference_expression meta_ctx ctx type_ctx typevar_ctx expr
   >>= fun inferred_typ ->
+  (*
+     TODO: Dodgy equality check here: what if the DB indices aren't the same?
+  *)
   if Ast.Typ.equal typ inferred_typ then Ok ()
   else
     error
@@ -427,8 +431,7 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx e =
       type_inference_expression meta_ctx new_ctx type_ctx typevar_ctx e2
   | Ast.Expr.LetRec ((id, typ), e, e2) ->
       (*We only allow types which are of the form A->B*)
-      is_valid_type_for_recursion typ
-      >>= fun () ->
+      is_valid_type_for_recursion typ >>= fun () ->
       let new_ctx = Typing_context.ObjTypingContext.add_mapping ctx id typ in
       Or_error.tag
         (type_check_expression meta_ctx new_ctx type_ctx typevar_ctx e typ)
@@ -444,8 +447,7 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx e =
       (* First get the types *)
       let iddefs, _ = List.unzip idddef_e_list in
       (* Then check the types are functional *)
-      List.map iddefs ~f:(fun (_, typ) ->
-        is_valid_type_for_recursion typ)
+      List.map iddefs ~f:(fun (_, typ) -> is_valid_type_for_recursion typ)
       |> Or_error.combine_errors_unit
       >>= fun () ->
       let new_ctx =
@@ -834,7 +836,7 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx e =
       | Ast.Typ.TForall (v, typ) ->
           (* Check type validity *)
           is_valid_type type_ctx typevar_ctx t >>= fun () ->
-          Substitutions.type_type_substitute e_typ v typ
+          Substitutions.type_type_substitute t v typ
       | _ ->
           error
             "TypeInferenceError: At type apply, the left operand must be a big \
@@ -856,8 +858,7 @@ let process_top_level meta_ctx ctx type_ctx typevar_ctx = function
   | Ast.TopLevelDefn.RecursiveDefinition (iddef, e) ->
       let open Or_error.Monad_infix in
       type_check_expression meta_ctx ctx type_ctx typevar_ctx
-        (Ast.Expr.LetRec
-           (iddef, e, Ast.Expr.Constant Ast.Constant.Unit))
+        (Ast.Expr.LetRec (iddef, e, Ast.Expr.Constant Ast.Constant.Unit))
         Ast.Typ.TUnit
       >>= fun _ ->
       (*Note that here we type check in the new context (self reference)*)

@@ -813,6 +813,27 @@ let test_big_lambda _ =
     (parse_program
        (Lexing.from_string "'a. e;;\n  'a. b.(i);;\n  'a. let a: 'a = 0 in b;;"))
 
+let test_big_lambda_precedance_wrt_func _ =
+  assert_equal
+    [
+      Past.TopLevelDefn.Definition
+        ( ( "f",
+            Past.Typ.TForall
+              ( "b",
+                Past.Typ.TForall
+                  ("a", Past.Typ.TFun (Past.Typ.TVar "a", Past.Typ.TInt)) ) ),
+          Past.Expr.BigLambda
+            ( "b",
+              Past.Expr.BigLambda
+                ( "a",
+                  Past.Expr.Lambda
+                    ( ("x", Past.Typ.TVar "a"),
+                      Past.Expr.Constant (Past.Constant.Integer 1) ) ) ) );
+    ]
+    (parse_program
+       (Lexing.from_string
+          "let f: forall 'b. forall 'a. 'a -> int = 'b.('a. fun (x: 'a) -> 1);;"))
+
 (* Name the test cases and group them together *)
 let suite =
   "parsing_suite"
@@ -876,4 +897,6 @@ let suite =
          "test_seq_precedence" >:: test_seq_precedence;
          "test_type_app" >:: test_type_app;
          "test_big_lambda" >:: test_big_lambda;
+         "test_big_lambda_precedance_wrt_func"
+         >:: test_big_lambda_precedance_wrt_func;
        ]

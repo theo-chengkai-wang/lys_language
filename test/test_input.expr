@@ -1,5 +1,13 @@
-'a. e;;
-'a. b.(i);;
-'a. let a: 'a = 0 in b;;
+('a. fun (x: 'a) -> 1) [int];;
 
-f [int] s [int] d e;;
+
+(*Shadowing test*)
+let f: forall 'a. forall 'a. 'a -> int = 'a.('a. fun (x: 'a) -> 1);;
+
+'a. 'b. f ['b] ['a];;
+
+let b_f: forall 'a. [x:'a]'a = 'a.box (x: 'a |- x);;
+
+let b_f_fail: 'a -> 'a = fun (x: 'a) -> x;;
+
+u with ();;
