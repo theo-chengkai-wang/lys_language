@@ -1,13 +1,25 @@
-('a. fun (x: 'a) -> 1) [int];;
+('a. fun (x: 'a) -> 1);;
 
 
 (*Shadowing test*)
-let f: forall 'a. forall 'a. 'a -> int = 'a.('a. fun (x: 'a) -> 1);;
+let f: forall 'b. forall 'a. 'b -> 'a -> int = 'b.('a. fun (y: 'b) -> fun (x: 'a) -> 1);;
 
-'a. 'b. f ['b] ['a];;
+let x: forall 'a. forall 'b. 'a -> 'b -> int = 'a. 'b. f ['a] ['b];;
+
+
+(*
 
 let b_f: forall 'a. [x:'a]'a = 'a.box (x: 'a |- x);;
 
+let rec b_f_2: forall 'a. 'a -> forall 'b. 'b -> int = 'a. fun (x: 'a) -> 'b. fun (y: 'b) -> 1;;
+
+b_f_2 [int] 1 [string] "123";;
+
+datatype some_type = None | Some of (forall 'a. 'a -> 'a);;
+
+Some ('a. fun (x: 'a) -> x);;
+
+
 let b_f_fail: 'a -> 'a = fun (x: 'a) -> x;;
 
-u with ();;
+u with ();; *)

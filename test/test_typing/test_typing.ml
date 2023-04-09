@@ -20,10 +20,16 @@ let type_infer
     ?obj_context:(obj_ctx =
         Typing_context.ObjTypingContext.create_empty_context ())
     ?type_context:(typ_ctx = Typing_context.TypeConstrTypingContext.empty)
-    ?typevar_context:(typevar_ctx = Typing_context.PolyTypeVarContext.create_empty_context ())
-    lexbuf =
+    ?typevar_context:(typevar_ctx =
+        Typing_context.PolyTypeVarContext.create_empty_context ()) lexbuf =
+  let open Or_error.Monad_infix in
   lexbuf |> parse_expr_exn |> Ast.Expr.of_past
-  |> Lys_typing.Typecore.type_inference_expression meta_ctx obj_ctx typ_ctx typevar_ctx
+  |> Ast.Expr.populate_index ~current_ast_level:0
+       ~current_identifiers:Lys_utils.String_map.empty ~current_meta_ast_level:0
+       ~current_meta_identifiers:Lys_utils.String_map.empty
+       ~current_type_ast_level:0 ~current_typevars:Lys_utils.String_map.empty
+  >>= Lys_typing.Typecore.type_inference_expression meta_ctx obj_ctx typ_ctx
+        typevar_ctx
 
 let type_infer_from_str
     ?meta_context:(meta_ctx =
@@ -42,7 +48,7 @@ let type_check_program_from_str
     ?type_context:(type_ctx = Typing_context.TypeConstrTypingContext.empty) str
     =
   str |> Lexing.from_string |> Lys_parsing.Lex_and_parse.parse_program
-  |> Lys_ast.Ast.Program.of_past
+  |> Lys_ast.Ast.Program.of_past |> Lys_ast.Ast.Program.populate_index |> ok_exn
   |> Lys_typing.Typecore.type_check_program ~meta_ctx ~obj_ctx ~type_ctx
   |> Or_error.ok
 
@@ -418,6 +424,53 @@ let imperative_suite =
          "test_array_index" >:: test_array_index;
        ]
 
+let test_poly_forall _ =
+  assert_equal
+    (Some
+       (Ast.Typ.TForall
+          ( Ast.TypeVar.of_string "a",
+            Ast.Typ.TFun
+              ( Ast.Typ.TVar
+                  (Ast.TypeVar.of_string_and_index "a"
+                     (Ast.DeBruijnIndex.create 0 |> ok_exn)),
+                Ast.Typ.TInt ) )))
+    (Or_error.ok (type_infer_from_str "('a. fun (x: 'a) -> 1);;"))
+
+let test_poly_rec_apply _ =
+  let program =
+    "let rec b_f_2: forall 'a. 'a -> forall 'b. 'b -> int = 'a. fun (x: 'a) -> \
+     'b. fun (y: 'b) -> 1;; \n\
+    \    let x: int = b_f_2 [int] 1 [string] \"123\";;"
+  in
+  assert_bool "Type check has failed"
+    (Option.is_some (type_check_program_from_str program))
+
+let test_datatype_with_poly_node _ =
+  let program =
+    "datatype some_type = None | Some of (forall 'a. 'a -> 'a);;\n\
+    \    let x: some_type = Some ('a. fun (x: 'a) -> x);;"
+  in
+  assert_bool "Type check has failed"
+    (Option.is_some (type_check_program_from_str program))
+
+let test_reg_type_substitution _ =
+  let program =
+    "let f: forall 'b. forall 'a. 'b -> 'a -> int = 'b.('a. fun (y: 'b) -> fun \
+     (x: 'a) -> 1);;\n\
+     let x: forall 'a. forall 'b. 'a -> 'b -> int = 'a. 'b. f ['a] ['b];;"
+  in
+  assert_bool "Type check has failed"
+    (Option.is_some (type_check_program_from_str program))
+
+let polymorphism_suite =
+  "polymorphism_suite"
+  >::: [
+         "test_poly_forall" >:: test_poly_forall;
+         "test_poly_rec_apply" >:: test_poly_rec_apply;
+         "test_datatype_with_poly_node" >:: test_datatype_with_poly_node;
+         "test_reg_type_substitution" >:: test_reg_type_substitution;
+       ]
+
 let suite =
   "typing_suite"
   >::: [
@@ -426,4 +479,5 @@ let suite =
          example_programs_suite;
          adt_suite;
          imperative_suite;
+         polymorphism_suite;
        ]
