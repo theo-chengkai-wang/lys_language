@@ -103,6 +103,14 @@ module type MetaIdentifier_type = sig
   val shift : t -> depth:int -> offset:int -> t Or_error.t
 end
 
+module type TypeVar_type = sig
+  type t [@@deriving sexp, show, compare, equal]
+
+  val of_string : string -> t
+  val of_past : Past.TypeVar.t -> t
+  val get_name : t -> string
+end
+
 module rec ObjIdentifier : ObjIdentifier_type = struct
   (*Here we identify the binder via the De Bruijn index.*)
   type t = string * DeBruijnIndex.t [@@deriving sexp, show, compare, equal]
@@ -206,6 +214,14 @@ and Constructor : Constructor_type = struct
   let of_past (past_constructor : Past.Constructor.t) = past_constructor
 end
 
+and TypeVar : TypeVar_type = struct
+  type t = string [@@deriving sexp, show, compare, equal]
+
+  let get_name v = v
+  let of_string v = v
+  let of_past (v : Past.TypeVar.t) = v
+end
+
 and Typ : sig
   type t =
     | TUnit
@@ -220,6 +236,8 @@ and Typ : sig
     | TSum of t * t
     | TRef of t
     | TArray of t
+    | TVar of TypeVar.t
+    | TForall of TypeVar.t * t
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.Typ.t -> t
@@ -237,6 +255,8 @@ end = struct
     | TSum of t * t
     | TRef of t
     | TArray of t
+    | TVar of TypeVar.t
+    | TForall of TypeVar.t * t
   [@@deriving sexp, show, compare, equal]
 
   let rec of_past = function
@@ -252,6 +272,8 @@ end = struct
     | Past.Typ.TSum (t1, t2) -> TSum (of_past t1, of_past t2)
     | Past.Typ.TRef t -> TRef (of_past t)
     | Past.Typ.TArray t -> TArray (of_past t)
+    | Past.Typ.TForall (v, t) -> TForall (TypeVar.of_past v, of_past t)
+    | Past.Typ.TVar v -> TVar (TypeVar.of_past v)
 end
 
 and IdentifierDefn : sig
@@ -534,6 +556,8 @@ and Expr : sig
     | While of t * t
     | Array of t list
     | ArrayAssign of t * t * t
+    | BigLambda of TypeVar.t * t
+    | TypeApply of t * Typ.t
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.Expr.t -> t
@@ -589,6 +613,8 @@ end = struct
     | While of t * t
     | Array of t list
     | ArrayAssign of t * t * t
+    | BigLambda of TypeVar.t * t
+    | TypeApply of t * Typ.t
   [@@deriving sexp, show, compare, equal]
 
   (* TODO: let rec pp_to_code expr = () *)
@@ -649,6 +675,8 @@ end = struct
     | Past.Expr.Array es -> Array (List.map es ~f:of_past)
     | Past.Expr.ArrayAssign (arr, index, assign_to) ->
         ArrayAssign (of_past arr, of_past index, of_past assign_to)
+    | Past.Expr.BigLambda (v, e) -> BigLambda (TypeVar.of_past v, of_past e)
+    | Past.Expr.TypeApply (e, t) -> TypeApply (of_past e, Typ.of_past t)
 
   let rec populate_index expr ~current_ast_level ~current_identifiers
       ~current_meta_ast_level ~current_meta_identifiers =

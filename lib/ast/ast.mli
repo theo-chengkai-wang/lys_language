@@ -69,10 +69,19 @@ module type MetaIdentifier_type = sig
   val shift : t -> depth:int -> offset:int -> t Or_error.t
 end
 
+module type TypeVar_type = sig
+  type t [@@deriving sexp, show, compare, equal]
+
+  val of_string : string -> t
+  val of_past : Past.TypeVar.t -> t
+  val get_name : t -> string
+end
+
 module rec ObjIdentifier : ObjIdentifier_type
 and MetaIdentifier : MetaIdentifier_type
 and TypeIdentifier : TypeIdentifier_type
 and Constructor : Constructor_type
+and TypeVar : TypeVar_type
 
 and Typ : sig
   type t =
@@ -88,6 +97,8 @@ and Typ : sig
     | TSum of t * t
     | TRef of t
     | TArray of t
+    | TVar of TypeVar.t
+    | TForall of TypeVar.t * t
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.Typ.t -> t
@@ -227,6 +238,8 @@ and Expr : sig
     | While of t * t
     | Array of t list
     | ArrayAssign of t * t * t
+    | BigLambda of TypeVar.t * t
+    | TypeApply of t * Typ.t
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.Expr.t -> t
