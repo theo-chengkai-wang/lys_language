@@ -214,7 +214,7 @@ let substitute expr_subst_for id expr_subst_in =
     expr_subst_in
 
 let rec sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth
-    expr_subst_in =
+    current_type_depth expr_subst_in =
   (*Assume that all the ids have De Bruijn index 0*)
   let open Or_error.Monad_infix in
   match expr_subst_in with
@@ -241,7 +241,7 @@ let rec sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth
                Shift meta-indices too*)
             Ast.Expr.shift_indices expr ~obj_depth:0 ~meta_depth:0 ~type_depth:0
               ~obj_offset:current_depth ~meta_offset:current_meta_depth
-              ~type_offset:0
+              ~type_offset:current_type_depth
             (* TODO: Correct here to have proper type substitution *)
             |> Or_error.tag
                  ~tag:
@@ -251,17 +251,21 @@ let rec sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth
                       (Ast.Expr.show expr) id))
   | Ast.Expr.Constant c -> Ok (Ast.Expr.Constant c)
   | Ast.Expr.UnaryOp (op, expr) ->
-      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth expr
+      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth
+        current_type_depth expr
       >>= fun expr -> Ok (Ast.Expr.UnaryOp (op, expr))
   | Ast.Expr.BinaryOp (op, expr, expr2) ->
-      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth expr
+      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth
+        current_type_depth expr
       >>= fun expr ->
-      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth expr2
+      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth
+        current_type_depth expr2
       >>= fun expr2 -> Ok (Ast.Expr.BinaryOp (op, expr, expr2))
   | Ast.Expr.Prod exprs ->
       List.map exprs
         ~f:
-          (sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth)
+          (sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth
+             current_type_depth)
       |> Or_error.combine_errors
       >>= fun exprs -> Ok (Ast.Expr.Prod exprs)
   (* | Ast.Expr.Fst expr ->
@@ -271,131 +275,156 @@ let rec sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth
          sim_substitute_aux zipped_exprs_ids current_depth expr >>= fun expr ->
          Ok (Ast.Expr.Snd expr) *)
   | Ast.Expr.Nth (expr, i) ->
-      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth expr
+      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth
+        current_type_depth expr
       >>= fun expr -> Ok (Ast.Expr.Nth (expr, i))
   | Ast.Expr.Left (t1, t2, expr) ->
-      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth expr
+      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth
+        current_type_depth expr
       >>= fun expr -> Ok (Ast.Expr.Left (t1, t2, expr))
   | Ast.Expr.Right (t1, t2, expr) ->
-      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth expr
+      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth
+        current_type_depth expr
       >>= fun expr -> Ok (Ast.Expr.Right (t1, t2, expr))
   | Ast.Expr.Case (e, iddef1, e1, iddef2, e2) ->
-      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth e
+      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth
+        current_type_depth e
       >>= fun e ->
       sim_substitute_aux zipped_exprs_ids (current_depth + 1) current_meta_depth
-        e1
+        current_type_depth e1
       >>= fun e1 ->
       sim_substitute_aux zipped_exprs_ids (current_depth + 1) current_meta_depth
-        e2
+        current_type_depth e2
       >>= fun e2 -> Ok (Ast.Expr.Case (e, iddef1, e1, iddef2, e2))
   | Ast.Expr.Lambda (iddef, e) ->
       sim_substitute_aux zipped_exprs_ids (current_depth + 1) current_meta_depth
-        e
+        current_type_depth e
       >>= fun e -> Ok (Ast.Expr.Lambda (iddef, e))
   | Ast.Expr.Application (e1, e2) ->
-      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth e1
+      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth
+        current_type_depth e1
       >>= fun e1 ->
-      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth e2
+      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth
+        current_type_depth e2
       >>= fun e2 -> Ok (Ast.Expr.Application (e1, e2))
   | Ast.Expr.IfThenElse (b, e1, e2) ->
-      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth b
+      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth
+        current_type_depth b
       >>= fun b ->
-      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth e1
+      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth
+        current_type_depth e1
       >>= fun e1 ->
-      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth e2
+      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth
+        current_type_depth e2
       >>= fun e2 -> Ok (Ast.Expr.IfThenElse (b, e1, e2))
   | Ast.Expr.LetBinding (iddef, e, e2) ->
-      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth e
+      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth
+        current_type_depth e
       >>= fun e ->
       sim_substitute_aux zipped_exprs_ids (current_depth + 1) current_meta_depth
-        e2
+        current_type_depth e2
       >>= fun e2 -> Ok (Ast.Expr.LetBinding (iddef, e, e2))
   | Ast.Expr.LetRec (iddef, e, e2) ->
       sim_substitute_aux zipped_exprs_ids (current_depth + 1) current_meta_depth
-        e
+        current_type_depth e
       >>= fun e ->
       sim_substitute_aux zipped_exprs_ids (current_depth + 1) current_meta_depth
-        e2
+        current_type_depth e2
       >>= fun e2 -> Ok (Ast.Expr.LetRec (iddef, e, e2))
   | Ast.Expr.LetRecMutual (iddef_e_list, e2) ->
       List.map iddef_e_list ~f:(fun (iddef, e) ->
           sim_substitute_aux zipped_exprs_ids (current_depth + 1)
-            current_meta_depth e
+            current_meta_depth current_type_depth e
           >>= fun e -> Ok (iddef, e))
       |> Or_error.combine_errors
       >>= fun iddef_e_list ->
       sim_substitute_aux zipped_exprs_ids (current_depth + 1) current_meta_depth
-        e2
+        current_type_depth e2
       >>= fun e2 -> Ok (Ast.Expr.LetRecMutual (iddef_e_list, e2))
   | Ast.Expr.Box (ctx, e) -> Ok (Ast.Expr.Box (ctx, e))
   | Ast.Expr.LetBox (metaid, e, e2) ->
-      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth e
+      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth
+        current_type_depth e
       >>= fun e ->
       sim_substitute_aux zipped_exprs_ids current_depth (current_meta_depth + 1)
-        e2
+        current_type_depth e2
       >>= fun e2 -> Ok (Ast.Expr.LetBox (metaid, e, e2))
   | Ast.Expr.Closure (metaid, exprs) ->
       exprs
       |> List.map
            ~f:
              (sim_substitute_aux zipped_exprs_ids current_depth
-                current_meta_depth)
+                current_meta_depth current_type_depth)
       |> Or_error.combine_errors
       >>= fun exprs -> Ok (Ast.Expr.Closure (metaid, exprs))
   | Ast.Expr.Constr (tid, e_opt) -> (
       match e_opt with
       | None -> Ok (Ast.Expr.Constr (tid, e_opt))
       | Some e ->
-          sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth e
+          sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth
+            current_type_depth e
           >>= fun e -> Ok (Ast.Expr.Constr (tid, Some e)))
   | Ast.Expr.Match (e, pattn_expr_list) ->
-      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth e
+      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth
+        current_type_depth e
       >>= fun e ->
       List.map pattn_expr_list ~f:(fun (pattn, expr) ->
           let binders = Ast.Pattern.get_binders pattn in
           let new_depth =
             if List.is_empty binders then current_depth else current_depth + 1
           in
-          sim_substitute_aux zipped_exprs_ids new_depth current_meta_depth expr
+          sim_substitute_aux zipped_exprs_ids new_depth current_meta_depth
+            current_type_depth expr
           >>= fun expr -> Ok (pattn, expr))
       |> Or_error.combine_errors
       >>= fun pattn_expr_list -> Ok (Ast.Expr.Match (e, pattn_expr_list))
   | Ast.Expr.Lift (typ, expr) ->
-      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth expr
+      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth
+        current_type_depth expr
       >>= fun expr -> Ok (Ast.Expr.Lift (typ, expr))
   | Ast.Expr.EValue v ->
       Ast.Value.to_expr v
       |> sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth
+           current_type_depth
   | Ast.Expr.Ref e ->
-      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth e
+      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth
+        current_type_depth e
       >>= fun e -> Ok (Ast.Expr.Ref e)
   | Ast.Expr.While (p, e) ->
-      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth p
+      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth
+        current_type_depth p
       >>= fun p ->
-      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth e
+      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth
+        current_type_depth e
       >>= fun e -> Ok (Ast.Expr.While (p, e))
   | Ast.Expr.Array exprs ->
       List.map exprs
         ~f:
-          (sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth)
+          (sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth
+             current_type_depth)
       |> Or_error.combine_errors
       >>= fun exprs -> Ok (Ast.Expr.Array exprs)
   | Ast.Expr.ArrayAssign (e1, e2, e3) ->
-      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth e1
+      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth
+        current_type_depth e1
       >>= fun e1 ->
-      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth e2
+      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth
+        current_type_depth e2
       >>= fun e2 ->
-      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth e3
+      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth
+        current_type_depth e3
       >>= fun e3 -> Ok (Ast.Expr.ArrayAssign (e1, e2, e3))
   | Ast.Expr.BigLambda (v, e) ->
-      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth e
+      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth
+        (current_type_depth + 1) e
       >>= fun e -> Ok (Ast.Expr.BigLambda (v, e))
   | Ast.Expr.TypeApply (e, t) ->
-      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth e
+      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth
+        current_type_depth e
       >>= fun e -> Ok (Ast.Expr.TypeApply (e, t))
 
 let sim_substitute_from_zipped_list expr_id_zipped expr_subst_in =
-  sim_substitute_aux expr_id_zipped 0 0 expr_subst_in
+  sim_substitute_aux expr_id_zipped 0 0 0 expr_subst_in
 
 let sim_substitute exprs context expr_subst_in =
   let open Or_error.Monad_infix in
@@ -413,7 +442,7 @@ let sim_substitute exprs context expr_subst_in =
   | List.Or_unequal_lengths.Ok zipped ->
       Ok zipped >>= fun zipped ->
       (*Assume that all the ids have De Bruijn index 0*)
-      sim_substitute_aux zipped 0 0 expr_subst_in
+      sim_substitute_aux zipped 0 0 0 expr_subst_in
 
 let equal_meta_id_str_depth meta_id id_str de_bruijn_int =
   (*Checks whether the given object id corresponds to the id and the de bruijn index given*)
@@ -621,3 +650,216 @@ let meta_substitute ctx expr meta_id expr_subst_in =
   let meta_id_str = Ast.MetaIdentifier.get_name meta_id in
   let current_meta_depth = 0 in
   meta_substitute_aux ctx expr meta_id_str current_meta_depth expr_subst_in
+
+let equal_typevar_str_depth obj_id id_str de_bruijn_int =
+  (*Checks whether the given object id corresponds to the id and the de bruijn index given*)
+  de_bruijn_int |> Ast.DeBruijnIndex.create |> Or_error.ok
+  |> Option.value ~default:Ast.DeBruijnIndex.none
+  |> Ast.TypeVar.of_string_and_index id_str
+  |> Ast.TypeVar.equal obj_id
+
+let rec type_sub_iddef ~current_depth (t_sub_for : Ast.Typ.t)
+    (v : Ast.TypeVar.t) (id, t_sub_in) =
+  let open Or_error.Monad_infix in
+  type_type_substitute ~current_depth t_sub_for v t_sub_in >>= fun typ ->
+  Ok (id, typ)
+
+and type_type_substitute (t_sub_for : Ast.Typ.t) (v : Ast.TypeVar.t)
+    (t_sub_in : Ast.Typ.t) ~current_depth =
+  let open Or_error.Monad_infix in
+  (*[t1/v]t2*)
+  (*Maybe I'll still need De Bruijn Indices*)
+  match t_sub_in with
+  | Ast.Typ.TUnit -> Ok Ast.Typ.TUnit
+  | Ast.Typ.TBool -> Ok Ast.Typ.TBool
+  | Ast.Typ.TInt -> Ok Ast.Typ.TInt
+  | Ast.Typ.TChar -> Ok Ast.Typ.TChar
+  | Ast.Typ.TString -> Ok Ast.Typ.TString
+  | Ast.Typ.TIdentifier id ->
+      (*
+       TODO: This is to be changed for ADT polymorphism
+    *)
+      Ok (Ast.Typ.TIdentifier id)
+  | Ast.Typ.TFun (t1, t2) ->
+      type_type_substitute ~current_depth t_sub_for v t1 >>= fun t1 ->
+      type_type_substitute ~current_depth t_sub_for v t2 >>= fun t2 ->
+      Ok (Ast.Typ.TFun (t1, t2))
+  | Ast.Typ.TBox (ctx, t) ->
+      type_type_substitute ~current_depth t_sub_for v t >>= fun t ->
+      List.map ~f:(type_sub_iddef ~current_depth t_sub_for v) ctx
+      |> Or_error.combine_errors
+      >>= fun ctx -> Ok (Ast.Typ.TBox (ctx, t))
+  | Ast.Typ.TProd tlist ->
+      List.map ~f:(type_type_substitute ~current_depth t_sub_for v) tlist
+      |> Or_error.combine_errors
+      >>= fun tlist -> Ok (Ast.Typ.TProd tlist)
+  | Ast.Typ.TSum (t1, t2) ->
+      type_type_substitute ~current_depth t_sub_for v t1 >>= fun t1 ->
+      type_type_substitute ~current_depth t_sub_for v t2 >>= fun t2 ->
+      Ok (Ast.Typ.TSum (t1, t2))
+  | Ast.Typ.TRef t ->
+      type_type_substitute ~current_depth t_sub_for v t >>= fun t ->
+      Ok (Ast.Typ.TRef t)
+  | Ast.Typ.TArray t ->
+      type_type_substitute ~current_depth t_sub_for v t >>= fun t ->
+      Ok (Ast.Typ.TArray t)
+  | Ast.Typ.TVar id ->
+      (* Inspired from above substitutions *)
+      if not (equal_typevar_str_depth id (Ast.TypeVar.get_name v) current_depth)
+      then
+        Ast.TypeVar.shift ~depth:current_depth ~offset:(-1) id
+        |> fun or_error ->
+        Or_error.tag_arg or_error
+          "TypeSubstitution: Error in shifting (substituting for id, on type \
+           id2) (id, id2)"
+          (v, id) [%sexp_of: Ast.TypeVar.t * Ast.TypeVar.t]
+        >>= fun id -> Ok (Ast.Typ.TVar id)
+      else
+        t_sub_for
+        |> Ast.Typ.shift_indices ~type_depth:0 ~type_offset:current_depth
+        >>= fun t_sub_for -> Ok t_sub_for
+  | Ast.Typ.TForall (id, typ) ->
+      type_type_substitute ~current_depth:(current_depth + 1) t_sub_for id typ
+      >>= fun typ -> Ok (Ast.Typ.TForall (id, typ))
+
+and type_term_substitute t_sub_for v expr_subst_in ~current_depth =
+  let open Or_error.Monad_infix in
+  match expr_subst_in with
+  | Ast.Expr.Identifier oid -> Ok (Ast.Expr.Identifier oid)
+  | Ast.Expr.Constant c -> Ok (Ast.Expr.Constant c)
+  | Ast.Expr.UnaryOp (op, expr) ->
+      type_term_substitute t_sub_for v expr ~current_depth >>= fun expr ->
+      Ok (Ast.Expr.UnaryOp (op, expr))
+  | Ast.Expr.BinaryOp (op, expr, expr2) ->
+      type_term_substitute t_sub_for v expr ~current_depth >>= fun expr ->
+      type_term_substitute t_sub_for v expr2 ~current_depth >>= fun expr2 ->
+      Ok (Ast.Expr.BinaryOp (op, expr, expr2))
+  | Ast.Expr.Prod exprs ->
+      List.map exprs ~f:(type_term_substitute t_sub_for v ~current_depth)
+      |> Or_error.combine_errors
+      >>= fun exprs -> Ok (Ast.Expr.Prod exprs)
+  (* | Ast.Expr.Fst expr ->
+         meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth expr
+         >>= fun expr -> Ok (Ast.Expr.Fst expr)
+     | Ast.Expr.Snd expr ->
+         meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth expr
+         >>= fun expr -> Ok (Ast.Expr.Snd expr) *)
+  | Ast.Expr.Nth (expr, i) ->
+      type_term_substitute t_sub_for v ~current_depth expr >>= fun expr ->
+      Ok (Ast.Expr.Nth (expr, i))
+  | Ast.Expr.Left (t1, t2, expr) ->
+      type_type_substitute t_sub_for v ~current_depth t1 >>= fun t1 ->
+      type_type_substitute t_sub_for v ~current_depth t2 >>= fun t2 ->
+      type_term_substitute t_sub_for v ~current_depth expr >>= fun expr ->
+      Ok (Ast.Expr.Left (t1, t2, expr))
+  | Ast.Expr.Right (t1, t2, expr) ->
+      type_type_substitute t_sub_for v ~current_depth t1 >>= fun t1 ->
+      type_type_substitute t_sub_for v ~current_depth t2 >>= fun t2 ->
+      type_term_substitute t_sub_for v ~current_depth expr >>= fun expr ->
+      Ok (Ast.Expr.Right (t1, t2, expr))
+  | Ast.Expr.Case (e, iddef1, e1, iddef2, e2) ->
+      type_term_substitute t_sub_for v ~current_depth e >>= fun e ->
+      type_sub_iddef t_sub_for v iddef1 ~current_depth >>= fun iddef1 ->
+      type_term_substitute t_sub_for v ~current_depth e1 >>= fun e1 ->
+      type_sub_iddef t_sub_for v iddef2 ~current_depth >>= fun iddef2 ->
+      type_term_substitute t_sub_for v ~current_depth e2 >>= fun e2 ->
+      Ok (Ast.Expr.Case (e, iddef1, e1, iddef2, e2))
+  | Ast.Expr.Lambda (iddef, e) ->
+      type_sub_iddef t_sub_for v iddef ~current_depth >>= fun iddef ->
+      type_term_substitute t_sub_for v ~current_depth e >>= fun e ->
+      Ok (Ast.Expr.Lambda (iddef, e))
+  | Ast.Expr.Application (e1, e2) ->
+      type_term_substitute t_sub_for v ~current_depth e1 >>= fun e1 ->
+      type_term_substitute t_sub_for v ~current_depth e2 >>= fun e2 ->
+      Ok (Ast.Expr.Application (e1, e2))
+  | Ast.Expr.IfThenElse (b, e1, e2) ->
+      type_term_substitute t_sub_for v ~current_depth b >>= fun b ->
+      type_term_substitute t_sub_for v ~current_depth e1 >>= fun e1 ->
+      type_term_substitute t_sub_for v ~current_depth e2 >>= fun e2 ->
+      Ok (Ast.Expr.IfThenElse (b, e1, e2))
+  | Ast.Expr.LetBinding (iddef, e, e2) ->
+      type_sub_iddef t_sub_for v iddef ~current_depth >>= fun iddef ->
+      type_term_substitute t_sub_for v ~current_depth e >>= fun e ->
+      type_term_substitute t_sub_for v ~current_depth e2 >>= fun e2 ->
+      Ok (Ast.Expr.LetBinding (iddef, e, e2))
+  | Ast.Expr.LetRec (iddef, e, e2) ->
+      type_sub_iddef t_sub_for v iddef ~current_depth >>= fun iddef ->
+      type_term_substitute t_sub_for v ~current_depth e >>= fun e ->
+      type_term_substitute t_sub_for v ~current_depth e2 >>= fun e2 ->
+      Ok (Ast.Expr.LetRec (iddef, e, e2))
+  | Ast.Expr.LetRecMutual (iddef_e_list, e2) ->
+      List.map iddef_e_list ~f:(fun (iddef, e) ->
+          type_sub_iddef t_sub_for v iddef ~current_depth >>= fun iddef ->
+          type_term_substitute t_sub_for v ~current_depth e >>= fun e ->
+          Ok (iddef, e))
+      |> Or_error.combine_errors
+      >>= fun iddef_e_list ->
+      type_term_substitute t_sub_for v ~current_depth e2 >>= fun e2 ->
+      Ok (Ast.Expr.LetRecMutual (iddef_e_list, e2))
+  | Ast.Expr.Box (ctx2, e) ->
+      List.map ~f:(type_sub_iddef ~current_depth t_sub_for v) ctx2
+      |> Or_error.combine_errors
+      >>= fun ctx2 ->
+      type_term_substitute t_sub_for v ~current_depth e >>= fun e ->
+      Ok (Ast.Expr.Box (ctx2, e))
+  | Ast.Expr.LetBox (metaid, e, e2) ->
+      type_term_substitute t_sub_for v ~current_depth e
+      (*There was an error here. it's current_meta_depth without the +1 because u is non-binding in e*)
+      >>=
+      fun e ->
+      type_term_substitute t_sub_for v ~current_depth e2 >>= fun e2 ->
+      Ok (Ast.Expr.LetBox (metaid, e, e2))
+  | Ast.Expr.Closure (metaid, exprs) ->
+      exprs
+      |> List.map ~f:(type_term_substitute t_sub_for v ~current_depth)
+      |> Or_error.combine_errors
+      |> Or_error.tag
+           ~tag:
+             "TypeSubstitutionError: Error type-substituting on expressions in \
+              the explicit substitution term."
+      >>= fun exprs_in_subs -> Ok (Ast.Expr.Closure (metaid, exprs_in_subs))
+  | Ast.Expr.Constr (tid, e_opt) -> (
+      (*
+       TODO: Modify for ADT Polymorphism
+    *)
+      match e_opt with
+      | None -> Ok (Ast.Expr.Constr (tid, e_opt))
+      | Some e ->
+          type_term_substitute t_sub_for v ~current_depth e >>= fun e ->
+          Ok (Ast.Expr.Constr (tid, Some e)))
+  | Ast.Expr.Match (e, pattn_expr_list) ->
+      type_term_substitute t_sub_for v ~current_depth e >>= fun e ->
+      List.map pattn_expr_list ~f:(fun (pattn, expr) ->
+          type_term_substitute t_sub_for v ~current_depth expr >>= fun expr ->
+          Ok (pattn, expr))
+      |> Or_error.combine_errors
+      >>= fun pattn_expr_list -> Ok (Ast.Expr.Match (e, pattn_expr_list))
+  | Ast.Expr.Lift (typ, expr) ->
+      type_type_substitute t_sub_for v typ ~current_depth >>= fun typ ->
+      type_term_substitute t_sub_for v ~current_depth expr >>= fun expr ->
+      Ok (Ast.Expr.Lift (typ, expr))
+  | Ast.Expr.EValue value ->
+      Ast.Value.to_expr value |> type_term_substitute t_sub_for v ~current_depth
+  | Ast.Expr.Ref e ->
+      type_term_substitute t_sub_for v ~current_depth e >>= fun e ->
+      Ok (Ast.Expr.Ref e)
+  | Ast.Expr.While (p, e) ->
+      type_term_substitute t_sub_for v ~current_depth p >>= fun p ->
+      type_term_substitute t_sub_for v ~current_depth e >>= fun e ->
+      Ok (Ast.Expr.While (p, e))
+  | Ast.Expr.Array exprs ->
+      List.map exprs ~f:(type_term_substitute t_sub_for v ~current_depth)
+      |> Or_error.combine_errors
+      >>= fun exprs -> Ok (Ast.Expr.Array exprs)
+  | Ast.Expr.ArrayAssign (e1, e2, e3) ->
+      type_term_substitute t_sub_for v ~current_depth e1 >>= fun e1 ->
+      type_term_substitute t_sub_for v ~current_depth e2 >>= fun e2 ->
+      type_term_substitute t_sub_for v ~current_depth e3 >>= fun e3 ->
+      Ok (Ast.Expr.ArrayAssign (e1, e2, e3))
+  | Ast.Expr.BigLambda (id, e) ->
+      type_term_substitute t_sub_for v ~current_depth:(current_depth + 1) e
+      >>= fun e -> Ok (Ast.Expr.BigLambda (id, e))
+  | Ast.Expr.TypeApply (e, t) ->
+      type_term_substitute t_sub_for v ~current_depth e >>= fun e ->
+      type_type_substitute t_sub_for v t ~current_depth >>= fun t ->
+      Ok (Ast.Expr.TypeApply (e, t))
