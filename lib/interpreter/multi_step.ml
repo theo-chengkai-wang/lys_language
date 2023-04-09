@@ -1,4 +1,5 @@
 open Lys_ast
+open Lys_substitutions
 open Core
 open Interpreter_common
 open Lys_utils

@@ -10,6 +10,7 @@ open Lys_parsing
 open Lys_typing
 open Lys_utils
 open Lys_ast
+open Lys_substitutions
 open Lys_interpreter
 
 let loop str () =

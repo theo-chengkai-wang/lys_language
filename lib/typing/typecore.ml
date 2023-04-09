@@ -66,11 +66,32 @@ let includes_function_type
   let res, _ = includes_function_type_aux ~type_ctx ~types_visited typ in
   res
 
-(* let rec type_substitute t1 v t2 = 
+(* let rec type_substitute (t_sub_for: Ast.Typ.t) (v: Ast.TypeVar.t) (t_sub_in: Ast.Typ.t) = 
+  let open Or_error.Monad_infix in
   (*[t1/v]t2*)
   (*Maybe I'll still need De Bruijn Indices*)
-  match t2 with
-  |  *)
+  match t_sub_in with
+  | Ast.Typ.TUnit -> Ok Ast.Typ.TUnit
+  | Ast.Typ.TBool -> Ok Ast.Typ.TBool
+  | Ast.Typ.TInt -> Ok Ast.Typ.TInt
+  | Ast.Typ.TChar -> Ok Ast.Typ.TChar
+  | Ast.Typ.TString -> Ok Ast.Typ.TString
+  | Ast.Typ.TIdentifier id -> 
+    (*
+       TODO: This is to be changed for ADT polymorphism
+    *)
+    Ok (Ast.Typ.TIdentifier (id)) 
+  | Ast.Typ.TFun (t1, t2) -> 
+    type_substitute t_sub_for v t1 >>= fun t1 ->
+      type_substitute t_sub_for v t2 >>=  fun t2 ->
+        Ok (Ast.Typ.TFun (t1, t2))
+  | Ast.Typ.TBox (ctx, t) ->
+  | Ast.Typ.TProd tlist ->
+  | Ast.Typ.TSum (t1, t2) ->
+  | Ast.Typ.TRef t ->
+  | Ast.Typ.TArray t ->
+  | Ast.Typ.TVar v ->
+  | Ast.Typ.TForall (v, typ) -> *)
 
 let rec type_check_expression meta_ctx ctx
     (type_ctx : Typing_context.TypeConstrTypingContext.t) (typevar_ctx: unit Typing_context.PolyTypeVarContext.t) expr typ =
