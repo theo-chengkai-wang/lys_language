@@ -12,25 +12,30 @@ module DeBruijnIndex : sig
   val value : t -> default:int -> int
 end
 
-module type ObjIdentifier_type = sig
+module type Identifier_type = sig
+  module PastModule : sig
+    type t [@@deriving sexp, show, compare, equal]
+  end
+
   type t [@@deriving sexp, show, compare, equal]
 
   val of_string : string -> t
-  val of_past : Past.Identifier.t -> t
+  val of_past : PastModule.t -> t
   val of_string_and_index : string -> DeBruijnIndex.t -> t
   val get_name : t -> string
   val get_debruijn_index : t -> DeBruijnIndex.t
 
   val populate_index :
     t ->
-    current_ast_level:int ->
+    current_level:int ->
     current_identifiers:int String_map.t ->
-    current_meta_ast_level:int ->
-    current_meta_identifiers:int String_map.t ->
     t Or_error.t
 
   val shift : t -> depth:int -> offset:int -> t Or_error.t
 end
+
+module type ObjIdentifier_type =
+  Identifier_type with module PastModule = Past.Identifier
 
 module type Constructor_type = sig
   type t [@@deriving sexp, show, compare, equal]
@@ -49,33 +54,10 @@ module type TypeIdentifier_type = sig
   val of_past : Past.Identifier.t -> t
 end
 
-module type MetaIdentifier_type = sig
-  type t [@@deriving sexp, show, compare, equal]
+module type MetaIdentifier_type =
+  Identifier_type with module PastModule = Past.Identifier
 
-  val of_string : string -> t
-  val of_past : Past.Identifier.t -> t
-  val of_string_and_index : string -> DeBruijnIndex.t -> t
-  val get_name : t -> string
-  val get_debruijn_index : t -> DeBruijnIndex.t
-
-  val populate_index :
-    t ->
-    current_ast_level:int ->
-    current_identifiers:int String_map.t ->
-    current_meta_ast_level:int ->
-    current_meta_identifiers:int String_map.t ->
-    t Or_error.t
-
-  val shift : t -> depth:int -> offset:int -> t Or_error.t
-end
-
-module type TypeVar_type = sig
-  type t [@@deriving sexp, show, compare, equal]
-
-  val of_string : string -> t
-  val of_past : Past.TypeVar.t -> t
-  val get_name : t -> string
-end
+module type TypeVar_type = Identifier_type with module PastModule = Past.TypeVar
 
 module rec ObjIdentifier : ObjIdentifier_type
 and MetaIdentifier : MetaIdentifier_type
@@ -102,6 +84,9 @@ and Typ : sig
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.Typ.t -> t
+
+  val populate_index: t -> current_type_ast_level:int -> current_typevars:int String_map.t -> t Or_error.t
+  val shift_indices: t -> type_depth:int -> type_offset:int -> t Or_error.t
 end
 
 and IdentifierDefn : sig
@@ -250,14 +235,18 @@ and Expr : sig
     current_identifiers:int String_map.t ->
     current_meta_ast_level:int ->
     current_meta_identifiers:int String_map.t ->
+    current_type_ast_level:int ->
+    current_typevars:int String_map.t ->
     t Or_error.t
 
   val shift_indices :
     t ->
     obj_depth:int ->
     meta_depth:int ->
+    type_depth:int ->
     obj_offset:int ->
     meta_offset:int ->
+    type_offset:int ->
     t Or_error.t
 
   val to_val : t -> Value.t option
