@@ -658,14 +658,14 @@ let equal_typevar_str_depth obj_id id_str de_bruijn_int =
   |> Ast.TypeVar.of_string_and_index id_str
   |> Ast.TypeVar.equal obj_id
 
-let rec type_sub_iddef ~current_depth (t_sub_for : Ast.Typ.t)
-    (v : Ast.TypeVar.t) (id, t_sub_in) =
+let rec type_sub_iddef (t_sub_for : Ast.Typ.t) (v : Ast.TypeVar.t)
+    ~current_depth (id, t_sub_in) =
   let open Or_error.Monad_infix in
   type_type_substitute ~current_depth t_sub_for v t_sub_in >>= fun typ ->
   Ok (id, typ)
 
 and type_type_substitute (t_sub_for : Ast.Typ.t) (v : Ast.TypeVar.t)
-    (t_sub_in : Ast.Typ.t) ~current_depth =
+    ?(current_depth = 0) (t_sub_in : Ast.Typ.t) =
   let open Or_error.Monad_infix in
   (*[t1/v]t2*)
   (*Maybe I'll still need De Bruijn Indices*)
@@ -722,7 +722,7 @@ and type_type_substitute (t_sub_for : Ast.Typ.t) (v : Ast.TypeVar.t)
       type_type_substitute ~current_depth:(current_depth + 1) t_sub_for id typ
       >>= fun typ -> Ok (Ast.Typ.TForall (id, typ))
 
-and type_term_substitute t_sub_for v expr_subst_in ~current_depth =
+and type_term_substitute t_sub_for v ?(current_depth = 0) expr_subst_in =
   let open Or_error.Monad_infix in
   match expr_subst_in with
   | Ast.Expr.Identifier oid -> Ok (Ast.Expr.Identifier oid)
