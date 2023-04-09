@@ -110,6 +110,16 @@ let rec is_valid_type type_ctx typevar_ctx typ =
       in
       is_valid_type type_ctx new_typevar_context typ
 
+let rec is_valid_type_for_recursion typ =
+  match typ with
+  | Ast.Typ.TFun (_, _) -> Ok ()
+  | Ast.Typ.TForall (_, typ) -> is_valid_type_for_recursion typ
+  | _ ->
+      error
+        "RecursionTypeCheckError: let rec declaration must have function type or be \
+         of polymorphic function type."
+        () [%sexp_of: unit]
+
 let rec type_check_expression meta_ctx ctx
     (type_ctx : Typing_context.TypeConstrTypingContext.t)
     (typevar_ctx : unit Typing_context.PolyTypeVarContext.t) expr typ =
@@ -417,12 +427,7 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx e =
       type_inference_expression meta_ctx new_ctx type_ctx typevar_ctx e2
   | Ast.Expr.LetRec ((id, typ), e, e2) ->
       (*We only allow types which are of the form A->B*)
-      (match typ with
-      | Ast.Typ.TFun (_, _) -> Ok ()
-      | _ ->
-          error
-            "TypeInferenceError: let rec declaration must have function type."
-            () [%sexp_of: unit])
+      is_valid_type_for_recursion typ
       >>= fun () ->
       let new_ctx = Typing_context.ObjTypingContext.add_mapping ctx id typ in
       Or_error.tag
@@ -440,13 +445,7 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx e =
       let iddefs, _ = List.unzip idddef_e_list in
       (* Then check the types are functional *)
       List.map iddefs ~f:(fun (_, typ) ->
-          match typ with
-          | Ast.Typ.TFun (_, _) -> Ok ()
-          | _ ->
-              error
-                "TypeInferenceError: let rec declaration must have function \
-                 type."
-                () [%sexp_of: unit])
+        is_valid_type_for_recursion typ)
       |> Or_error.combine_errors_unit
       >>= fun () ->
       let new_ctx =
@@ -833,7 +832,7 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx e =
       (* Check is right type (big lambda) *)
       match e_typ with
       | Ast.Typ.TForall (v, typ) ->
-        (* Check type validity *)
+          (* Check type validity *)
           is_valid_type type_ctx typevar_ctx t >>= fun () ->
           Substitutions.type_type_substitute e_typ v typ
       | _ ->
@@ -855,12 +854,15 @@ let process_top_level meta_ctx ctx type_ctx typevar_ctx = function
           type_ctx,
           typevar_ctx )
   | Ast.TopLevelDefn.RecursiveDefinition (iddef, e) ->
-      let id, typ = iddef in
-      let new_ctx = Typing_context.ObjTypingContext.add_mapping ctx id typ in
       let open Or_error.Monad_infix in
-      type_check_expression meta_ctx new_ctx type_ctx typevar_ctx e typ
+      type_check_expression meta_ctx ctx type_ctx typevar_ctx
+        (Ast.Expr.LetRec
+           (iddef, e, Ast.Expr.Constant Ast.Constant.Unit))
+        Ast.Typ.TUnit
       >>= fun _ ->
       (*Note that here we type check in the new context (self reference)*)
+      let id, typ = iddef in
+      let new_ctx = Typing_context.ObjTypingContext.add_mapping ctx id typ in
       Ok
         ( Ast.TypedTopLevelDefn.RecursiveDefinition (typ, iddef, e),
           meta_ctx,
