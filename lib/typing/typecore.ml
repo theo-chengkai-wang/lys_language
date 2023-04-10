@@ -8,19 +8,6 @@ open Lys_utils
 
 (* meta_ctx->ctx->Aast.Expr.t -> Ast.Typ.t -> unit Or_error.t *)
 
-module BoxContextSet = Set.Make (Ast.ObjIdentifier)
-
-let box_context_contains_duplicates ctx =
-  (*Return true if there are duplicates*)
-  let rec check_duplicates_aux map ctx =
-    match ctx with
-    | [] -> false
-    | (x, _) :: xs ->
-        if BoxContextSet.mem map x then true
-        else check_duplicates_aux (BoxContextSet.add map x) xs
-  in
-  check_duplicates_aux BoxContextSet.empty ctx
-
 (* Check whether the type contains a function type *)
 module TypSet = Set.Make (Ast.TypeIdentifier)
 
@@ -88,10 +75,16 @@ let rec is_valid_type type_ctx typevar_ctx typ =
   | Ast.Typ.TFun (t1, t2) | Ast.Typ.TSum (t1, t2) ->
       is_valid_type type_ctx typevar_ctx t1 >>= fun () ->
       is_valid_type type_ctx typevar_ctx t2
-  | Ast.Typ.TBox (ctx, t) ->
-      List.map ~f:(fun (_, typ) -> is_valid_type type_ctx typevar_ctx typ) ctx
+  | Ast.Typ.TBox (tvctx, ctx, t) ->
+      let new_typevar_ctx =
+        Typing_context.PolyTypeVarContext.add_all_mappings typevar_ctx
+          (List.map ~f:(fun v -> (v, ())) tvctx)
+      in
+      List.map
+        ~f:(fun (_, typ) -> is_valid_type type_ctx new_typevar_ctx typ)
+        ctx
       |> Or_error.combine_errors_unit
-      >>= fun () -> is_valid_type type_ctx typevar_ctx t
+      >>= fun () -> is_valid_type type_ctx new_typevar_ctx t
   | Ast.Typ.TProd tlist ->
       List.map tlist ~f:(fun t -> is_valid_type type_ctx typevar_ctx t)
       |> Or_error.combine_errors_unit
@@ -145,7 +138,8 @@ let rec type_check_expression meta_ctx ctx
         * Ast.Typ.t
         * Ast.Typ.t
         * Ast.Typ.t Typing_context.ObjTypingContext.t
-        * (Ast.Context.t * Ast.Typ.t) Typing_context.MetaTypingContext.t]
+        * (Ast.TypeVarContext.t * Ast.Context.t * Ast.Typ.t)
+          Typing_context.MetaTypingContext.t]
 
 and type_inference_expression meta_ctx ctx type_ctx typevar_ctx e =
   let open Or_error.Monad_infix in
@@ -468,38 +462,48 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx e =
              "TypeInferenceError: Type error at mutually recursive declaration"
       >>= fun () ->
       type_inference_expression meta_ctx new_ctx type_ctx typevar_ctx e2
-  | Ast.Expr.Box (context, e) ->
-      (if box_context_contains_duplicates context then
+  | Ast.Expr.Box (box_tvctx, box_context, e) ->
+      (if Ast.Context.contains_duplicate_ids box_context then
        error
          "TypeInferenceError: there are duplicates in the provided box context"
-         context [%sexp_of: Ast.Context.t]
+         box_context [%sexp_of: Ast.Context.t]
+      else if Ast.TypeVarContext.contains_duplicates box_tvctx then
+        error
+          "TypeInferenceError: there are duplicates in the provided type var \
+           context"
+          box_tvctx [%sexp_of: Ast.TypeVarContext.t]
       else Ok ())
       >>= fun () ->
+      let new_typevar_ctx =
+        Typing_context.PolyTypeVarContext.add_all_mappings typevar_ctx
+          (List.map box_tvctx ~f:(fun v -> (v, ())))
+      in
       let new_ctx =
         Typing_context.ObjTypingContext.add_all_mappings
           (Typing_context.ObjTypingContext.create_empty_context ())
-          context (*Bug here*)
+          box_context (*Bug here*)
       in
-      type_inference_expression meta_ctx new_ctx type_ctx typevar_ctx e
-      >>= fun e_typ -> Ok (Ast.Typ.TBox (context, e_typ))
+      type_inference_expression meta_ctx new_ctx type_ctx new_typevar_ctx e
+      >>= fun e_typ -> Ok (Ast.Typ.TBox (box_tvctx, box_context, e_typ))
   | Ast.Expr.LetBox (metaid, e, e2) ->
       ( (*First check that e gives a box*)
         type_inference_expression meta_ctx ctx type_ctx typevar_ctx e
       >>= fun e_typ ->
         match e_typ with
-        | Ast.Typ.TBox (box_context, box_typ) -> Ok (box_context, box_typ)
+        | Ast.Typ.TBox (box_tvctx, box_context, box_typ) ->
+            Ok (box_tvctx, box_context, box_typ)
         | _ ->
             Or_error.error "TypeInferenceError: Can only unbox a boxed term."
               (metaid, e, e_typ)
               [%sexp_of: Ast.MetaIdentifier.t * Ast.Expr.t * Ast.Typ.t] )
-      >>= fun (box_context, box_typ) ->
+      >>= fun (box_tvctx, box_context, box_typ) ->
       (*Add it to the meta context and continue*)
       let new_meta_ctx =
         Typing_context.MetaTypingContext.add_mapping meta_ctx metaid
-          (box_context, box_typ)
+          (box_tvctx, box_context, box_typ)
       in
       type_inference_expression new_meta_ctx ctx type_ctx typevar_ctx e2
-  | Ast.Expr.Closure (meta_id, exprs) ->
+  | Ast.Expr.Closure (meta_id, typs, exprs) ->
       let meta_var_option =
         Typing_context.MetaTypingContext.get_last_mapping meta_ctx meta_id
       in
@@ -511,32 +515,43 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx e =
             ^ Ast.MetaIdentifier.show meta_id)
             (meta_ctx, meta_id)
             [%sexp_of:
-              (Ast.Context.t * Ast.Typ.t) Typing_context.MetaTypingContext.t
+              (Ast.TypeVarContext.t * Ast.Context.t * Ast.Typ.t)
+              Typing_context.MetaTypingContext.t
               * Ast.MetaIdentifier.t]
-      | Some (box_context, box_typ) -> Ok (box_context, box_typ))
-      >>= fun (box_context, box_typ) ->
-      (*Check expressions match box_context*)
-      (*1- check length*)
-      let zipped_list_option = List.zip box_context exprs in
-      (match zipped_list_option with
-      | List.Or_unequal_lengths.Ok zipped_list -> Ok zipped_list
-      | List.Or_unequal_lengths.Unequal_lengths ->
-          error
-            "TypeInferenceError: the number of arguments to the `with` \
-             expression does not match the size of the context. (box_context, \
-             closure_expr)"
-            (box_context, Ast.Expr.Closure (meta_id, exprs))
-            [%sexp_of: Ast.Context.t * Ast.Expr.t])
-      >>= fun zipped_list ->
-      (*2- check types*)
-      Or_error.tag
-        (Or_error.combine_errors_unit
-           (List.map zipped_list ~f:(fun ((_, typ), e) ->
-                type_check_expression meta_ctx ctx type_ctx typevar_ctx e typ)))
-        ~tag:
-          "TypeInferenceError: Type mismatch between context and expressions \
-           provided to substitute in."
-      >>= fun () -> (*3- now context match*) Ok box_typ
+      | Some (box_tvctx, box_context, box_typ) ->
+          Ok (box_tvctx, box_context, box_typ))
+      >>= fun (box_tvctx, box_context, box_typ) ->
+      (*I- Check typs match box_tvctx *)
+      if List.length box_tvctx <> List.length typs then
+        Or_error.error
+          "TypeInferenceError: type list provided unequal to the box's type \
+           var context length (closure_expr)"
+          (Ast.Expr.Closure (meta_id, typs, exprs))
+          [%sexp_of: Ast.Expr.t]
+      else
+        (* II- Check expressions match box_context *)
+        (* 1- check length *)
+        let zipped_list_option = List.zip box_context exprs in
+        (match zipped_list_option with
+        | List.Or_unequal_lengths.Ok zipped_list -> Ok zipped_list
+        | List.Or_unequal_lengths.Unequal_lengths ->
+            error
+              "TypeInferenceError: the number of arguments to the `with` \
+               expression does not match the size of the context. \
+               (box_context, closure_expr)"
+              (box_context, Ast.Expr.Closure (meta_id, typs, exprs))
+              [%sexp_of: Ast.Context.t * Ast.Expr.t])
+        >>= fun zipped_list ->
+        (* 2- check types *)
+        Or_error.tag
+          (Or_error.combine_errors_unit
+             (List.map zipped_list ~f:(fun ((_, typ), e) ->
+                  type_check_expression meta_ctx ctx type_ctx typevar_ctx e typ)))
+          ~tag:
+            "TypeInferenceError: Type mismatch between context and expressions \
+             provided to substitute in."
+        >>= fun () -> (* Now substitute the typ *) 
+        Substitutions.sim_type_type_substitute typs box_tvctx box_typ
   | Ast.Expr.Match (e, pattn_expr_list) -> (
       (*
       1- infer type of e
@@ -768,7 +783,7 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx e =
           typ [%sexp_of: Ast.Typ.t]
       else
         type_check_expression meta_ctx ctx type_ctx typevar_ctx expr typ
-        >>= fun () -> Ok (Ast.Typ.TBox ([], typ))
+        >>= fun () -> Ok (Ast.Typ.TBox ([], [], typ))
   | Ast.Expr.EValue v ->
       type_inference_expression meta_ctx ctx type_ctx typevar_ctx
         (Ast.Value.to_expr v)

@@ -6,7 +6,7 @@ open Lys_ast
 open Core
 
 val type_inference_expression :
-  (Ast.Context.t * Ast.Typ.t) Typing_context.MetaTypingContext.t ->
+  (Ast.TypeVarContext.t * Ast.Context.t * Ast.Typ.t) Typing_context.MetaTypingContext.t ->
   Ast.Typ.t Typing_context.ObjTypingContext.t ->
   Typing_context.TypeConstrTypingContext.t ->
   unit Typing_context.PolyTypeVarContext.t ->
@@ -14,7 +14,7 @@ val type_inference_expression :
   Ast.Typ.t Or_error.t
 
 val type_check_expression :
-  (Ast.Context.t * Ast.Typ.t) Typing_context.MetaTypingContext.t ->
+  (Ast.TypeVarContext.t * Ast.Context.t * Ast.Typ.t) Typing_context.MetaTypingContext.t ->
   Ast.Typ.t Typing_context.ObjTypingContext.t ->
   Typing_context.TypeConstrTypingContext.t ->
   unit Typing_context.PolyTypeVarContext.t ->
@@ -23,7 +23,7 @@ val type_check_expression :
   unit Or_error.t
 
 val type_check_program :
-  ?meta_ctx:(Ast.Context.t * Ast.Typ.t) Typing_context.MetaTypingContext.t ->
+  ?meta_ctx:(Ast.TypeVarContext.t * Ast.Context.t * Ast.Typ.t) Typing_context.MetaTypingContext.t ->
   ?obj_ctx:Ast.Typ.t Typing_context.ObjTypingContext.t ->
   ?type_ctx:Typing_context.TypeConstrTypingContext.t ->
   ?typevar_ctx:unit Typing_context.PolyTypeVarContext.t ->

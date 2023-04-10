@@ -33,3 +33,16 @@ val type_term_substitute :
   ?current_depth:int ->
   Ast.Expr.t ->
   Ast.Expr.t Or_error.t
+
+val sim_type_type_substitute: Ast.Typ.t list -> Ast.TypeVarContext.t -> Ast.Typ.t -> Ast.Typ.t Or_error.t
+
+val sim_type_term_substitute :
+  Ast.Typ.t list -> Ast.TypeVarContext.t -> Ast.Expr.t -> Ast.Expr.t Or_error.t
+
+val sim_substitute_with_types :
+  Ast.Typ.t list ->
+  Ast.TypeVarContext.t ->
+  Ast.Expr.t list ->
+  Ast.Context.t ->
+  Ast.Expr.t ->
+  Ast.Expr.t Or_error.t

@@ -137,21 +137,21 @@ let rec substitute_aux expr_subst_for id_str current_depth current_meta_depth
       substitute_aux expr_subst_for id_str (current_depth + 1)
         current_meta_depth e2
       >>= fun e2 -> Ok (Ast.Expr.LetRecMutual (iddef_e_list, e2))
-  | Ast.Expr.Box (ctx, e) -> Ok (Ast.Expr.Box (ctx, e))
+  | Ast.Expr.Box (tvctx, ctx, e) -> Ok (Ast.Expr.Box (tvctx, ctx, e))
   | Ast.Expr.LetBox (metaid, e, e2) ->
       substitute_aux expr_subst_for id_str current_depth current_meta_depth e
       >>= fun e ->
       substitute_aux expr_subst_for id_str current_depth
         (current_meta_depth + 1) e2
       >>= fun e2 -> Ok (Ast.Expr.LetBox (metaid, e, e2))
-  | Ast.Expr.Closure (metaid, exprs) ->
+  | Ast.Expr.Closure (metaid, typs, exprs) ->
       exprs
       |> List.map
            ~f:
              (substitute_aux expr_subst_for id_str current_depth
                 current_meta_depth)
       |> Or_error.combine_errors
-      >>= fun exprs -> Ok (Ast.Expr.Closure (metaid, exprs))
+      >>= fun exprs -> Ok (Ast.Expr.Closure (metaid, typs, exprs))
   | Ast.Expr.Constr (tid, e_opt) -> (
       match e_opt with
       | None -> Ok (Ast.Expr.Constr (tid, e_opt))
@@ -341,7 +341,7 @@ let rec sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth
       sim_substitute_aux zipped_exprs_ids (current_depth + 1) current_meta_depth
         current_type_depth e2
       >>= fun e2 -> Ok (Ast.Expr.LetRecMutual (iddef_e_list, e2))
-  | Ast.Expr.Box (ctx, e) -> Ok (Ast.Expr.Box (ctx, e))
+  | Ast.Expr.Box (tvctx, ctx, e) -> Ok (Ast.Expr.Box (tvctx, ctx, e))
   | Ast.Expr.LetBox (metaid, e, e2) ->
       sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth
         current_type_depth e
@@ -349,14 +349,14 @@ let rec sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth
       sim_substitute_aux zipped_exprs_ids current_depth (current_meta_depth + 1)
         current_type_depth e2
       >>= fun e2 -> Ok (Ast.Expr.LetBox (metaid, e, e2))
-  | Ast.Expr.Closure (metaid, exprs) ->
+  | Ast.Expr.Closure (metaid, typs, exprs) ->
       exprs
       |> List.map
            ~f:
              (sim_substitute_aux zipped_exprs_ids current_depth
                 current_meta_depth current_type_depth)
       |> Or_error.combine_errors
-      >>= fun exprs -> Ok (Ast.Expr.Closure (metaid, exprs))
+      >>= fun exprs -> Ok (Ast.Expr.Closure (metaid, typs, exprs))
   | Ast.Expr.Constr (tid, e_opt) -> (
       match e_opt with
       | None -> Ok (Ast.Expr.Constr (tid, e_opt))
@@ -535,9 +535,9 @@ let rec meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth
       >>= fun iddef_e_list ->
       meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth e2
       >>= fun e2 -> Ok (Ast.Expr.LetRecMutual (iddef_e_list, e2))
-  | Ast.Expr.Box (ctx2, e) ->
+  | Ast.Expr.Box (tvctx, ctx2, e) ->
       meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth e
-      >>= fun e -> Ok (Ast.Expr.Box (ctx2, e))
+      >>= fun e -> Ok (Ast.Expr.Box (tvctx, ctx2, e))
   | Ast.Expr.LetBox (metaid, e, e2) ->
       meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth e
       (*There was an error here. it's current_meta_depth without the +1 because u is non-binding in e*)
@@ -546,7 +546,7 @@ let rec meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth
       meta_substitute_aux ctx expr_subst_for meta_id_str
         (current_meta_depth + 1) e2
       >>= fun e2 -> Ok (Ast.Expr.LetBox (metaid, e, e2))
-  | Ast.Expr.Closure (metaid, exprs) ->
+  | Ast.Expr.Closure (metaid, typs, exprs) ->
       (* Debug code here
          let () =
            if String.equal (Ast.MetaIdentifier.get_name metaid) "res2_" then (
@@ -583,7 +583,7 @@ let rec meta_substitute_aux ctx expr_subst_for meta_id_str current_meta_depth
               print_endline (Ast.MetaIdentifier.show metaid)
             else ()
           in *)
-        Ok (Ast.Expr.Closure (metaid, exprs_in_subs))
+        Ok (Ast.Expr.Closure (metaid, typs, exprs_in_subs))
       else
         expr_subst_for
         |> Ast.Expr.shift_indices ~obj_depth:0 ~meta_depth:0 ~obj_offset:0
@@ -684,11 +684,18 @@ and type_type_substitute (t_sub_for : Ast.Typ.t) (v : Ast.TypeVar.t)
       type_type_substitute ~current_depth t_sub_for v t1 >>= fun t1 ->
       type_type_substitute ~current_depth t_sub_for v t2 >>= fun t2 ->
       Ok (Ast.Typ.TFun (t1, t2))
-  | Ast.Typ.TBox (ctx, t) ->
-      type_type_substitute ~current_depth t_sub_for v t >>= fun t ->
-      List.map ~f:(type_sub_iddef ~current_depth t_sub_for v) ctx
+  | Ast.Typ.TBox (tvctx, ctx, t) ->
+      let new_current_depth =
+        if Ast.TypeVarContext.is_empty tvctx then current_depth
+        else current_depth + 1
+      in
+      type_type_substitute ~current_depth:new_current_depth t_sub_for v t
+      >>= fun t ->
+      List.map
+        ~f:(type_sub_iddef ~current_depth:new_current_depth t_sub_for v)
+        ctx
       |> Or_error.combine_errors
-      >>= fun ctx -> Ok (Ast.Typ.TBox (ctx, t))
+      >>= fun ctx -> Ok (Ast.Typ.TBox (tvctx, ctx, t))
   | Ast.Typ.TProd tlist ->
       List.map ~f:(type_type_substitute ~current_depth t_sub_for v) tlist
       |> Or_error.combine_errors
@@ -795,12 +802,18 @@ and type_term_substitute t_sub_for v ?(current_depth = 0) expr_subst_in =
       >>= fun iddef_e_list ->
       type_term_substitute t_sub_for v ~current_depth e2 >>= fun e2 ->
       Ok (Ast.Expr.LetRecMutual (iddef_e_list, e2))
-  | Ast.Expr.Box (ctx2, e) ->
-      List.map ~f:(type_sub_iddef ~current_depth t_sub_for v) ctx2
+  | Ast.Expr.Box (tvctx, ctx2, e) ->
+      let new_current_depth =
+        if Ast.TypeVarContext.is_empty tvctx then current_depth
+        else current_depth + 1
+      in
+      List.map
+        ~f:(type_sub_iddef ~current_depth:new_current_depth t_sub_for v)
+        ctx2
       |> Or_error.combine_errors
       >>= fun ctx2 ->
-      type_term_substitute t_sub_for v ~current_depth e >>= fun e ->
-      Ok (Ast.Expr.Box (ctx2, e))
+      type_term_substitute t_sub_for v ~current_depth:new_current_depth e
+      >>= fun e -> Ok (Ast.Expr.Box (tvctx, ctx2, e))
   | Ast.Expr.LetBox (metaid, e, e2) ->
       type_term_substitute t_sub_for v ~current_depth e
       (*There was an error here. it's current_meta_depth without the +1 because u is non-binding in e*)
@@ -808,7 +821,10 @@ and type_term_substitute t_sub_for v ?(current_depth = 0) expr_subst_in =
       fun e ->
       type_term_substitute t_sub_for v ~current_depth e2 >>= fun e2 ->
       Ok (Ast.Expr.LetBox (metaid, e, e2))
-  | Ast.Expr.Closure (metaid, exprs) ->
+  | Ast.Expr.Closure (metaid, typs, exprs) ->
+      List.map ~f:(type_type_substitute t_sub_for v ~current_depth) typs
+      |> Or_error.combine_errors
+      >>= fun typs ->
       exprs
       |> List.map ~f:(type_term_substitute t_sub_for v ~current_depth)
       |> Or_error.combine_errors
@@ -816,7 +832,8 @@ and type_term_substitute t_sub_for v ?(current_depth = 0) expr_subst_in =
            ~tag:
              "TypeSubstitutionError: Error type-substituting on expressions in \
               the explicit substitution term."
-      >>= fun exprs_in_subs -> Ok (Ast.Expr.Closure (metaid, exprs_in_subs))
+      >>= fun exprs_in_subs ->
+      Ok (Ast.Expr.Closure (metaid, typs, exprs_in_subs))
   | Ast.Expr.Constr (tid, e_opt) -> (
       (*
        TODO: Modify for ADT Polymorphism
@@ -862,3 +879,29 @@ and type_term_substitute t_sub_for v ?(current_depth = 0) expr_subst_in =
       type_term_substitute t_sub_for v ~current_depth e >>= fun e ->
       type_type_substitute t_sub_for v t ~current_depth >>= fun t ->
       Ok (Ast.Expr.TypeApply (e, t))
+
+let sim_type_type_substitute typs tvctx type_sub_in =
+  let open Or_error.Monad_infix in
+  List.fold2 tvctx typs ~init:(Ok type_sub_in) ~f:(fun typ_sub_in tv typ ->
+    typ_sub_in >>= fun typ_sub_in -> type_type_substitute typ tv typ_sub_in)
+  |> function
+  | List.Or_unequal_lengths.Unequal_lengths ->
+      error "SimultaneousSubtitutionError: Unequal Length typs and terms"
+        (typs, tvctx) [%sexp_of: Ast.Typ.t list * Ast.TypeVarContext.t]
+  | List.Or_unequal_lengths.Ok expr_subst_in -> expr_subst_in
+
+let sim_type_term_substitute typs tvctx expr_sub_in =
+    let open Or_error.Monad_infix in
+    List.fold2 tvctx typs ~init:(Ok expr_sub_in) ~f:(fun e tv typ ->
+      e >>= fun e -> type_term_substitute typ tv e)
+    |> function
+    | List.Or_unequal_lengths.Unequal_lengths ->
+        error "SimultaneousSubtitutionError: Unequal Length typs and terms"
+          (typs, tvctx) [%sexp_of: Ast.Typ.t list * Ast.TypeVarContext.t]
+    | List.Or_unequal_lengths.Ok expr_subst_in -> expr_subst_in
+  
+
+let sim_substitute_with_types typs tvctx exprs context expr_subst_in =
+  let open Or_error.Monad_infix in
+  sim_type_term_substitute typs tvctx expr_subst_in >>= fun expr_subst_in ->
+  sim_substitute exprs context expr_subst_in

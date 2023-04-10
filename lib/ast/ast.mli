@@ -74,7 +74,7 @@ and Typ : sig
     | TString
     | TIdentifier of TypeIdentifier.t
     | TFun of t * t
-    | TBox of Context.t * t
+    | TBox of TypeVarContext.t * Context.t * t
     | TProd of t list
     | TSum of t * t
     | TRef of t
@@ -98,6 +98,14 @@ and IdentifierDefn : sig
   type t = ObjIdentifier.t * Typ.t [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.IdentifierDefn.t -> t
+
+  val populate_index :
+    t ->
+    current_type_ast_level:int ->
+    current_typevars:int String_map.t ->
+    t Or_error.t
+
+  val shift_indices : t -> type_depth:int -> type_offset:int -> t Or_error.t
 end
 
 and RefCell : sig
@@ -129,6 +137,23 @@ and Context : sig
   type t = IdentifierDefn.t list [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.Context.t -> t
+
+  val populate_index :
+    t ->
+    current_type_ast_level:int ->
+    current_typevars:int String_map.t ->
+    t Or_error.t
+
+  val shift_indices : t -> type_depth:int -> type_offset:int -> t Or_error.t
+  val contains_duplicate_ids: t -> bool
+end
+
+and TypeVarContext : sig
+  type t = TypeVar.t list [@@deriving sexp, show, equal, compare]
+
+  val of_past : Past.TypeVarContext.t -> t
+  val is_empty : t -> bool
+  val contains_duplicates: t -> bool
 end
 
 and BinaryOperator : sig
@@ -217,9 +242,10 @@ and Expr : sig
     (*let rec f: A->B =
       e[f] in e'*)
     | LetRecMutual of (IdentifierDefn.t * t) list * t
-    | Box of Context.t * t (*box (x:A, y:B |- e)*)
+    | Box of TypeVarContext.t * Context.t * t (*box (x:A, y:B |- e)*)
     | LetBox of MetaIdentifier.t * t * t (*let box u = e in e'*)
-    | Closure of MetaIdentifier.t * t list (*u with (e1, e2, e3, ...)*)
+    | Closure of
+        MetaIdentifier.t * Typ.t list * t list (*u with (e1, e2, e3, ...)*)
     | Constr of Constructor.t * t option (* Constr e*)
     | Match of t * (Pattern.t * t) list
     | Lift of Typ.t * t
@@ -264,7 +290,7 @@ and Value : sig
     | Left of Typ.t * Typ.t * t (*L[A,B] e*)
     | Right of Typ.t * Typ.t * t (*R[A,B] e*)
     | Lambda of IdentifierDefn.t * Expr.t (*fun (x : A) -> e*)
-    | Box of Context.t * Expr.t (*box (x:A, y:B |- e)*)
+    | Box of TypeVarContext.t * Context.t * Expr.t (*box (x:A, y:B |- e)*)
     | Constr of Constructor.t * t option
     | BigLambda of TypeVar.t * Expr.t
   [@@deriving sexp, show, compare, equal]

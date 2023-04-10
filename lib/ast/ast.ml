@@ -171,7 +171,7 @@ and Typ : sig
     | TString
     | TIdentifier of TypeIdentifier.t
     | TFun of t * t
-    | TBox of Context.t * t
+    | TBox of TypeVarContext.t * Context.t * t
     | TProd of t list
     | TSum of t * t
     | TRef of t
@@ -198,7 +198,7 @@ end = struct
     | TString
     | TIdentifier of TypeIdentifier.t
     | TFun of t * t
-    | TBox of Context.t * t
+    | TBox of TypeVarContext.t * Context.t * t
     | TProd of t list
     | TSum of t * t
     | TRef of t
@@ -215,7 +215,8 @@ end = struct
     | Past.Typ.TString -> TString
     | Past.Typ.TIdentifier id -> TIdentifier (TypeIdentifier.of_past id)
     | Past.Typ.TFun (t1, t2) -> TFun (of_past t1, of_past t2)
-    | Past.Typ.TBox (_, ctx, t1) -> TBox (Context.of_past ctx, of_past t1) (* TODO: MODIFY *)
+    | Past.Typ.TBox (typevarctx, ctx, t1) ->
+        TBox (TypeVarContext.of_past typevarctx, Context.of_past ctx, of_past t1)
     | Past.Typ.TProd ts -> TProd (List.map ts ~f:of_past)
     | Past.Typ.TSum (t1, t2) -> TSum (of_past t1, of_past t2)
     | Past.Typ.TRef t -> TRef (of_past t)
@@ -238,14 +239,27 @@ end = struct
         >>= fun t1 ->
         populate_index ~current_type_ast_level ~current_typevars t2
         >>= fun t2 -> Ok (TFun (t1, t2))
-    | TBox (ctx, t) ->
+    | TBox (tvctx, ctx, t) ->
+        let new_typ_level, new_typvars =
+          if TypeVarContext.is_empty tvctx then
+            (* If empty then don't add a level. *)
+            (current_type_ast_level, current_typevars)
+          else
+            (* Insert context and add level *)
+            ( current_type_ast_level + 1,
+              List.fold tvctx ~init:current_typevars ~f:(fun acc tv ->
+                  String_map.set acc ~key:(TypeVar.get_name tv)
+                    ~data:current_type_ast_level) )
+        in
         List.map ctx ~f:(fun (x, typ) ->
-            populate_index ~current_type_ast_level ~current_typevars typ
+            populate_index ~current_type_ast_level:new_typ_level
+              ~current_typevars:new_typvars typ
             >>= fun typ -> Ok (x, typ))
         |> Or_error.combine_errors
         >>= fun ctx ->
-        populate_index ~current_type_ast_level ~current_typevars t >>= fun t ->
-        Ok (TBox (ctx, t))
+        populate_index ~current_type_ast_level:new_typ_level
+          ~current_typevars:new_typvars t
+        >>= fun t -> Ok (TBox (tvctx, ctx, t))
     | TProd tlist ->
         List.map tlist
           ~f:(populate_index ~current_type_ast_level ~current_typevars)
@@ -290,12 +304,17 @@ end = struct
         shift_indices ~type_depth ~type_offset t1 >>= fun t1 ->
         shift_indices ~type_depth ~type_offset t2 >>= fun t2 ->
         Ok (TFun (t1, t2))
-    | TBox (ctx, t) ->
+    | TBox (tvctx, ctx, t) ->
+        let new_type_depth =
+          if TypeVarContext.is_empty tvctx then type_depth else type_depth + 1
+        in
         List.map ctx ~f:(fun (x, typ) ->
-            shift_indices ~type_depth ~type_offset typ >>= fun typ -> Ok (x, typ))
+            shift_indices ~type_depth:new_type_depth ~type_offset typ
+            >>= fun typ -> Ok (x, typ))
         |> Or_error.combine_errors
         >>= fun ctx ->
-        shift_indices ~type_depth ~type_offset t >>= fun t -> Ok (TBox (ctx, t))
+        shift_indices ~type_depth:new_type_depth ~type_offset t >>= fun t ->
+        Ok (TBox (tvctx, ctx, t))
     | TProd tlist ->
         List.map tlist ~f:(shift_indices ~type_depth ~type_offset)
         |> Or_error.combine_errors
@@ -413,6 +432,7 @@ and Context : sig
     t Or_error.t
 
   val shift_indices : t -> type_depth:int -> type_offset:int -> t Or_error.t
+  val contains_duplicate_ids : t -> bool
 end = struct
   type t = IdentifierDefn.t list [@@deriving sexp, show, compare, equal]
 
@@ -428,6 +448,24 @@ end = struct
   let shift_indices v ~type_depth ~type_offset =
     List.map v ~f:(IdentifierDefn.shift_indices ~type_depth ~type_offset)
     |> Or_error.combine_errors
+
+  let contains_duplicate_ids xs =
+    List.contains_dup xs ~compare:(fun (id1, _) (id2, _) ->
+        String.compare (ObjIdentifier.get_name id1) (ObjIdentifier.get_name id2))
+end
+
+and TypeVarContext : sig
+  type t = TypeVar.t list [@@deriving sexp, show, equal, compare]
+
+  val of_past : Past.TypeVarContext.t -> t
+  val is_empty : t -> bool
+  val contains_duplicates : t -> bool
+end = struct
+  type t = TypeVar.t list [@@deriving sexp, show, equal, compare]
+
+  let of_past = List.map ~f:TypeVar.of_past
+  let is_empty = List.is_empty
+  let contains_duplicates xs = List.contains_dup xs ~compare:TypeVar.compare
 end
 
 and BinaryOperator : sig
@@ -620,9 +658,10 @@ and Expr : sig
     (*let rec f: A->B =
       e[f] in e'*)
     | LetRecMutual of (IdentifierDefn.t * t) list * t
-    | Box of Context.t * t (*box (x:A, y:B |- e)*)
+    | Box of TypeVarContext.t * Context.t * t (*box (x:A, y:B |- e)*)
     | LetBox of MetaIdentifier.t * t * t (*let box u = e in e'*)
-    | Closure of MetaIdentifier.t * t list (*u with (e1, e2, e3, ...)*)
+    | Closure of
+        MetaIdentifier.t * Typ.t list * t list (*u with (e1, e2, e3, ...)*)
     | Constr of Constructor.t * t option (* Constr e*)
     | Match of t * (Pattern.t * t) list
     | Lift of Typ.t * t
@@ -681,9 +720,10 @@ end = struct
     (*let rec f: A->B =
       e[f] in e'*)
     | LetRecMutual of (IdentifierDefn.t * t) list * t
-    | Box of Context.t * t (*box (x:A, y:B |- e)*)
+    | Box of TypeVarContext.t * Context.t * t (*box (x:A, y:B |- e)*)
     | LetBox of MetaIdentifier.t * t * t (*let box u = e in e'*)
-    | Closure of MetaIdentifier.t * t list (*u with (e1, e2, e3, ...)*)
+    | Closure of
+        MetaIdentifier.t * Typ.t list * t list (*u with (e1, e2, e3, ...)*)
     | Constr of Constructor.t * t option (* Constr e*)
     | Match of t * (Pattern.t * t) list
     | Lift of Typ.t * t
@@ -734,11 +774,15 @@ end = struct
           ( List.map iddef_e_list ~f:(fun (iddef, e) ->
                 (IdentifierDefn.of_past iddef, of_past e)),
             of_past e2 )
-    | Past.Expr.Box (_, ctx, e) -> Box (Context.of_past ctx, of_past e)
+    | Past.Expr.Box (tvctx, ctx, e) ->
+        Box (TypeVarContext.of_past tvctx, Context.of_past ctx, of_past e)
     | Past.Expr.LetBox (metaid, e, e2) ->
         LetBox (MetaIdentifier.of_past metaid, of_past e, of_past e2)
-    | Past.Expr.Closure (metaid, _, exprs) ->
-        Closure (MetaIdentifier.of_past metaid, List.map exprs ~f:of_past)
+    | Past.Expr.Closure (metaid, typs, exprs) ->
+        Closure
+          ( MetaIdentifier.of_past metaid,
+            List.map typs ~f:Typ.of_past,
+            List.map exprs ~f:of_past )
     | Past.Expr.Constr (constructor, Some value) ->
         Constr (Constructor.of_past constructor, Some (Expr.of_past value))
     | Past.Expr.Constr (constructor, None) ->
@@ -951,7 +995,7 @@ end = struct
           ~current_identifiers:new_current_identifiers ~current_meta_ast_level
           ~current_meta_identifiers ~current_type_ast_level ~current_typevars
         >>= fun e2 -> Ok (LetRecMutual (iddef_e_list, e2))
-    | Box (ctx, e) ->
+    | Box (tvctx, ctx, e) ->
         (*
           Explanation: ctx is a list of iddefn so no need to populate indices; we create a fresh context with nothing in it like for a closure, and
           base all our De Bruijn indices from that, starting from 0, ignoring whatever is outside completely.
@@ -959,7 +1003,20 @@ end = struct
 
           New: context needs populating type indices
         *)
-        Context.populate_index ~current_type_ast_level ~current_typevars ctx
+        (* TODO: If polymorphic,  i.e. box tvctx is non empty, handle them first. *)
+        let new_typ_level, new_typvars =
+          if TypeVarContext.is_empty tvctx then
+            (* If empty then don't add a level. *)
+            (current_type_ast_level, current_typevars)
+          else
+            (* Insert context and add level *)
+            ( current_type_ast_level + 1,
+              List.fold tvctx ~init:current_typevars ~f:(fun acc tv ->
+                  String_map.set acc ~key:(TypeVar.get_name tv)
+                    ~data:current_type_ast_level) )
+        in
+        Context.populate_index ~current_type_ast_level:new_typ_level
+          ~current_typevars:new_typvars ctx
         >>= fun ctx ->
         Or_error.tag
           ~tag:
@@ -971,8 +1028,9 @@ end = struct
         (* Actually we need to populate the types *)
         populate_index e ~current_ast_level:1
           ~current_identifiers:new_current_identifiers ~current_meta_ast_level
-          ~current_meta_identifiers ~current_type_ast_level ~current_typevars
-        >>= fun e -> Ok (Box (ctx, e))
+          ~current_meta_identifiers ~current_type_ast_level:new_typ_level
+          ~current_typevars:new_typvars
+        >>= fun e -> Ok (Box (tvctx, ctx, e))
     | LetBox (metaid, e, e2) ->
         let new_current_meta_identifiers =
           String_map.set current_meta_identifiers
@@ -989,7 +1047,15 @@ end = struct
           ~current_meta_identifiers:new_current_meta_identifiers
           ~current_type_ast_level ~current_typevars
         >>= fun e2 -> Ok (LetBox (metaid, e, e2))
-    | Closure (metaid, exprs) ->
+    | Closure (metaid, typs, exprs) ->
+        List.map typs
+          ~f:(Typ.populate_index ~current_type_ast_level ~current_typevars)
+        |> Or_error.combine_errors
+        |> Or_error.tag
+             ~tag:
+               "DeBruijnPopulationError: Error in typs\n\
+               \    in the explicit substitution"
+        >>= fun typs ->
         let populated_expr_or_error_list =
           List.map exprs ~f:(fun e ->
               populate_index e ~current_ast_level ~current_identifiers
@@ -1005,7 +1071,7 @@ end = struct
         MetaIdentifier.populate_index metaid
           ~current_level:current_meta_ast_level
           ~current_identifiers:current_meta_identifiers
-        >>= fun metaid -> Ok (Closure (metaid, exprs))
+        >>= fun metaid -> Ok (Closure (metaid, typs, exprs))
     | Constr (tid, e_opt) -> (
         (* Or_error.unimplemented "not implemented" *)
         (* Congruence*)
@@ -1229,12 +1295,17 @@ end = struct
         shift_indices e2 ~obj_depth:(obj_depth + 1) ~meta_depth ~type_depth
           ~obj_offset ~meta_offset ~type_offset
         >>= fun e2 -> Ok (LetRecMutual (iddef_e_list, e2))
-    | Box (ctx, e) ->
+    | Box (tvctx, ctx, e) ->
+        (* Again, when shifting we want to record the new depth in the case the typevar context is non-empty. *)
+        let new_type_depth =
+          if TypeVarContext.is_empty tvctx then type_depth else type_depth + 1
+        in
         (*Can only shift meta indices*)
-        Context.shift_indices ctx ~type_depth ~type_offset >>= fun ctx ->
-        shift_indices e ~obj_depth:(obj_depth + 1) ~meta_depth ~type_depth
-          ~obj_offset ~meta_offset ~type_offset
-        >>= fun e -> Ok (Box (ctx, e))
+        Context.shift_indices ctx ~type_depth:new_type_depth ~type_offset
+        >>= fun ctx ->
+        shift_indices e ~obj_depth:(obj_depth + 1) ~meta_depth
+          ~type_depth:new_type_depth ~obj_offset ~meta_offset ~type_offset
+        >>= fun e -> Ok (Box (tvctx, ctx, e))
     | LetBox (metaid, e, e2) ->
         shift_indices e ~obj_depth ~meta_depth ~type_depth ~obj_offset
           ~meta_offset ~type_offset
@@ -1242,8 +1313,15 @@ end = struct
         shift_indices e2 ~obj_depth ~meta_depth:(meta_depth + 1) ~type_depth
           ~obj_offset ~meta_offset ~type_offset
         >>= fun e2 -> Ok (LetBox (metaid, e, e2))
-    | Closure (metaid, exprs) ->
-        let populated_expr_or_error_list =
+    | Closure (metaid, typs, exprs) ->
+        List.map typs ~f:(Typ.shift_indices ~type_depth ~type_offset)
+        |> Or_error.combine_errors
+        |> Or_error.tag
+             ~tag:
+               "DeBruijnShiftingError[OBJECT]: Error in the explicit type \
+                substitution term of a closure"
+        >>= fun typs ->
+        let expr_or_error_list =
           List.map exprs ~f:(fun e ->
               shift_indices e ~obj_depth ~meta_depth ~type_depth ~obj_offset
                 ~meta_offset ~type_offset)
@@ -1252,12 +1330,12 @@ end = struct
           ~tag:
             "DeBruijnShiftingError[OBJECT]: Error in the explicit substitution \
              term of a closure"
-          (Or_error.combine_errors populated_expr_or_error_list)
+          (Or_error.combine_errors expr_or_error_list)
         >>= fun exprs ->
         Or_error.tag
           ~tag:"DeBruijnShiftingError[META]: Shifting meta index failed."
           (MetaIdentifier.shift metaid ~depth:meta_depth ~offset:meta_offset)
-        >>= fun metaid -> Ok (Closure (metaid, exprs))
+        >>= fun metaid -> Ok (Closure (metaid, typs, exprs))
     | Constr (tid, e_opt) -> (
         match e_opt with
         | None -> Ok (Constr (tid, None))
@@ -1320,8 +1398,8 @@ end = struct
           ~meta_offset ~type_offset e3
         >>= fun e3 -> Ok (ArrayAssign (e1, e2, e3))
     | BigLambda (v, e) ->
-        shift_indices ~obj_depth ~meta_depth ~type_depth ~obj_offset
-          ~meta_offset ~type_offset:(type_offset + 1) e
+        shift_indices ~obj_depth ~meta_depth ~type_depth:(type_depth + 1)
+          ~obj_offset ~meta_offset ~type_offset e
         >>= fun e -> Ok (BigLambda (v, e))
     | TypeApply (e, t) ->
         Typ.shift_indices ~type_depth ~type_offset t >>= fun t ->
@@ -1343,7 +1421,7 @@ end = struct
         in
         convert_exprs exprs >>= fun vs -> Some (Value.Prod vs)
     | Lambda (iddef, e) -> Some (Value.Lambda (iddef, e))
-    | Box (ctx, e) -> Some (Value.Box (ctx, e))
+    | Box (tvctx, ctx, e) -> Some (Value.Box (tvctx, ctx, e))
     | Constr (tid, e_opt) -> (
         match e_opt with
         | None -> Some (Value.Constr (tid, None))
@@ -1359,7 +1437,7 @@ and Value : sig
     | Left of Typ.t * Typ.t * t (*L[A,B] e*)
     | Right of Typ.t * Typ.t * t (*R[A,B] e*)
     | Lambda of IdentifierDefn.t * Expr.t (*fun (x : A) -> e*)
-    | Box of Context.t * Expr.t (*box (x:A, y:B |- e)*)
+    | Box of TypeVarContext.t * Context.t * Expr.t (*box (x:A, y:B |- e)*)
     | Constr of Constructor.t * t option
     | BigLambda of TypeVar.t * Expr.t
   [@@deriving sexp, show, compare, equal]
@@ -1373,7 +1451,7 @@ end = struct
     | Left of Typ.t * Typ.t * t (*L[A,B] e*)
     | Right of Typ.t * Typ.t * t (*R[A,B] e*)
     | Lambda of IdentifierDefn.t * Expr.t (*fun (x : A) -> e*)
-    | Box of Context.t * Expr.t (*box (x:A, y:B |- e)*)
+    | Box of TypeVarContext.t * Context.t * Expr.t (*box (x:A, y:B |- e)*)
     | Constr of Constructor.t * t option
     | BigLambda of TypeVar.t * Expr.t
   [@@deriving sexp, show, compare, equal]
@@ -1384,7 +1462,7 @@ end = struct
     | Left (t1, t2, v) -> Expr.Left (t1, t2, Expr.EValue v)
     | Right (t1, t2, v) -> Expr.Right (t1, t2, Expr.EValue v)
     | Lambda (iddef, expr) -> Expr.Lambda (iddef, expr)
-    | Box (ctx, expr) -> Expr.Box (ctx, expr)
+    | Box (tvctx, ctx, expr) -> Expr.Box (tvctx, ctx, expr)
     | Constr (constr, Some v) -> Expr.Constr (constr, Some (Expr.EValue v))
     | Constr (constr, None) -> Expr.Constr (constr, None)
     | BigLambda (typvar, e) -> Expr.BigLambda (typvar, e)
@@ -1403,7 +1481,7 @@ end = struct
     | Left (t1, t2, v) -> Expr.Left (t1, t2, to_expr_intensional v)
     | Right (t1, t2, v) -> Expr.Right (t1, t2, to_expr_intensional v)
     | Lambda (iddef, expr) -> Expr.Lambda (iddef, expr)
-    | Box (ctx, expr) -> Expr.Box (ctx, expr)
+    | Box (tvctx, ctx, expr) -> Expr.Box (tvctx, ctx, expr)
     | Constr (constr, Some v) ->
         Expr.Constr (constr, Some (to_expr_intensional v))
     | Constr (constr, None) -> Expr.Constr (constr, None)

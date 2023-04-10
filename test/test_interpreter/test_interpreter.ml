@@ -159,7 +159,8 @@ let generate_tests_for_interpreter interpreter =
                  Ast.Typ.TFun
                    ( Ast.Typ.TInt,
                      Ast.Typ.TBox
-                       ( [ (Ast.ObjIdentifier.of_string "b", Ast.Typ.TInt) ],
+                       ( [],
+                         [ (Ast.ObjIdentifier.of_string "b", Ast.Typ.TInt) ],
                          Ast.Typ.TInt ) ) ),
                Ast.Value.Lambda
                  ( (Ast.ObjIdentifier.of_string "n", Ast.Typ.TInt),
@@ -171,7 +172,8 @@ let generate_tests_for_interpreter interpreter =
                                 (create_debruijn_exn 0)),
                            Ast.Expr.Constant (Ast.Constant.Integer 0) ),
                        Ast.Expr.Box
-                         ( [ (Ast.ObjIdentifier.of_string "b", Ast.Typ.TInt) ],
+                         ( [],
+                           [ (Ast.ObjIdentifier.of_string "b", Ast.Typ.TInt) ],
                            Ast.Expr.Constant (Ast.Constant.Integer 1) ),
                        Ast.Expr.LetBox
                          ( Ast.MetaIdentifier.of_string "u",
@@ -187,7 +189,8 @@ let generate_tests_for_interpreter interpreter =
                                    Ast.Expr.Constant (Ast.Constant.Integer 1) )
                              ),
                            Ast.Expr.Box
-                             ( [
+                             ( [],
+                               [
                                  (Ast.ObjIdentifier.of_string "b", Ast.Typ.TInt);
                                ],
                                Ast.Expr.BinaryOp
@@ -198,6 +201,7 @@ let generate_tests_for_interpreter interpreter =
                                    Ast.Expr.Closure
                                      ( Ast.MetaIdentifier.of_string_and_index
                                          "u" (create_debruijn_exn 0),
+                                       [],
                                        [
                                          Ast.Expr.Identifier
                                            (Ast.ObjIdentifier
@@ -209,10 +213,12 @@ let generate_tests_for_interpreter interpreter =
                None );
            Interpreter_common.TopLevelEvaluationResult.ExprValue
              ( Ast.Typ.TBox
-                 ( [ (Ast.ObjIdentifier.of_string "b", Ast.Typ.TInt) ],
+                 ( [],
+                   [ (Ast.ObjIdentifier.of_string "b", Ast.Typ.TInt) ],
                    Ast.Typ.TInt ),
                Ast.Value.Box
-                 ( [ (Ast.ObjIdentifier.of_string "b", Ast.Typ.TInt) ],
+                 ( [],
+                   [ (Ast.ObjIdentifier.of_string "b", Ast.Typ.TInt) ],
                    Ast.Expr.BinaryOp
                      ( Ast.BinaryOperator.MUL,
                        Ast.Expr.Identifier
@@ -373,8 +379,9 @@ let generate_tests_for_interpreter interpreter =
         assert_equal
           (Some
              (Interpreter_common.TopLevelEvaluationResult.ExprValue
-                ( Ast.Typ.TBox ([], Ast.Typ.TInt),
-                  Ast.Value.Box ([], Ast.Expr.Constant (Ast.Constant.Integer 1)),
+                ( Ast.Typ.TBox ([], [], Ast.Typ.TInt),
+                  Ast.Value.Box
+                    ([], [], Ast.Expr.Constant (Ast.Constant.Integer 1)),
                   None,
                   None,
                   None )))
@@ -395,10 +402,12 @@ let generate_tests_for_interpreter interpreter =
              (Interpreter_common.TopLevelEvaluationResult.ExprValue
                 ( Ast.Typ.TBox
                     ( [],
+                      [],
                       Ast.Typ.TIdentifier (Ast.TypeIdentifier.of_string "tree")
                     ),
                   Ast.Value.Box
                     ( [],
+                      [],
                       Ast.Expr.Constr
                         ( Ast.Constructor.of_string "Br",
                           Some
@@ -724,9 +733,10 @@ let generate_tests_for_interpreter interpreter =
         assert_equal
           (Some
              (Interpreter_common.TopLevelEvaluationResult.ExprValue
-                ( Ast.Typ.TBox ([], Ast.Typ.TArray Ast.Typ.TInt),
+                ( Ast.Typ.TBox ([], [], Ast.Typ.TArray Ast.Typ.TInt),
                   Ast.Value.Box
                     ( [],
+                      [],
                       Ast.Expr.Array
                         [
                           Ast.Expr.Constant (Ast.Constant.Integer 1);

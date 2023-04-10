@@ -238,7 +238,7 @@ let standard_suite =
 let test_box _ =
   assert_equal
     (Or_error.ok (type_infer_from_str "box (x:int |- x);;"))
-    (Some (TBox ([ (Ast.ObjIdentifier.of_string "x", TInt) ], TInt)));
+    (Some (TBox ([], [ (Ast.ObjIdentifier.of_string "x", TInt) ], TInt)));
   assert_equal ~msg:"Duplicate variable in box context"
     (Or_error.ok (type_infer_from_str "box (x: int, x:int |- x);;"))
     None
@@ -275,7 +275,7 @@ let test_closure_unmatched_context_wrt_arguments _ =
 
 let test_lift_primitive _ =
   assert_equal
-    (Some (Ast.Typ.TBox ([], Ast.Typ.TInt)))
+    (Some (Ast.Typ.TBox ([], [], Ast.Typ.TInt)))
     (Or_error.ok (type_infer_from_str "lift[int] 1;;"))
 
 let test_lift_non_primitive _ =
