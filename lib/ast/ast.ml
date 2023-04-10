@@ -420,14 +420,12 @@ end = struct
     List.map ident_defn_list ~f:IdentifierDefn.of_past
 
   let populate_index v ~current_type_ast_level ~current_typevars =
-    let open Or_error.Monad_infix in
     List.map v
       ~f:
         (IdentifierDefn.populate_index ~current_type_ast_level ~current_typevars)
     |> Or_error.combine_errors
 
   let shift_indices v ~type_depth ~type_offset =
-    let open Or_error.Monad_infix in
     List.map v ~f:(IdentifierDefn.shift_indices ~type_depth ~type_offset)
     |> Or_error.combine_errors
 end
@@ -1363,6 +1361,7 @@ and Value : sig
     | Lambda of IdentifierDefn.t * Expr.t (*fun (x : A) -> e*)
     | Box of Context.t * Expr.t (*box (x:A, y:B |- e)*)
     | Constr of Constructor.t * t option
+    | BigLambda of TypeVar.t * Expr.t
   [@@deriving sexp, show, compare, equal]
 
   val to_expr : Value.t -> Expr.t
@@ -1376,6 +1375,7 @@ end = struct
     | Lambda of IdentifierDefn.t * Expr.t (*fun (x : A) -> e*)
     | Box of Context.t * Expr.t (*box (x:A, y:B |- e)*)
     | Constr of Constructor.t * t option
+    | BigLambda of TypeVar.t * Expr.t
   [@@deriving sexp, show, compare, equal]
 
   let to_expr = function
@@ -1387,6 +1387,7 @@ end = struct
     | Box (ctx, expr) -> Expr.Box (ctx, expr)
     | Constr (constr, Some v) -> Expr.Constr (constr, Some (Expr.EValue v))
     | Constr (constr, None) -> Expr.Constr (constr, None)
+    | BigLambda (typvar, e) -> Expr.BigLambda (typvar, e)
 
   let rec to_expr_intensional = function
     (*This function does not preserve semantics for impure terms, but rather converts to an intensional representation*)
@@ -1406,6 +1407,7 @@ end = struct
     | Constr (constr, Some v) ->
         Expr.Constr (constr, Some (to_expr_intensional v))
     | Constr (constr, None) -> Expr.Constr (constr, None)
+    | BigLambda (typvar, e) -> Expr.BigLambda (typvar, e)
 end
 
 and Directive : sig

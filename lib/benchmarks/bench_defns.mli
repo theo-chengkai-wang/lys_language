@@ -1,5 +1,3 @@
-open Core
-
 module Legacy : sig
   module Benchmark_program_legacy: sig
     type t = { name : string; body : string; persist : bool }

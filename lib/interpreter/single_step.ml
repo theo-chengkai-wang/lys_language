@@ -831,7 +831,26 @@ let rec reduce ~top_level_context ~type_constr_context expr =
                       Or_error.error
                         "SingleStepReductionError: FATAL: arr is not an array \
                          [arr]"
-                        arr [%sexp_of: Ast.Expr.t]))
+                        arr [%sexp_of: Ast.Expr.t])
+      | Ast.Expr.BigLambda (typevar, e) ->
+          Ok (ReduceResult.NotReduced (Ast.Value.BigLambda (typevar, e)))
+      | Ast.Expr.TypeApply (e, typ) ->
+          reduce ~top_level_context ~type_constr_context e
+          >>= ReduceResult.process
+                ~reduced:(fun e ->
+                  Ok (ReduceResult.ReducedToExpr (Ast.Expr.TypeApply (e, typ))))
+                ~not_reduced:(fun value ->
+                  match value with
+                  | BigLambda (tv, inner_e) ->
+                      Substitutions.type_term_substitute typ tv inner_e
+                      >>= fun substitued_e ->
+                      Ok (ReduceResult.ReducedToExpr substitued_e)
+                  | _ ->
+                      Or_error.error
+                        "EvaluationError: FATAL: can only type apply on a big \
+                         lambda. (term)"
+                        (Ast.Expr.TypeApply (e, typ))
+                        [%sexp_of: Ast.Expr.t]))
 
 let multi_step_reduce ~top_level_context ~type_constr_context ?(verbose = false)
     expr =

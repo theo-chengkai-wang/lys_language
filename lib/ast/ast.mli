@@ -266,6 +266,7 @@ and Value : sig
     | Lambda of IdentifierDefn.t * Expr.t (*fun (x : A) -> e*)
     | Box of Context.t * Expr.t (*box (x:A, y:B |- e)*)
     | Constr of Constructor.t * t option
+    | BigLambda of TypeVar.t * Expr.t
   [@@deriving sexp, show, compare, equal]
 
   val to_expr : Value.t -> Expr.t

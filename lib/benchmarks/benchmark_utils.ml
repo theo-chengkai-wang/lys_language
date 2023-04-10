@@ -3,7 +3,6 @@ open Lys_parsing
 open Lys_typing
 open Lys_interpreter
 open Lys_ast
-open Bench_defns
 
 let evaluate_from_lexbuf_given_context interpreter lexbuf context typ_context =
   lexbuf |> Lex_and_parse.parse_program |> Ast.Program.of_past

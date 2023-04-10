@@ -580,6 +580,21 @@ let rec multi_step_reduce ~top_level_context ~type_constr_context ~expr =
       | _ ->
           Or_error.error "EvaluationError: FATAL: arr is not an array [arr]" arr
             [%sexp_of: Ast.Expr.t])
+  | Ast.Expr.BigLambda (typevar, e) -> Ok (Ast.Value.BigLambda (typevar, e))
+  | Ast.Expr.TypeApply (e, typ) -> (
+      multi_step_reduce ~top_level_context ~type_constr_context ~expr:e
+      >>= fun value ->
+      match value with
+      | BigLambda (tv, inner_e) ->
+          Substitutions.type_term_substitute typ tv inner_e
+          >>= fun substituted_e ->
+          multi_step_reduce ~top_level_context ~type_constr_context ~expr:substituted_e
+      | _ ->
+          Or_error.error
+            "EvaluationError: FATAL: can only type apply on a big lambda. \
+             (term)"
+            (Ast.Expr.TypeApply (e, typ))
+            [%sexp_of: Ast.Expr.t])
 
 let evaluate_top_level_defn ?(top_level_context = EvaluationContext.empty)
     ?(type_constr_context = TypeConstrContext.empty) ?(time_exec = false)
