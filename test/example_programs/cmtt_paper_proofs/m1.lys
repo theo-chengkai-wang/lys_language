@@ -1,5 +1,5 @@
-let m1: (([x:_c]_a) -> ([y1: _c, y2: _d]_a)) = 
-    fun (z: [x:_c]_a) -> 
-        let box u = z in box (y1: _c, y2: _d |- u with (y1))
+let m1: forall '_a. forall '_b. forall '_c. forall '_d. (([x:'_c]'_a) -> ([y1: '_c, y2: '_d]'_a)) = 
+    '_a.'_b.'_c.'_d. fun (z: [x:'_c]'_a) -> 
+        let box u = z in box (y1: '_c, y2: '_d |- u with (y1))
 in ()
 ;;
