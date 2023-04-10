@@ -738,6 +738,73 @@ let generate_tests_for_interpreter interpreter =
                   None )))
           (List.last results)
   in
+  let test_poly_define _ =
+    let program =
+      "'a. fun (x: 'a) -> 'b. fun (y: 'b) -> 1;;"
+    in
+    let res_opt = exec_program interpreter program in
+    match res_opt with
+    | None -> assert_string "Program Execution Failed"
+    | Some results ->
+        assert_equal
+          (Some
+             (Interpreter_common.TopLevelEvaluationResult.ExprValue
+                ( Ast.Typ.TForall
+                    ( Ast.TypeVar.of_string "a",
+                      Ast.Typ.TFun
+                        ( Ast.Typ.TVar
+                            (Ast.TypeVar.of_string_and_index "a"
+                               (Ast.DeBruijnIndex.create 0 |> ok_exn)),
+                          Ast.Typ.TForall
+                            ( Ast.TypeVar.of_string "b",
+                              Ast.Typ.TFun
+                                ( Ast.Typ.TVar
+                                    (Ast.TypeVar.of_string_and_index "b"
+                                       (Ast.DeBruijnIndex.create 0 |> ok_exn)),
+                                  Ast.Typ.TInt ) ) ) ),
+                  Ast.Value.BigLambda
+                    ( Ast.TypeVar.of_string "a",
+                      Ast.Expr.Lambda
+                        ( ( Ast.ObjIdentifier.of_string "x",
+                            Ast.Typ.TVar
+                              (Ast.TypeVar.of_string_and_index "a"
+                                 (Ast.DeBruijnIndex.create 0 |> ok_exn)) ),
+                          Ast.Expr.BigLambda
+                            ( Ast.TypeVar.of_string "b",
+                              Ast.Expr.Lambda
+                                ( ( Ast.ObjIdentifier.of_string "y",
+                                    Ast.Typ.TVar
+                                      (Ast.TypeVar.of_string_and_index "b"
+                                         (Ast.DeBruijnIndex.create 0 |> ok_exn))
+                                  ),
+                                  Ast.Expr.Constant (Ast.Constant.Integer 1) )
+                            ) ) ),
+                  None,
+                  None,
+                  None )))
+          (List.last results)
+  in
+  let test_poly_apply _ =
+    let program =
+      "let rec b_f_2: forall 'a. 'a -> forall 'b. 'b -> int = 'a. fun (x: 'a) \
+       -> 'b. fun (y: 'b) -> 1;;\n\
+      \       b_f_2 [int] 1 [string] \"123\";;"
+    in
+    let res_opt = exec_program interpreter program in
+    match res_opt with
+    | None -> assert_string "Program Execution Failed"
+    | Some results ->
+        assert_equal
+          (Some
+             (Interpreter_common.TopLevelEvaluationResult.ExprValue
+                ( Ast.Typ.TInt,
+                  Ast.Value.Constant (Ast.Constant.Integer 1),
+                  None,
+                  None,
+                  None )))
+          (List.last results)
+  in
+
   let interpreter_suite =
     "interpreter_main_suite"
     >::: [
@@ -767,6 +834,8 @@ let generate_tests_for_interpreter interpreter =
            "test_array_len" >:: test_array_len;
            "test_array_get_set" >:: test_array_get_set;
            "test_array_lift" >:: test_array_lift;
+           "test_poly_define" >:: test_poly_define;
+           "test_poly_apply" >:: test_poly_apply;
          ]
   in
   let test_intlist_map _ =

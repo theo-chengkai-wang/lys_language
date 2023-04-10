@@ -60,9 +60,10 @@ let test_read_prog filename _ =
   in
   let open Or_error.Monad_infix in
   parsed_program |> Ast.Program.populate_index >>= Typecore.type_check_program
-  |> fun r -> match r with
+  |> fun r ->
+  match r with
   | Ok _ -> ()
-  | Error e -> assert_failure ("Type checking failed." ^ (Error.to_string_hum e))
+  | Error e -> assert_failure ("Type checking failed." ^ Error.to_string_hum e)
 
 let prefix =
   Filename.concat Filename.current_dir_name
@@ -464,6 +465,11 @@ let test_reg_type_substitution _ =
   assert_bool "Type check has failed"
     (Option.is_some (type_check_program_from_str program))
 
+let test_unbound_poly_should_fail _ =
+  let program = "let b_f_fail: 'a -> 'a = fun (x: 'a) -> x;;" in
+  assert_bool "Type check hasn't failed"
+    (Option.is_none (type_check_program_from_str program))
+
 let polymorphism_suite =
   "polymorphism_suite"
   >::: [
@@ -471,6 +477,7 @@ let polymorphism_suite =
          "test_poly_rec_apply" >:: test_poly_rec_apply;
          "test_datatype_with_poly_node" >:: test_datatype_with_poly_node;
          "test_reg_type_substitution" >:: test_reg_type_substitution;
+         "test_unbound_poly_should_fail" >:: test_unbound_poly_should_fail;
        ]
 
 let suite =
