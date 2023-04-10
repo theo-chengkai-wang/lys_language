@@ -66,7 +66,7 @@ let test_read_prog filename _ =
   | Error e -> assert_failure ("Type checking failed." ^ Error.to_string_hum e)
 
 let prefix =
-  Filename.concat Filename.current_dir_name
+  Filename.concat Filename.parent_dir_name
     (Filename.concat "example_programs" "cmtt_paper_proofs")
 
 let files_to_test =
@@ -490,3 +490,6 @@ let suite =
          imperative_suite;
          polymorphism_suite;
        ]
+
+let () = run_test_tt_main suite
+

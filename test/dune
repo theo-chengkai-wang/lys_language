@@ -1,5 +1,4 @@
 (test
  (name lys_language)
  (modules lys_language)
- (libraries ounit2 test_parsing test_typing test_interpreter))
-
+ (libraries ounit2))

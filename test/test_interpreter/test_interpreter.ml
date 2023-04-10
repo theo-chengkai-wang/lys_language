@@ -739,9 +739,7 @@ let generate_tests_for_interpreter interpreter =
           (List.last results)
   in
   let test_poly_define _ =
-    let program =
-      "'a. fun (x: 'a) -> 'b. fun (y: 'b) -> 1;;"
-    in
+    let program = "'a. fun (x: 'a) -> 'b. fun (y: 'b) -> 1;;" in
     let res_opt = exec_program interpreter program in
     match res_opt with
     | None -> assert_string "Program Execution Failed"
@@ -969,3 +967,5 @@ let suite =
          generate_tests_for_interpreter
            (Interpreter.MultiStep { show_time = false });
        ]
+
+let () = run_test_tt_main suite

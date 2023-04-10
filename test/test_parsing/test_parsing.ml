@@ -86,7 +86,8 @@ let test_box _ =
   assert_equal
     (Some
        (Past.Expr.Box
-          ( [ ("x", Past.Typ.TInt); ("y", Past.Typ.TBool) ],
+          ( [],
+            [ ("x", Past.Typ.TInt); ("y", Past.Typ.TBool) ],
             Past.Expr.Identifier "a" )))
     (parse_expression (Lexing.from_string "box (x: int, y: bool |- a);;"))
 
@@ -96,7 +97,8 @@ let test_unbox _ =
        (Past.Expr.LetBox
           ( "u",
             Past.Expr.Box
-              ( [ ("x", Past.Typ.TInt); ("y", Past.Typ.TBool) ],
+              ( [],
+                [ ("x", Past.Typ.TInt); ("y", Past.Typ.TBool) ],
                 Past.Expr.Identifier "a" ),
             Past.Expr.Identifier "e" )))
     (parse_expression
@@ -107,6 +109,7 @@ let test_with _ =
     (Some
        (Past.Expr.Closure
           ( "u",
+            [],
             [
               Past.Expr.Constant (Past.Constant.Integer 1);
               Past.Expr.Constant (Past.Constant.Integer 2);
@@ -147,10 +150,11 @@ let test_reg_parse_unit_and_not_unit _ =
   assert_equal
     (Some
        (Past.Expr.LetBinding
-          ( ("x", Past.Typ.TBox ([], Past.Typ.TIdentifier "_A")),
-            Past.Expr.Box ([], Past.Expr.Identifier "_A"),
+          ( ("x", Past.Typ.TBox ([], [], Past.Typ.TIdentifier "_A")),
+            Past.Expr.Box ([], [], Past.Expr.Identifier "_A"),
             Past.Expr.LetBox
-              ("u", Past.Expr.Identifier "x", Past.Expr.Closure ("u", [])) )))
+              ("u", Past.Expr.Identifier "x", Past.Expr.Closure ("u", [], []))
+          )))
     (parse_expression
        (Lexing.from_string
           "let x: []_A = box (|- _A) in\nlet box u = x in\n    u with ();;\n"))
@@ -900,3 +904,5 @@ let suite =
          "test_big_lambda_precedance_wrt_func"
          >:: test_big_lambda_precedance_wrt_func;
        ]
+
+let () = run_test_tt_main suite
