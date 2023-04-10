@@ -546,11 +546,15 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx e =
         Or_error.tag
           (Or_error.combine_errors_unit
              (List.map zipped_list ~f:(fun ((_, typ), e) ->
+                  (* Subsitute type *)
+                  Substitutions.sim_type_type_substitute typs box_tvctx typ
+                  >>= fun typ ->
                   type_check_expression meta_ctx ctx type_ctx typevar_ctx e typ)))
           ~tag:
             "TypeInferenceError: Type mismatch between context and expressions \
              provided to substitute in."
-        >>= fun () -> (* Now substitute the typ *) 
+        >>= fun () ->
+        (* Now substitute the typ *)
         Substitutions.sim_type_type_substitute typs box_tvctx box_typ
   | Ast.Expr.Match (e, pattn_expr_list) -> (
       (*

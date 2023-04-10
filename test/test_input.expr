@@ -1,5 +1,8 @@
 box ('a; x: 'a |- x);;
 let x: ['a; x: 'a]'a = box ('a; x: 'a |- x);;
 let x: ['a; x: 'a |- 'a] = box ('a; x: 'a |- x);;
+let y: ['b; y: 'b |- 'b] =
+    let box u = x in
+        box ('b; y: 'b  |- u with ['b](y));;
 let box u = x in
     u with [int](1);;

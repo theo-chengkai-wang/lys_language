@@ -470,6 +470,34 @@ let test_unbound_poly_should_fail _ =
   assert_bool "Type check hasn't failed"
     (Option.is_none (type_check_program_from_str program))
 
+let test_basic_polybox_with_alt_syntax _ =
+  let program =
+    "let x: ['a; x: 'a]'a = box ('a; x: 'a |- x);;\n\
+    \    let x: ['a; x: 'a |- 'a] = box ('a; x: 'a |- x);;"
+  in
+  assert_bool "Type check has failed"
+    (Option.is_some (type_check_program_from_str program))
+
+let test_polybox_compose _ =
+  let program =
+    "let x: ['a; x: 'a]'a = box ('a; x: 'a |- x);;\n\
+    \    let y: ['b; y: 'b |- 'b] =\n\
+    \    let box u = x in\n\
+    \        box ('b; y: 'b  |- u with ['b](y));;"
+  in
+  assert_bool "Type check has failed"
+    (Option.is_some (type_check_program_from_str program))
+
+let test_polybox_unbox_close _ =
+  let program =
+    "let x: ['a; x: 'a]'a = box ('a; x: 'a |- x);;\n\
+    \        let y: int =\n\
+    \        let box u = x in\n\
+    \          u with [int](1);;"
+  in
+  assert_bool "Type check has failed"
+    (Option.is_some (type_check_program_from_str program))
+
 let polymorphism_suite =
   "polymorphism_suite"
   >::: [
@@ -478,6 +506,10 @@ let polymorphism_suite =
          "test_datatype_with_poly_node" >:: test_datatype_with_poly_node;
          "test_reg_type_substitution" >:: test_reg_type_substitution;
          "test_unbound_poly_should_fail" >:: test_unbound_poly_should_fail;
+         "test_basic_polybox_with_alt_syntax"
+         >:: test_basic_polybox_with_alt_syntax;
+         "test_polybox_compose" >:: test_polybox_compose;
+         "test_polybox_unbox_close" >:: test_polybox_unbox_close;
        ]
 
 let suite =
@@ -492,4 +524,3 @@ let suite =
        ]
 
 let () = run_test_tt_main suite
-
