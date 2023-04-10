@@ -58,9 +58,11 @@ let test_read_prog filename _ =
   let parsed_program =
     read_parse_file_as_program filename |> Ast.Program.of_past
   in
-  match Typecore.type_check_program parsed_program with
+  let open Or_error.Monad_infix in
+  parsed_program |> Ast.Program.populate_index >>= Typecore.type_check_program
+  |> fun r -> match r with
   | Ok _ -> ()
-  | Error _ -> assert_failure "Type checking failed."
+  | Error e -> assert_failure ("Type checking failed." ^ (Error.to_string_hum e))
 
 let prefix =
   Filename.concat Filename.current_dir_name
