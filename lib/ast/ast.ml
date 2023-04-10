@@ -215,7 +215,7 @@ end = struct
     | Past.Typ.TString -> TString
     | Past.Typ.TIdentifier id -> TIdentifier (TypeIdentifier.of_past id)
     | Past.Typ.TFun (t1, t2) -> TFun (of_past t1, of_past t2)
-    | Past.Typ.TBox (ctx, t1) -> TBox (Context.of_past ctx, of_past t1)
+    | Past.Typ.TBox (_, ctx, t1) -> TBox (Context.of_past ctx, of_past t1) (* TODO: MODIFY *)
     | Past.Typ.TProd ts -> TProd (List.map ts ~f:of_past)
     | Past.Typ.TSum (t1, t2) -> TSum (of_past t1, of_past t2)
     | Past.Typ.TRef t -> TRef (of_past t)
@@ -734,10 +734,10 @@ end = struct
           ( List.map iddef_e_list ~f:(fun (iddef, e) ->
                 (IdentifierDefn.of_past iddef, of_past e)),
             of_past e2 )
-    | Past.Expr.Box (ctx, e) -> Box (Context.of_past ctx, of_past e)
+    | Past.Expr.Box (_, ctx, e) -> Box (Context.of_past ctx, of_past e)
     | Past.Expr.LetBox (metaid, e, e2) ->
         LetBox (MetaIdentifier.of_past metaid, of_past e, of_past e2)
-    | Past.Expr.Closure (metaid, exprs) ->
+    | Past.Expr.Closure (metaid, _, exprs) ->
         Closure (MetaIdentifier.of_past metaid, List.map exprs ~f:of_past)
     | Past.Expr.Constr (constructor, Some value) ->
         Constr (Constructor.of_past constructor, Some (Expr.of_past value))

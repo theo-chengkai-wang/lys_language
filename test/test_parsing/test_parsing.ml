@@ -838,6 +838,65 @@ let test_big_lambda_precedance_wrt_func _ =
        (Lexing.from_string
           "let f: forall 'b. forall 'a. 'a -> int = 'b.('a. fun (x: 'a) -> 1);;"))
 
+let test_poly_box _ =
+  assert_equal
+    [
+      Past.TopLevelDefn.Expression
+        (Past.Expr.Box
+           ([ "a" ], [ ("x", Past.Typ.TVar "a") ], Past.Expr.Identifier "x"));
+    ]
+    (parse_program (Lexing.from_string "box ('a; x: 'a |- x);;"))
+
+let test_poly_box_defn _ =
+  assert_equal
+    [
+      Past.TopLevelDefn.Definition
+        ( ( "x",
+            Past.Typ.TBox
+              ([ "a" ], [ ("x", Past.Typ.TVar "a") ], Past.Typ.TVar "a") ),
+          Past.Expr.Box
+            ([ "a" ], [ ("x", Past.Typ.TVar "a") ], Past.Expr.Identifier "x") );
+    ]
+    (parse_program
+       (Lexing.from_string "let x: ['a; x: 'a]'a = box ('a; x: 'a |- x);;"))
+
+let test_poly_box_alt_type_def _ =
+  assert_equal
+    [
+      Past.TopLevelDefn.Definition
+        ( ( "x",
+            Past.Typ.TBox
+              ([ "a" ], [ ("x", Past.Typ.TVar "a") ], Past.Typ.TVar "a") ),
+          Past.Expr.Box
+            ([ "a" ], [ ("x", Past.Typ.TVar "a") ], Past.Expr.Identifier "x") );
+    ]
+    (parse_program
+       (Lexing.from_string "let x: ['a; x: 'a |- 'a] = box ('a; x: 'a |- x);;"))
+
+let test_poly_box_use _ =
+  assert_equal
+    [
+      Past.TopLevelDefn.Definition
+        ( ( "x",
+            Past.Typ.TBox
+              ([ "a" ], [ ("x", Past.Typ.TVar "a") ], Past.Typ.TVar "a") ),
+          Past.Expr.Box
+            ([ "a" ], [ ("x", Past.Typ.TVar "a") ], Past.Expr.Identifier "x") );
+      Past.TopLevelDefn.Expression
+        (Past.Expr.LetBox
+           ( "u",
+             Past.Expr.Identifier "x",
+             Past.Expr.Closure
+               ( "u",
+                 [ Past.Typ.TInt ],
+                 [ Past.Expr.Constant (Past.Constant.Integer 1) ] ) ));
+    ]
+    (parse_program
+       (Lexing.from_string
+          "let x: ['a; x: 'a |- 'a] = box ('a; x: 'a |- x);;\n\
+          \          let box u = x in\n\
+          \              u with [int](1);;"))
+
 (* Name the test cases and group them together *)
 let suite =
   "parsing_suite"
@@ -903,6 +962,10 @@ let suite =
          "test_big_lambda" >:: test_big_lambda;
          "test_big_lambda_precedance_wrt_func"
          >:: test_big_lambda_precedance_wrt_func;
+         "test_poly_box" >:: test_poly_box;
+         "test_poly_box_defn" >:: test_poly_box_defn;
+         "test_poly_box_alt_type_def" >:: test_poly_box_alt_type_def;
+         "test_poly_box_use" >:: test_poly_box_use;
        ]
 
 let () = run_test_tt_main suite

@@ -7,7 +7,8 @@ module Constructor : sig
 end
 
 module rec Identifier : Identifier_type
-and TypeVar: Identifier_type
+and TypeVar : Identifier_type
+
 and Typ : sig
   type t =
     | TUnit
@@ -17,7 +18,7 @@ and Typ : sig
     | TString
     | TIdentifier of Identifier.t
     | TFun of t * t
-    | TBox of Context.t * t
+    | TBox of TypeVarContext.t * Context.t * t
     | TProd of t list
     | TSum of t * t
     | TRef of t
@@ -33,6 +34,10 @@ end
 
 and Context : sig
   type t = IdentifierDefn.t list [@@deriving sexp, show, equal, compare]
+end
+
+and TypeVarContext : sig
+  type t = TypeVar.t list [@@deriving sexp, show, equal, compare]
 end
 
 and BinaryOperator : sig
@@ -59,7 +64,8 @@ and BinaryOperator : sig
 end
 
 and UnaryOperator : sig
-  type t = NEG | NOT | DEREF | ARRAY_LEN [@@deriving sexp, show, equal, compare]
+  type t = NEG | NOT | DEREF | ARRAY_LEN
+  [@@deriving sexp, show, equal, compare]
 end
 
 and Constant : sig
@@ -108,9 +114,9 @@ and Expr : sig
     (*let rec f: A->B =
       e[f] in e'*)
     | LetRecMutual of (IdentifierDefn.t * t) list * t
-    | Box of Context.t * t (*box (x:A, y:B |- e)*)
+    | Box of TypeVarContext.t * Context.t * t (*box (x:A, y:B |- e)*)
     | LetBox of Identifier.t * t * t (*let box u = e in e'*)
-    | Closure of Identifier.t * t list (*u with (e1, e2, e3, ...)*)
+    | Closure of Identifier.t * Typ.t list * t list (*u with (e1, e2, e3, ...)*)
     | Constr of Constructor.t * t option (* Constr e*)
     | Match of t * (Pattern.t * t) list
     | Lift of Typ.t * t

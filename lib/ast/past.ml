@@ -29,7 +29,7 @@ and Typ : sig
     | TString
     | TIdentifier of Identifier.t
     | TFun of t * t
-    | TBox of Context.t * t
+    | TBox of TypeVarContext.t * Context.t * t
     | TProd of t list
     | TSum of t * t
     | TRef of t
@@ -46,7 +46,7 @@ end = struct
     | TString
     | TIdentifier of Identifier.t
     | TFun of t * t
-    | TBox of Context.t * t
+    | TBox of TypeVarContext.t * Context.t * t
     | TProd of t list
     | TSum of t * t
     | TRef of t
@@ -66,6 +66,12 @@ and Context : sig
   type t = IdentifierDefn.t list [@@deriving sexp, show, equal, compare]
 end = struct
   type t = IdentifierDefn.t list [@@deriving sexp, show, equal, compare]
+end
+
+and TypeVarContext : sig
+  type t = TypeVar.t list [@@deriving sexp, show, equal, compare]
+end = struct
+  type t = TypeVar.t list [@@deriving sexp, show, equal, compare]
 end
 
 and BinaryOperator : sig
@@ -190,9 +196,9 @@ and Expr : sig
     (*let rec f: A->B =
       e[f] in e'*)
     | LetRecMutual of (IdentifierDefn.t * t) list * t
-    | Box of Context.t * t (*box (x:A, y:B |- e)*)
+    | Box of TypeVarContext.t * Context.t * t (*box (x:A, y:B |- e)*)
     | LetBox of Identifier.t * t * t (*let box u = e in e'*)
-    | Closure of Identifier.t * t list (*u with (e1, e2, e3, ...)*)
+    | Closure of Identifier.t * Typ.t list * t list (*u with (e1, e2, e3, ...)*)
     | Constr of Constructor.t * t option (* Constr e*)
     | Match of t * (Pattern.t * t) list
     | Lift of Typ.t * t (* lift[typ] e*)
@@ -226,9 +232,9 @@ end = struct
       (*let rec f: A->B =
         e[f] in e'*)
     | LetRecMutual of (IdentifierDefn.t * t) list * t
-    | Box of Context.t * t (*box (x:A, y:B |- e)*)
+    | Box of TypeVarContext.t * Context.t * t (*box (x:A, y:B |- e)*)
     | LetBox of Identifier.t * t * t (*let box u = e in e'*)
-    | Closure of Identifier.t * t list (*u with (e1, e2, e3, ...)*)
+    | Closure of Identifier.t * Typ.t list * t list (*u with (e1, e2, e3, ...)*)
     | Constr of Constructor.t * t option (* Constr e*)
     | Match of t * (Pattern.t * t) list
       (*match e with pattern -> ... | ... -> ... | ... -> ... | ...*)
