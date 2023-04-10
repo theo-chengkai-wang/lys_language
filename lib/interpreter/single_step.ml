@@ -524,8 +524,8 @@ let rec reduce ~top_level_context ~type_constr_context expr =
             (* [substituted_v/f; substituted_v2/g]e2 *)
             Substitutions.sim_substitute substituted_expr_list iddefs e2
             >>= fun ev2 -> Ok (ReduceResult.ReducedToExpr ev2)
-      | Ast.Expr.Box (ctx, e) ->
-          Ok (ReduceResult.NotReduced (Ast.Value.Box (ctx, e)))
+      | Ast.Expr.Box (tvctx, ctx, e) ->
+          Ok (ReduceResult.NotReduced (Ast.Value.Box (tvctx, ctx, e)))
       | Ast.Expr.LetBox (metaid, e, e2) ->
           reduce ~top_level_context ~type_constr_context e >>= fun box_res ->
           ReduceResult.process box_res
@@ -535,8 +535,8 @@ let rec reduce ~top_level_context ~type_constr_context expr =
                    (Ast.Expr.LetBox (metaid, box_e, e2))))
             ~not_reduced:(fun box_v ->
               match box_v with
-              | Ast.Value.Box (ctx, e_box) ->
-                  Substitutions.meta_substitute ctx e_box metaid e2
+              | Ast.Value.Box (tvctx, ctx, e_box) ->
+                  Substitutions.meta_substitute tvctx ctx e_box metaid e2
                   |> fun or_error ->
                   Or_error.tag_arg or_error
                     "SingleStepReductionError: Meta substitution error: \
@@ -555,7 +555,7 @@ let rec reduce ~top_level_context ~type_constr_context expr =
                      [FATAL] should not happen! Type check should have \
                      prevented this."
                     expr [%sexp_of: Ast.Expr.t])
-      | Ast.Expr.Closure (_, _) ->
+      | Ast.Expr.Closure (_, _, _) ->
           error
             "SingleStepReductionError: One should never have to evaluate a raw \
              closure."
@@ -567,7 +567,7 @@ let rec reduce ~top_level_context ~type_constr_context expr =
               Ok (ReduceResult.ReducedToExpr (Ast.Expr.Lift (t, new_e))))
             ~not_reduced:(fun v ->
               let expr_v = Ast.Value.to_expr_intensional v in
-              Ok (ReduceResult.ReducedToVal (Ast.Value.Box ([], expr_v))))
+              Ok (ReduceResult.ReducedToVal (Ast.Value.Box ([], [], expr_v))))
       | Ast.Expr.Constr (constr, e_opt) -> (
           if
             Option.is_none

@@ -28,9 +28,10 @@ let loop str () =
   let current_meta_identifiers =
     String_map.empty |> String_map.set ~key:"u" ~data:0
   in
-  let current_typevars = String_map.empty in 
-  Ast.Expr.populate_index e ~current_ast_level:1 ~current_meta_ast_level:1 ~current_type_ast_level:1
-    ~current_identifiers ~current_meta_identifiers  ~current_typevars
+  let current_typevars = String_map.empty in
+  Ast.Expr.populate_index e ~current_ast_level:1 ~current_meta_ast_level:1
+    ~current_type_ast_level:1 ~current_identifiers ~current_meta_identifiers
+    ~current_typevars
   |> ok_exn
   |> (*Do something*)
   (fun expr ->
@@ -40,7 +41,7 @@ let loop str () =
        (Ast.Expr.Identifier (Ast.ObjIdentifier.of_string_and_index "w" db_index))
        (Ast.ObjIdentifier.of_string "y")
        expr) *)
-    Substitutions.meta_substitute
+    Substitutions.meta_substitute []
       [ (Ast.ObjIdentifier.of_string "A", Ast.Typ.TInt) ]
       (Ast.Expr.Identifier (Ast.ObjIdentifier.of_string_and_index "A" db_index))
       (Ast.MetaIdentifier.of_string "u")
@@ -64,7 +65,7 @@ let loop2 str () =
   |> fun e ->
   Multi_step.multi_step_reduce
     ~top_level_context:Interpreter_common.EvaluationContext.empty
-    ~type_constr_context: Interpreter_common.TypeConstrContext.empty ~expr:e
+    ~type_constr_context:Interpreter_common.TypeConstrContext.empty ~expr:e
   |> ok_exn |> Ast.Value.show
   |> fun s -> print_endline (Printf.sprintf "Run result of expression:\n %s" s)
 
@@ -73,13 +74,14 @@ let loop3 str () =
   str |> Lexing.from_string |> Lex_and_parse.parse_program
   (* |> Ast.Program.of_past
      |> Ast.TypedProgram.convert_from_untyped_without_typecheck *)
-  |> Ast.Program.of_past |> Ast.Program.populate_index |> ok_exn 
-  |> Typecore.type_check_program |> ok_exn |> Interpreter.evaluate_program
-  |> ok_exn
+  |> Ast.Program.of_past
+  |> Ast.Program.populate_index |> ok_exn |> Typecore.type_check_program
+  |> ok_exn |> Interpreter.evaluate_program |> ok_exn
   |> fun l ->
   let _ =
     List.map l ~f:(fun res ->
-        print_endline (Interpreter_common.TopLevelEvaluationResult.get_str_output res);
+        print_endline
+          (Interpreter_common.TopLevelEvaluationResult.get_str_output res);
         print_endline "")
   in
   ()
@@ -101,14 +103,15 @@ let program3 =
   \  in pow 2;;"
 
 let program4 =
-  "let rec (pow: int -> int -> int) = fun (n:int) -> if n = 0 then (fun 
-   (x:int) -> 1) else (fun (x:int) -> x * (pow (n-1) x));;
-  pow 2 3;;
-  ENV;;
-  RESET;;
-  let rec (pow: int -> [b:int]int) = fun (n:int) -> if n = 0 then box 
-   (b:int |- 1) else let box u = pow (n-1) in box (b:int |- b * (u with (b)));;
-  pow 2;;"
+  "let rec (pow: int -> int -> int) = fun (n:int) -> if n = 0 then (fun \n\
+  \   (x:int) -> 1) else (fun (x:int) -> x * (pow (n-1) x));;\n\
+  \  pow 2 3;;\n\
+  \  ENV;;\n\
+  \  RESET;;\n\
+  \  let rec (pow: int -> [b:int]int) = fun (n:int) -> if n = 0 then box \n\
+  \   (b:int |- 1) else let box u = pow (n-1) in box (b:int |- b * (u with \
+   (b)));;\n\
+  \  pow 2;;"
 
 (* let program5 = "let rec " *)
 let () = loop3 program4 ()

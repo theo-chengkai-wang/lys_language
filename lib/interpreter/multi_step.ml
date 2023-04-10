@@ -349,15 +349,15 @@ let rec multi_step_reduce ~top_level_context ~type_constr_context ~expr =
       Substitutions.sim_substitute substituted_expr_list iddefs e2
       >>= fun ev2 ->
       multi_step_reduce ~top_level_context ~type_constr_context ~expr:ev2
-  | Ast.Expr.Box (ctx, e) -> Ok (Ast.Value.Box (ctx, e))
+  | Ast.Expr.Box (tvctx, ctx, e) -> Ok (Ast.Value.Box (tvctx, ctx, e))
   | Ast.Expr.LetBox (metaid, e, e2) -> (
       (* Debug code here
          let () = if String.equal (Ast.MetaIdentifier.get_name metaid) ("res2_") || String.equal (Ast.MetaIdentifier.get_name metaid) ("res1_") then print_endline (Ast.Expr.show expr) in *)
       multi_step_reduce ~top_level_context ~type_constr_context ~expr:e
       >>= fun box_v ->
       match box_v with
-      | Ast.Value.Box (ctx, e_box) ->
-          Substitutions.meta_substitute ctx e_box metaid e2 |> fun or_error ->
+      | Ast.Value.Box (tvctx, ctx, e_box) ->
+          Substitutions.meta_substitute tvctx ctx e_box metaid e2 |> fun or_error ->
           Or_error.tag_arg or_error
             "EvaluationError: Meta substitution error: metaid, e->v, ctx, v"
             (metaid, box_v, ctx, e2)
@@ -371,14 +371,14 @@ let rec multi_step_reduce ~top_level_context ~type_constr_context ~expr =
             "EvaluationError: type mismatch at LetBox. [FATAL] should not \
              happen! Type check should have prevented this."
             expr [%sexp_of: Ast.Expr.t])
-  | Ast.Expr.Closure (_, _) ->
+  | Ast.Expr.Closure (_, _, _) ->
       error "EvaluationError: One should never have to evaluate a raw closure."
         expr [%sexp_of: Ast.Expr.t]
   | Ast.Expr.Lift (_, expr) ->
       multi_step_reduce ~top_level_context ~type_constr_context ~expr
       >>= fun v ->
       let expr_v = Ast.Value.to_expr_intensional v in
-      Ok (Ast.Value.Box ([], expr_v))
+      Ok (Ast.Value.Box ([], [], expr_v))
   | Ast.Expr.Constr (constr, e_opt) -> (
       if
         Option.is_none
