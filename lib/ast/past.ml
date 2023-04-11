@@ -27,7 +27,7 @@ and Typ : sig
     | TInt
     | TChar
     | TString
-    | TIdentifier of Identifier.t
+    | TIdentifier of t list * Identifier.t
     | TFun of t * t
     | TBox of TypeVarContext.t * Context.t * t
     | TProd of t list
@@ -44,7 +44,7 @@ end = struct
     | TInt
     | TChar
     | TString
-    | TIdentifier of Identifier.t
+    | TIdentifier of t list * Identifier.t
     | TFun of t * t
     | TBox of TypeVarContext.t * Context.t * t
     | TProd of t list
@@ -199,7 +199,7 @@ and Expr : sig
     | Box of TypeVarContext.t * Context.t * t (*box (x:A, y:B |- e)*)
     | LetBox of Identifier.t * t * t (*let box u = e in e'*)
     | Closure of Identifier.t * Typ.t list * t list (*u with (e1, e2, e3, ...)*)
-    | Constr of Constructor.t * t option (* Constr e*)
+    | Constr of Constructor.t * Typ.t list * t option (* Constr e*)
     | Match of t * (Pattern.t * t) list
     | Lift of Typ.t * t (* lift[typ] e*)
     | Ref of t
@@ -235,7 +235,7 @@ end = struct
     | Box of TypeVarContext.t * Context.t * t (*box (x:A, y:B |- e)*)
     | LetBox of Identifier.t * t * t (*let box u = e in e'*)
     | Closure of Identifier.t * Typ.t list * t list (*u with (e1, e2, e3, ...)*)
-    | Constr of Constructor.t * t option (* Constr e*)
+    | Constr of Constructor.t * Typ.t list * t option (* Constr e*)
     | Match of t * (Pattern.t * t) list
       (*match e with pattern -> ... | ... -> ... | ... -> ... | ...*)
     | Lift of Typ.t * t
@@ -261,7 +261,9 @@ and TopLevelDefn : sig
     | MutualRecursiveDefinition of (IdentifierDefn.t * Expr.t) list
     | Expression of Expr.t
     | Directive of Directive.t
-    | DatatypeDecl of (Identifier.t * (Constructor.t * Typ.t option) list) list
+    | DatatypeDecl of
+        (TypeVarContext.t * Identifier.t * (Constructor.t * Typ.t option) list)
+        list
   [@@deriving sexp, show, equal, compare]
 end = struct
   type t =
@@ -270,7 +272,9 @@ end = struct
     | MutualRecursiveDefinition of (IdentifierDefn.t * Expr.t) list
     | Expression of Expr.t
     | Directive of Directive.t
-    | DatatypeDecl of (Identifier.t * (Constructor.t * Typ.t option) list) list
+    | DatatypeDecl of
+        (TypeVarContext.t * Identifier.t * (Constructor.t * Typ.t option) list)
+        list
   [@@deriving sexp, show, equal, compare]
 end
 

@@ -193,8 +193,10 @@ mutual_rec:
     | LET REC r = single_rec "and" l=separated_nonempty_list("and", single_rec) {r::l}
 
 datatype_decl:
-    | i = identifier EQ l = separated_nonempty_list ("|", datatype_decl_clause) {(i, l)}
-    | i = identifier {(i,[])}
+    | i = identifier EQ l = separated_nonempty_list ("|", datatype_decl_clause) {([], i, l)}
+    | tv = TYPEVAR i = identifier EQ l = separated_nonempty_list ("|", datatype_decl_clause) {([tv], i, l)}
+    | "(" tl = separated_nonempty_list(COMMA, TYPEVAR) ")" i = identifier EQ l = separated_nonempty_list ("|", datatype_decl_clause) {(tl, i, l)}
+    | i = identifier {([], i, [])}
 
 top_level:
     | d = directive {TopLevelDefn.Directive d}
@@ -249,7 +251,8 @@ expr:
     | c = comp { c }
     | s = string_op { s }
     | b = bool { b }
-    | c = CONSTR e = option(simple_expr) {Expr.Constr (c, e)}
+    | c = CONSTR e = option(simple_expr) {Expr.Constr (c, [], e)}
+    | c = CONSTR LEFT_BRACKET tl = separated_nonempty_list(COMMA, typ) RIGHT_BRACKET e = option(simple_expr) {Expr.Constr (c, tl, e)}
     | LIFT LEFT_BRACKET t = typ RIGHT_BRACKET e = simple_expr {Expr.Lift (t, e)}
     | u = identifier; WITH; s = sim_sub {let (l1, l2) = s in Expr.Closure (u, l1, l2)} // not a simple_expr because it contains a WITH application
     (* bigger constructs *)
@@ -300,7 +303,9 @@ typ:
     | FORALL v = TYPEVAR DOT t=typ %prec DOT_BIG_LAMBDA {Typ.TForall (v, t)} // Polymorphic stuff
     | v = TYPEVAR {Typ.TVar (v)}
     | STRING_typ {Typ.TString}
-    | i = ID {Typ.TIdentifier (i)}
+    | i = ID {Typ.TIdentifier ([], i)}
+    | t = typ i = ID {Typ.TIdentifier ([t], i)}
+    | "(" tl = separated_nonempty_list(COMMA, typ) ")" i = ID {Typ.TIdentifier (tl, i)}
     | t1 = typ; "->"; t2 = typ /*%prec typ_FUNCTION_ARROW*/ {Typ.TFun (t1, t2)}
     | LEFT_PAREN t = typ "*" ts = separated_nonempty_list("*", typ) RIGHT_PAREN %prec typ_PRODUCT {Typ.TProd (t::ts)}
     | t1 = typ; "+"; t2 = typ %prec typ_SUM {Typ.TSum (t1, t2)}

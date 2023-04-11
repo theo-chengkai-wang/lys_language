@@ -150,7 +150,7 @@ let test_reg_parse_unit_and_not_unit _ =
   assert_equal
     (Some
        (Past.Expr.LetBinding
-          ( ("x", Past.Typ.TBox ([], [], Past.Typ.TIdentifier "_A")),
+          ( ("x", Past.Typ.TBox ([], [], Past.Typ.TIdentifier ([], "_A"))),
             Past.Expr.Box ([], [], Past.Expr.Identifier "_A"),
             Past.Expr.LetBox
               ("u", Past.Expr.Identifier "x", Past.Expr.Closure ("u", [], []))
@@ -163,7 +163,7 @@ let test_let _ =
   assert_equal
     (Some
        (Past.Expr.LetBinding
-          ( ("x", Past.Typ.TIdentifier "_A"),
+          ( ("x", Past.Typ.TIdentifier ([], "_A")),
             Past.Expr.Identifier "y",
             Past.Expr.Identifier "b" )))
     (parse_expression (Lexing.from_string "let x: _A = y in b;;"))
@@ -174,7 +174,8 @@ let test_let_rec _ =
        (Past.Expr.LetRec
           ( ( "x",
               Past.Typ.TFun
-                (Past.Typ.TIdentifier "_A", Past.Typ.TIdentifier "_B") ),
+                ( Past.Typ.TIdentifier ([], "_A"),
+                  Past.Typ.TIdentifier ([], "_B") ) ),
             Past.Expr.Identifier "y",
             Past.Expr.Identifier "b" )))
     (parse_expression (Lexing.from_string "let rec x: _A -> _B = y in b;;"))
@@ -468,14 +469,16 @@ let test_datatype_def _ =
     [
       Past.TopLevelDefn.DatatypeDecl
         [
-          ( "sometype",
+          ( [],
+            "sometype",
             [
               ("Con1", Some Past.Typ.TInt);
               ("Con3", Some Past.Typ.TUnit);
               ( "Con4",
                 Some
                   (Past.Typ.TProd
-                     [ Past.Typ.TInt; Past.Typ.TIdentifier "sometype" ]) );
+                     [ Past.Typ.TInt; Past.Typ.TIdentifier ([], "sometype") ])
+              );
             ] );
         ];
     ]
@@ -488,23 +491,25 @@ let test_datatype_definition _ =
   assert_equal
     [
       Past.TopLevelDefn.Definition
-        ( ("x", Past.Typ.TIdentifier "sometype"),
+        ( ("x", Past.Typ.TIdentifier ([], "sometype")),
           Past.Expr.Constr
-            ("Con1", Some (Past.Expr.Constant (Past.Constant.Integer 1))) );
+            ("Con1", [], Some (Past.Expr.Constant (Past.Constant.Integer 1))) );
     ]
     (parse_program (Lexing.from_string "let x:sometype = Con1 1;;"));
   assert_equal
     [
       Past.TopLevelDefn.Definition
-        ( ("y", Past.Typ.TIdentifier "sometype"),
+        ( ("y", Past.Typ.TIdentifier ([], "sometype")),
           Past.Expr.Constr
             ( "Con4",
+              [],
               Some
                 (Past.Expr.Prod
                    [
                      Past.Expr.Constant (Past.Constant.Integer 1);
                      Past.Expr.Constr
                        ( "Con2",
+                         [],
                          Some (Past.Expr.Constant (Past.Constant.Integer 1)) );
                    ]) ) );
     ]
@@ -649,14 +654,17 @@ let test_mutual_recursive_datatype _ =
     [
       Past.TopLevelDefn.DatatypeDecl
         [
-          ( "sometype",
+          ( [],
+            "sometype",
             [
               ("A", Some Past.Typ.TInt);
-              ("B", Some (Past.Typ.TIdentifier "sometype"));
-              ("C", Some (Past.Typ.TIdentifier "othertype"));
+              ("B", Some (Past.Typ.TIdentifier ([], "sometype")));
+              ("C", Some (Past.Typ.TIdentifier ([], "othertype")));
             ] );
-          ( "othertype",
-            [ ("D", None); ("E", Some (Past.Typ.TIdentifier "sometype")) ] );
+          ( [],
+            "othertype",
+            [ ("D", None); ("E", Some (Past.Typ.TIdentifier ([], "sometype"))) ]
+          );
         ];
     ]
     (parse_program
@@ -897,6 +905,79 @@ let test_poly_box_use _ =
           \          let box u = x in\n\
           \              u with [int](1);;"))
 
+let test_datatype_def_list _ =
+  assert_equal
+    [
+      Past.TopLevelDefn.DatatypeDecl
+        [
+          ( [ "a" ],
+            "list",
+            [
+              ("Nil", None);
+              ( "Cons",
+                Some
+                  (Past.Typ.TProd
+                     [
+                       Past.Typ.TVar "a";
+                       Past.Typ.TIdentifier ([ Past.Typ.TVar "a" ], "list");
+                     ]) );
+            ] );
+        ];
+    ]
+    (parse_program
+       (Lexing.from_string "datatype 'a list = Nil | Cons of ('a * 'a list);;"))
+
+let test_datatype_def_sum _ =
+  assert_equal
+    [
+      Past.TopLevelDefn.DatatypeDecl
+        [
+          ( [ "a"; "b" ],
+            "sum",
+            [
+              ("Left", Some (Past.Typ.TVar "a"));
+              ("Right", Some (Past.Typ.TVar "b"));
+            ] );
+        ];
+    ]
+    (parse_program
+       (Lexing.from_string
+          "datatype ('a, 'b) sum = Left of ('a) | Right of ('b);;"))
+
+let test_constr_with_type_app _ =
+  assert_equal
+    [
+      Past.TopLevelDefn.Expression
+        (Past.Expr.Constr
+           ( "Left",
+             [ Past.Typ.TInt; Past.Typ.TString ],
+             Some (Past.Expr.Constant (Past.Constant.Integer 1)) ));
+      Past.TopLevelDefn.Expression
+        (Past.Expr.Constr ("Nil", [ Past.Typ.TInt ], None));
+      Past.TopLevelDefn.Expression
+        (Past.Expr.Constr
+           ( "Cons",
+             [ Past.Typ.TInt ],
+             Some
+               (Past.Expr.Prod
+                  [
+                    Past.Expr.Constant (Past.Constant.Integer 2);
+                    Past.Expr.Constr
+                      ( "Cons",
+                        [ Past.Typ.TInt ],
+                        Some
+                          (Past.Expr.Prod
+                             [
+                               Past.Expr.Constant (Past.Constant.Integer 1);
+                               Past.Expr.Constr ("Nil", [ Past.Typ.TInt ], None);
+                             ]) );
+                  ]) ));
+    ]
+    (parse_program
+       (Lexing.from_string
+          "Left[int, string] 1;; Nil[int];; Cons[int] (2, Cons[int] (1, \
+           Nil[int]));;"))
+
 (* Name the test cases and group them together *)
 let suite =
   "parsing_suite"
@@ -966,6 +1047,9 @@ let suite =
          "test_poly_box_defn" >:: test_poly_box_defn;
          "test_poly_box_alt_type_def" >:: test_poly_box_alt_type_def;
          "test_poly_box_use" >:: test_poly_box_use;
+         "test_datatype_def_list" >:: test_datatype_def_list;
+         "test_datatype_def_sum" >:: test_datatype_def_sum;
+         "test_constr_with_type_app" >:: test_constr_with_type_app;
        ]
 
 let () = run_test_tt_main suite

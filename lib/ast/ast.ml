@@ -213,7 +213,7 @@ end = struct
     | Past.Typ.TInt -> TInt
     | Past.Typ.TChar -> TChar
     | Past.Typ.TString -> TString
-    | Past.Typ.TIdentifier id -> TIdentifier (TypeIdentifier.of_past id)
+    | Past.Typ.TIdentifier (_,id) -> TIdentifier (TypeIdentifier.of_past id) (* TODO: Change this to work *)
     | Past.Typ.TFun (t1, t2) -> TFun (of_past t1, of_past t2)
     | Past.Typ.TBox (typevarctx, ctx, t1) ->
         TBox (TypeVarContext.of_past typevarctx, Context.of_past ctx, of_past t1)
@@ -783,10 +783,10 @@ end = struct
           ( MetaIdentifier.of_past metaid,
             List.map typs ~f:Typ.of_past,
             List.map exprs ~f:of_past )
-    | Past.Expr.Constr (constructor, Some value) ->
+    | Past.Expr.Constr (constructor, _, Some value) -> (* TODO: MODIFY *)
         Constr (Constructor.of_past constructor, Some (Expr.of_past value))
-    | Past.Expr.Constr (constructor, None) ->
-        Constr (Constructor.of_past constructor, None)
+    | Past.Expr.Constr (constructor, _, None) ->
+        Constr (Constructor.of_past constructor, None) (* TODO: MODIFY *)
     | Past.Expr.Match (e, pattns) ->
         Match
           ( of_past e,
@@ -1537,9 +1537,9 @@ end = struct
                (IdentifierDefn.of_past iddef, Expr.of_past e)))
     | Past.TopLevelDefn.Expression e -> Expression (Expr.of_past e)
     | Past.TopLevelDefn.Directive d -> Directive (Directive.of_past d)
-    | Past.TopLevelDefn.DatatypeDecl id_constr_typ_list_list ->
+    | Past.TopLevelDefn.DatatypeDecl (id_constr_typ_list_list) -> 
         let new_id_contr_typ_list_list =
-          List.map id_constr_typ_list_list ~f:(fun (id, constr_typ_list) ->
+          List.map id_constr_typ_list_list ~f:(fun (_, id, constr_typ_list) ->(* TODO: PolyADT MODIFY *)
               ( TypeIdentifier.of_past id,
                 List.map constr_typ_list ~f:(fun (constr, typ) ->
                     match typ with
