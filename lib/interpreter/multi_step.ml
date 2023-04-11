@@ -379,7 +379,7 @@ let rec multi_step_reduce ~top_level_context ~type_constr_context ~expr =
       >>= fun v ->
       let expr_v = Ast.Value.to_expr_intensional v in
       Ok (Ast.Value.Box ([], [], expr_v))
-  | Ast.Expr.Constr (constr, e_opt) -> (
+  | Ast.Expr.Constr (constr, tlist, e_opt) -> (
       if
         Option.is_none
           (TypeConstrContext.get_typ_from_constr type_constr_context constr)
@@ -388,10 +388,10 @@ let rec multi_step_reduce ~top_level_context ~type_constr_context ~expr =
           [%sexp_of: Ast.Constructor.t]
       else
         match e_opt with
-        | None -> Ok (Ast.Value.Constr (constr, None))
+        | None -> Ok (Ast.Value.Constr (constr, tlist, None))
         | Some e ->
             multi_step_reduce ~top_level_context ~type_constr_context ~expr:e
-            >>= fun v -> Ok (Ast.Value.Constr (constr, Some v)))
+            >>= fun v -> Ok (Ast.Value.Constr (constr, tlist, Some v)))
   | Ast.Expr.Match (e, pattn_expr_list) -> (
       multi_step_reduce ~top_level_context ~type_constr_context ~expr:e
       >>= fun v ->
@@ -435,7 +435,8 @@ let rec multi_step_reduce ~top_level_context ~type_constr_context ~expr =
                   multi_step_reduce ~top_level_context ~type_constr_context
                     ~expr:substituted_expr)
             |> Some
-        | Ast.Pattern.Datatype (constr, []), Ast.Value.Constr (constr2, None) ->
+        | Ast.Pattern.Datatype (constr, []), Ast.Value.Constr (constr2, _, None) ->
+            (* Here the constructor doesn't take any argument so we don't need it to do anything with the types *)
             (* CHECK IF constr exists *)
             if
               Option.is_none
@@ -450,7 +451,8 @@ let rec multi_step_reduce ~top_level_context ~type_constr_context ~expr =
               multi_step_reduce ~top_level_context ~type_constr_context ~expr
               |> Some
         | ( Ast.Pattern.Datatype (constr, [ id ]),
-            Ast.Value.Constr (constr2, Some v) ) ->
+            Ast.Value.Constr (constr2, _, Some v) ) ->
+              (* Ignore the types *)
             if
               Option.is_none
                 (TypeConstrContext.get_typ_from_constr type_constr_context
@@ -469,7 +471,8 @@ let rec multi_step_reduce ~top_level_context ~type_constr_context ~expr =
                       ~expr:substituted_expr)
               |> Some
         | ( Ast.Pattern.Datatype (constr, id_list),
-            Ast.Value.Constr (constr2, Some (Ast.Value.Prod vlist)) ) ->
+            Ast.Value.Constr (constr2, _, Some (Ast.Value.Prod vlist)) ) ->
+              (* I can ignore the types safely *)
             if
               Option.is_none
                 (TypeConstrContext.get_typ_from_constr type_constr_context
@@ -711,10 +714,10 @@ let evaluate_top_level_defn ?(top_level_context = EvaluationContext.empty)
               type_constr_context ))
   | Ast.TypedTopLevelDefn.DatatypeDecl id_constr_typ_list_list ->
       List.fold id_constr_typ_list_list ~init:(Ok type_constr_context)
-        ~f:(fun acc (tid, constructor_type_list) ->
+        ~f:(fun acc (tvctx, tid, constructor_type_list) ->
           acc >>= fun new_typ_ctx ->
           TypeConstrContext.add_typ_from_decl new_typ_ctx
-            (tid, constructor_type_list))
+            (tvctx, tid, constructor_type_list))
       >>= fun new_typ_context ->
       Ok
         ( TopLevelEvaluationResult.DatatypeDecl id_constr_typ_list_list,

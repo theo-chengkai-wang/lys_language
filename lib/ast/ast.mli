@@ -72,7 +72,7 @@ and Typ : sig
     | TInt
     | TChar
     | TString
-    | TIdentifier of TypeIdentifier.t
+    | TIdentifier of t list * TypeIdentifier.t
     | TFun of t * t
     | TBox of TypeVarContext.t * Context.t * t
     | TProd of t list
@@ -145,7 +145,7 @@ and Context : sig
     t Or_error.t
 
   val shift_indices : t -> type_depth:int -> type_offset:int -> t Or_error.t
-  val contains_duplicate_ids: t -> bool
+  val contains_duplicate_ids : t -> bool
 end
 
 and TypeVarContext : sig
@@ -153,7 +153,7 @@ and TypeVarContext : sig
 
   val of_past : Past.TypeVarContext.t -> t
   val is_empty : t -> bool
-  val contains_duplicates: t -> bool
+  val contains_duplicates : t -> bool
 end
 
 and BinaryOperator : sig
@@ -246,7 +246,7 @@ and Expr : sig
     | LetBox of MetaIdentifier.t * t * t (*let box u = e in e'*)
     | Closure of
         MetaIdentifier.t * Typ.t list * t list (*u with (e1, e2, e3, ...)*)
-    | Constr of Constructor.t * t option (* Constr e*)
+    | Constr of Constructor.t * Typ.t list * t option (* Constr e*)
     | Match of t * (Pattern.t * t) list
     | Lift of Typ.t * t
     | EValue of Value.t
@@ -291,7 +291,7 @@ and Value : sig
     | Right of Typ.t * Typ.t * t (*R[A,B] e*)
     | Lambda of IdentifierDefn.t * Expr.t (*fun (x : A) -> e*)
     | Box of TypeVarContext.t * Context.t * Expr.t (*box (x:A, y:B |- e)*)
-    | Constr of Constructor.t * t option
+    | Constr of Constructor.t * Typ.t list * t option
     | BigLambda of TypeVar.t * Expr.t
   [@@deriving sexp, show, compare, equal]
 
@@ -313,7 +313,10 @@ and TopLevelDefn : sig
     | Expression of Expr.t
     | Directive of Directive.t
     | DatatypeDecl of
-        (TypeIdentifier.t * (Constructor.t * Typ.t option) list) list
+        (TypeVarContext.t
+        * TypeIdentifier.t
+        * (Constructor.t * Typ.t option) list)
+        list
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.TopLevelDefn.t -> t
@@ -335,7 +338,10 @@ module TypedTopLevelDefn : sig
     | Expression of Typ.t * Expr.t
     | Directive of Directive.t
     | DatatypeDecl of
-        (TypeIdentifier.t * (Constructor.t * Typ.t option) list) list
+        (TypeVarContext.t
+        * TypeIdentifier.t
+        * (Constructor.t * Typ.t option) list)
+        list
   [@@deriving sexp, show, compare, equal]
 
   val convert_from_untyped_without_typecheck : TopLevelDefn.t -> t

@@ -152,13 +152,13 @@ let rec substitute_aux expr_subst_for id_str current_depth current_meta_depth
                 current_meta_depth)
       |> Or_error.combine_errors
       >>= fun exprs -> Ok (Ast.Expr.Closure (metaid, typs, exprs))
-  | Ast.Expr.Constr (tid, e_opt) -> (
+  | Ast.Expr.Constr (tid, tlist, e_opt) -> (
       match e_opt with
-      | None -> Ok (Ast.Expr.Constr (tid, e_opt))
+      | None -> Ok (Ast.Expr.Constr (tid, tlist, e_opt))
       | Some e ->
           substitute_aux expr_subst_for id_str current_depth current_meta_depth
             e
-          >>= fun e -> Ok (Ast.Expr.Constr (tid, Some e)))
+          >>= fun e -> Ok (Ast.Expr.Constr (tid, tlist, Some e)))
   | Ast.Expr.Match (e, pattn_expr_list) ->
       substitute_aux expr_subst_for id_str current_depth current_meta_depth e
       >>= fun e ->
@@ -357,13 +357,13 @@ let rec sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth
                 current_meta_depth current_type_depth)
       |> Or_error.combine_errors
       >>= fun exprs -> Ok (Ast.Expr.Closure (metaid, typs, exprs))
-  | Ast.Expr.Constr (tid, e_opt) -> (
+  | Ast.Expr.Constr (tid, tlist, e_opt) -> (
       match e_opt with
-      | None -> Ok (Ast.Expr.Constr (tid, e_opt))
+      | None -> Ok (Ast.Expr.Constr (tid, tlist, e_opt))
       | Some e ->
           sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth
             current_type_depth e
-          >>= fun e -> Ok (Ast.Expr.Constr (tid, Some e)))
+          >>= fun e -> Ok (Ast.Expr.Constr (tid, tlist, Some e)))
   | Ast.Expr.Match (e, pattn_expr_list) ->
       sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth
         current_type_depth e
@@ -468,11 +468,13 @@ and type_type_substitute (t_sub_for : Ast.Typ.t) (v : Ast.TypeVar.t)
   | Ast.Typ.TInt -> Ok Ast.Typ.TInt
   | Ast.Typ.TChar -> Ok Ast.Typ.TChar
   | Ast.Typ.TString -> Ok Ast.Typ.TString
-  | Ast.Typ.TIdentifier id ->
+  | Ast.Typ.TIdentifier (tlist, id) ->
       (*
        TODO: This is to be changed for ADT polymorphism
     *)
-      Ok (Ast.Typ.TIdentifier id)
+      List.map ~f:(type_type_substitute t_sub_for v ~current_depth) tlist
+      |> Or_error.combine_errors
+      >>= fun tlist -> Ok (Ast.Typ.TIdentifier (tlist, id))
   | Ast.Typ.TFun (t1, t2) ->
       type_type_substitute ~current_depth t_sub_for v t1 >>= fun t1 ->
       type_type_substitute ~current_depth t_sub_for v t2 >>= fun t2 ->
@@ -627,15 +629,15 @@ and type_term_substitute t_sub_for v ?(current_depth = 0) expr_subst_in =
               the explicit substitution term."
       >>= fun exprs_in_subs ->
       Ok (Ast.Expr.Closure (metaid, typs, exprs_in_subs))
-  | Ast.Expr.Constr (tid, e_opt) -> (
-      (*
-       TODO: Modify for ADT Polymorphism
-    *)
+  | Ast.Expr.Constr (tid, tlist, e_opt) -> (
+      List.map ~f:(type_type_substitute t_sub_for v ~current_depth) tlist
+      |> Or_error.combine_errors
+      >>= fun tlist ->
       match e_opt with
-      | None -> Ok (Ast.Expr.Constr (tid, e_opt))
+      | None -> Ok (Ast.Expr.Constr (tid, tlist, e_opt))
       | Some e ->
           type_term_substitute t_sub_for v ~current_depth e >>= fun e ->
-          Ok (Ast.Expr.Constr (tid, Some e)))
+          Ok (Ast.Expr.Constr (tid, tlist, Some e)))
   | Ast.Expr.Match (e, pattn_expr_list) ->
       type_term_substitute t_sub_for v ~current_depth e >>= fun e ->
       List.map pattn_expr_list ~f:(fun (pattn, expr) ->
@@ -875,13 +877,13 @@ let rec meta_substitute_aux tvctx ctx expr_subst_for meta_id_str
            expr_subst_for, meta_id_str, current_meta_depth)"
           (ctx, expr_subst_for, meta_id_str, current_meta_depth)
           [%sexp_of: Ast.Context.t * Ast.Expr.t * string * int]
-  | Ast.Expr.Constr (tid, e_opt) -> (
+  | Ast.Expr.Constr (tid, tlist, e_opt) -> (
       match e_opt with
-      | None -> Ok (Ast.Expr.Constr (tid, e_opt))
+      | None -> Ok (Ast.Expr.Constr (tid, tlist, e_opt))
       | Some e ->
           meta_substitute_aux tvctx ctx expr_subst_for meta_id_str
             current_meta_depth e
-          >>= fun e -> Ok (Ast.Expr.Constr (tid, Some e)))
+          >>= fun e -> Ok (Ast.Expr.Constr (tid, tlist, Some e)))
   | Ast.Expr.Match (e, pattn_expr_list) ->
       meta_substitute_aux tvctx ctx expr_subst_for meta_id_str
         current_meta_depth e

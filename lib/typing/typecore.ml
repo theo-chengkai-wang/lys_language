@@ -12,7 +12,7 @@ open Lys_utils
 module TypSet = Set.Make (Ast.TypeIdentifier)
 
 let rec includes_function_type_aux
-    ~(type_ctx : Typing_context.TypeConstrTypingContext.t)
+    ~(type_ctx : Typing_context.TypeConstrContext.t)
     ~(types_visited : TypSet.t) = function
   | Ast.Typ.TFun (_, _) -> (true, types_visited)
   | Ast.Typ.TProd tlist ->
@@ -27,29 +27,36 @@ let rec includes_function_type_aux
       if outcome1 then (outcome1, types_visited1)
       else
         (includes_function_type_aux ~type_ctx ~types_visited:types_visited1) t2
-  | Ast.Typ.TIdentifier tid -> (
+  | Ast.Typ.TIdentifier (tlist, tid) -> (
       if TypSet.mem types_visited tid then (false, types_visited)
       else
         let types_visited = TypSet.add types_visited tid in
         let constr_records_opt =
-          Typing_context.TypeConstrTypingContext.get_constr_from_typ type_ctx
+          Typing_context.TypeConstrContext.get_constr_from_typ type_ctx
             tid
         in
         match constr_records_opt with
         | None -> (false, types_visited)
         | Some constr_records ->
-            List.fold constr_records ~init:(false, types_visited)
-              ~f:(fun (prev_result, types_visited) record ->
-                if prev_result then (prev_result, types_visited)
-                else
-                  match record.arg_type with
-                  | None -> (false, types_visited)
-                  | Some typ ->
-                      includes_function_type_aux ~type_ctx ~types_visited typ))
+            List.map ~f:(fun { arg_type; _ } -> arg_type) constr_records
+            (* Coarse check for tlist: we aren't doing the type sub, but rather
+               are checking whether there are functional types in tlist and in the list
+               of construtors separately.
+               Append THIS to tlist because we're making exactly the same check *)
+            |> List.append (List.map ~f:(fun typ -> Some typ) tlist)
+            |> List.fold ~init:(false, types_visited)
+                 ~f:(fun (prev_result, types_visited) typ ->
+                   if prev_result then (prev_result, types_visited)
+                   else
+                     match typ with
+                     | None -> (false, types_visited)
+                     | Some typ ->
+                         includes_function_type_aux ~type_ctx ~types_visited typ)
+      )
   | _ -> (false, types_visited)
 
 let includes_function_type
-    ~(type_ctx : Typing_context.TypeConstrTypingContext.t)
+    ~(type_ctx : Typing_context.TypeConstrContext.t)
     ?(types_visited : TypSet.t = TypSet.empty) typ =
   let res, _ = includes_function_type_aux ~type_ctx ~types_visited typ in
   res
@@ -62,16 +69,35 @@ let rec is_valid_type type_ctx typevar_ctx typ =
   | Ast.Typ.TInt -> Ok ()
   | Ast.Typ.TChar -> Ok ()
   | Ast.Typ.TString -> Ok ()
-  | Ast.Typ.TIdentifier id -> (
+  | Ast.Typ.TIdentifier (tlist, id) -> (
       match
-        Typing_context.TypeConstrTypingContext.get_constr_from_typ type_ctx id
+        Typing_context.TypeConstrContext.get_constr_from_typ type_ctx id
       with
       | None ->
           Or_error.error
             "TypeValidityCheckError: The given type is invalid: unbound type \
              identifier (tid)"
             id [%sexp_of: Ast.TypeIdentifier.t]
-      | Some _ -> Ok ())
+      | Some constr_records -> (
+          match constr_records with
+          | [] ->
+              (* tlist has to be empty*)
+              if List.is_empty tlist then Ok ()
+              else
+                error
+                  "TypeValidityCheckError: the type doesn't have constructors, \
+                   hence has to be non-polymorphic, yet applied it to types."
+                  (Ast.Typ.TIdentifier (tlist, id))
+                  [%sexp_of: Ast.Typ.t]
+          | { type_params; _ } :: _ ->
+              let type_param_length = List.length type_params in
+              let tlist_length = List.length tlist in
+              if type_param_length = tlist_length then Ok ()
+              else
+                Or_error.errorf
+                  "TypeValidityCheckError: expected # of type params = %i; \
+                   gave %i type params"
+                  type_param_length tlist_length))
   | Ast.Typ.TFun (t1, t2) | Ast.Typ.TSum (t1, t2) ->
       is_valid_type type_ctx typevar_ctx t1 >>= fun () ->
       is_valid_type type_ctx typevar_ctx t2
@@ -114,7 +140,7 @@ let rec is_valid_type_for_recursion typ =
         () [%sexp_of: unit]
 
 let rec type_check_expression meta_ctx ctx
-    (type_ctx : Typing_context.TypeConstrTypingContext.t)
+    (type_ctx : Typing_context.TypeConstrContext.t)
     (typevar_ctx : unit Typing_context.PolyTypeVarContext.t) expr typ =
   let open Or_error.Monad_infix in
   is_valid_type type_ctx typevar_ctx typ >>= fun () ->
@@ -635,7 +661,7 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx e =
                     "TypeInferenceError: Mismatch between type and pattern."
                     (pattn, inferred_typ) [%sexp_of: Ast.Pattern.t * Ast.Typ.t])
           |> Or_error.combine_errors
-      | Ast.Typ.TIdentifier tid ->
+      | Ast.Typ.TIdentifier (tlist, tid) ->
           (* Check that each thing is a constructor of the right type. *)
           List.map pattn_expr_list ~f:(fun (pattn, expr) ->
               match pattn with
@@ -652,7 +678,7 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx e =
               | Ast.Pattern.Datatype (constr, id_list) ->
                   (*1- check that constructor is of the type needed*)
                   let constr_record_opt =
-                    Typing_context.TypeConstrTypingContext.get_typ_from_constr
+                    Typing_context.TypeConstrContext.get_typ_from_constr
                       type_ctx constr
                   in
                   (match constr_record_opt with
@@ -678,6 +704,18 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx e =
                     | Some typ -> [ typ ]
                     | None -> []
                   in
+                  (* 2.5- *NEW*: Do the type substitutions *)
+                  List.map
+                    ~f:
+                      (Substitutions.sim_type_type_substitute tlist
+                         constr_record.type_params)
+                    typs
+                  |> Or_error.combine_errors
+                  |> Or_error.tag
+                       ~tag:
+                         "TypeInferenceError: Error when type substituting the \
+                          type arguments in the constructor param types."
+                  >>= fun typs ->
                   (*3- Match id list*)
                   Utils.try_zip_list_or_error id_list typs
                     (Or_error.error
@@ -745,10 +783,10 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx e =
                ~compare:Ast.Typ.compare)
             [%sexp_of: Ast.Typ.t list]
       | Some typ -> Ok typ)
-  | Ast.Expr.Constr (constr, e_opt) -> (
+  | Ast.Expr.Constr (constr, tlist, e_opt) -> (
       (* Check if constructor is defined *)
       match
-        Typing_context.TypeConstrTypingContext.get_typ_from_constr type_ctx
+        Typing_context.TypeConstrContext.get_typ_from_constr type_ctx
           constr
       with
       | None ->
@@ -758,6 +796,10 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx e =
           (match (constr_record.arg_type, e_opt) with
           | None, None -> Ok ()
           | Some t, Some e ->
+              (* *NEW* Check that (poly) type is valid *)
+              Substitutions.sim_type_type_substitute tlist
+                constr_record.type_params t
+              >>= fun t ->
               (* Defined, so check arguments *)
               type_check_expression meta_ctx ctx type_ctx typevar_ctx e t
               |> Or_error.tag
@@ -775,7 +817,8 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx e =
                    (Ast.Constructor.show constr))
                 (constr_record.arg_type, e_opt)
                 [%sexp_of: Ast.Typ.t option * Ast.Expr.t option])
-          >>= fun _ -> Ok (Ast.Typ.TIdentifier constr_record.belongs_to_typ))
+          >>= fun _ ->
+          Ok (Ast.Typ.TIdentifier (tlist, constr_record.belongs_to_typ)))
   | Ast.Expr.Lift (typ, expr) ->
       (* Only support lifting primitive types
          (int, unit, char...), box types and all other thing without function types *)
@@ -940,10 +983,11 @@ let process_top_level meta_ctx ctx type_ctx typevar_ctx = function
   | Ast.TopLevelDefn.DatatypeDecl id_constr_typ_list_list ->
       let open Or_error.Monad_infix in
       List.fold id_constr_typ_list_list ~init:(Ok type_ctx)
-        ~f:(fun acc (tid, constr_typ_list) ->
+        ~f:(fun acc (tvctx, tid, constr_typ_list) ->
           acc >>= fun running_type_ctx ->
-          Typing_context.TypeConstrTypingContext.add_typ_from_decl
-            running_type_ctx (tid, constr_typ_list))
+          Typing_context.TypeConstrContext.add_typ_from_decl
+            running_type_ctx
+            (tvctx, tid, constr_typ_list))
       >>= fun new_type_ctx ->
       Ok
         ( Ast.TypedTopLevelDefn.DatatypeDecl id_constr_typ_list_list,
@@ -965,7 +1009,7 @@ let rec type_check_program_aux meta_ctx ctx type_ctx typevar_ctx program =
 let type_check_program
     ?(meta_ctx = Typing_context.MetaTypingContext.create_empty_context ())
     ?(obj_ctx = Typing_context.ObjTypingContext.create_empty_context ())
-    ?(type_ctx = Typing_context.TypeConstrTypingContext.empty)
+    ?(type_ctx = Typing_context.TypeConstrContext.empty)
     ?(typevar_ctx = Typing_context.PolyTypeVarContext.create_empty_context ())
     program =
   program |> type_check_program_aux meta_ctx obj_ctx type_ctx typevar_ctx

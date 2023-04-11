@@ -29,8 +29,10 @@ module MetaTypingContext :
 module PolyTypeVarContext : TypingContext_type with module Key = Ast.TypeVar
 [@@deriving show]
 
-module type TypeConstrTypingContext_type = sig
+module type TypeConstrContext_type = sig
   type constr_record = {
+    type_params : Ast.TypeVarContext.t;
+        (* Inefficient representation but acceptable*)
     constr : Ast.Constructor.t;
     arg_type : Ast.Typ.t option;
     belongs_to_typ : Ast.TypeIdentifier.t;
@@ -41,7 +43,9 @@ module type TypeConstrTypingContext_type = sig
 
   val add_typ_from_decl :
     t ->
-    Ast.TypeIdentifier.t * (Ast.Constructor.t * Ast.Typ.t option) list ->
+    Ast.TypeVarContext.t
+    * Ast.TypeIdentifier.t
+    * (Ast.Constructor.t * Ast.Typ.t option) list ->
     t Or_error.t (*Error thrown when duplicated constructor name*)
 
   val get_constr_from_typ :
@@ -50,6 +54,9 @@ module type TypeConstrTypingContext_type = sig
 
   val get_typ_from_constr : t -> Ast.Constructor.t -> constr_record option
   val empty : t
+  val typ_is_polymorphic : t -> Ast.TypeIdentifier.t -> bool option
+  val constr_is_polymorphic : t -> Ast.Constructor.t -> bool option
+  val show: t -> string
 end
 
-module TypeConstrTypingContext : TypeConstrTypingContext_type
+module TypeConstrContext : TypeConstrContext_type

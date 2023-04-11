@@ -568,7 +568,7 @@ let rec reduce ~top_level_context ~type_constr_context expr =
             ~not_reduced:(fun v ->
               let expr_v = Ast.Value.to_expr_intensional v in
               Ok (ReduceResult.ReducedToVal (Ast.Value.Box ([], [], expr_v))))
-      | Ast.Expr.Constr (constr, e_opt) -> (
+      | Ast.Expr.Constr (constr, tlist, e_opt) -> (
           if
             Option.is_none
               (TypeConstrContext.get_typ_from_constr type_constr_context constr)
@@ -578,22 +578,24 @@ let rec reduce ~top_level_context ~type_constr_context expr =
           else
             match e_opt with
             | None ->
-                Ok (ReduceResult.NotReduced (Ast.Value.Constr (constr, None)))
+                Ok
+                  (ReduceResult.NotReduced
+                     (Ast.Value.Constr (constr, tlist, None)))
             | Some e ->
                 reduce ~top_level_context ~type_constr_context e >>= fun res ->
                 ReduceResult.process res
                   ~reduced:(fun new_e ->
                     Ok
                       (ReduceResult.ReducedToExpr
-                         (Ast.Expr.Constr (constr, Some new_e))))
+                         (Ast.Expr.Constr (constr, tlist, Some new_e))))
                   ~reduced_to_val:(fun v ->
                     Ok
                       (ReduceResult.ReducedToVal
-                         (Ast.Value.Constr (constr, Some v))))
+                         (Ast.Value.Constr (constr, tlist, Some v))))
                   ~not_reduced:(fun v ->
                     Ok
                       (ReduceResult.NotReduced
-                         (Ast.Value.Constr (constr, Some v)))))
+                         (Ast.Value.Constr (constr, tlist, Some v)))))
       | Ast.Expr.Match (e, pattn_expr_list) ->
           reduce ~top_level_context ~type_constr_context e >>= fun res ->
           ReduceResult.process res
@@ -637,7 +639,7 @@ let rec reduce ~top_level_context ~type_constr_context expr =
                           >>= fun substituted_expr -> Ok substituted_expr)
                     |> Some
                 | ( Ast.Pattern.Datatype (constr, []),
-                    Ast.Value.Constr (constr2, None) ) ->
+                    Ast.Value.Constr (constr2, _, None) ) ->
                     (* CHECK IF constr exists *)
                     if
                       Option.is_none
@@ -651,7 +653,7 @@ let rec reduce ~top_level_context ~type_constr_context expr =
                     else if not (Ast.Constructor.equal constr constr2) then None
                     else Ok expr |> Some
                 | ( Ast.Pattern.Datatype (constr, [ id ]),
-                    Ast.Value.Constr (constr2, Some v) ) ->
+                    Ast.Value.Constr (constr2, _, Some v) ) ->
                     if
                       Option.is_none
                         (TypeConstrContext.get_typ_from_constr
@@ -669,7 +671,8 @@ let rec reduce ~top_level_context ~type_constr_context expr =
                       >>= (fun substituted_expr -> Ok substituted_expr)
                       |> Some
                 | ( Ast.Pattern.Datatype (constr, id_list),
-                    Ast.Value.Constr (constr2, Some (Ast.Value.Prod vlist)) ) ->
+                    Ast.Value.Constr (constr2, _, Some (Ast.Value.Prod vlist)) )
+                  ->
                     if
                       Option.is_none
                         (TypeConstrContext.get_typ_from_constr
@@ -1012,10 +1015,10 @@ let evaluate_top_level_defn ?(top_level_context = EvaluationContext.empty)
               type_constr_context ))
   | Ast.TypedTopLevelDefn.DatatypeDecl id_constr_typ_list_list ->
       List.fold id_constr_typ_list_list ~init:(Ok type_constr_context)
-        ~f:(fun acc (tid, constructor_type_list) ->
+        ~f:(fun acc (tvctx, tid, constructor_type_list) ->
           acc >>= fun new_typ_ctx ->
           TypeConstrContext.add_typ_from_decl new_typ_ctx
-            (tid, constructor_type_list))
+            (tvctx, tid, constructor_type_list))
       >>= fun new_typ_context ->
       Ok
         ( TopLevelEvaluationResult.DatatypeDecl id_constr_typ_list_list,

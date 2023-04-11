@@ -11,8 +11,7 @@ let loop interpreter lexbuf context typ_context () =
        ~obj_ctx:
          (Interpreter_common.EvaluationContext.to_typing_obj_context context)
        ~type_ctx:
-         (Interpreter_common.TypeConstrContext.to_typeconstrtypingcontext
-            typ_context)
+         (typ_context)
   |> ok_exn
   |> Interpreter.evaluate_top_level_defns ~top_level_context:context
        ~type_constr_context:typ_context ~interpreter

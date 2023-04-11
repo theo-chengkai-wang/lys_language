@@ -169,7 +169,7 @@ and Typ : sig
     | TInt
     | TChar
     | TString
-    | TIdentifier of TypeIdentifier.t
+    | TIdentifier of t list * TypeIdentifier.t
     | TFun of t * t
     | TBox of TypeVarContext.t * Context.t * t
     | TProd of t list
@@ -196,7 +196,7 @@ end = struct
     | TInt
     | TChar
     | TString
-    | TIdentifier of TypeIdentifier.t
+    | TIdentifier of t list * TypeIdentifier.t
     | TFun of t * t
     | TBox of TypeVarContext.t * Context.t * t
     | TProd of t list
@@ -213,7 +213,8 @@ end = struct
     | Past.Typ.TInt -> TInt
     | Past.Typ.TChar -> TChar
     | Past.Typ.TString -> TString
-    | Past.Typ.TIdentifier (_,id) -> TIdentifier (TypeIdentifier.of_past id) (* TODO: Change this to work *)
+    | Past.Typ.TIdentifier (tlist, id) ->
+        TIdentifier (List.map ~f:of_past tlist, TypeIdentifier.of_past id)
     | Past.Typ.TFun (t1, t2) -> TFun (of_past t1, of_past t2)
     | Past.Typ.TBox (typevarctx, ctx, t1) ->
         TBox (TypeVarContext.of_past typevarctx, Context.of_past ctx, of_past t1)
@@ -232,8 +233,12 @@ end = struct
     | TInt -> Ok TInt
     | TChar -> Ok TChar
     | TString -> Ok TString
-    | TIdentifier id ->
-        Ok (TIdentifier id) (*TODO: modify here for polymorphic ADTs*)
+    | TIdentifier (tlist, id) ->
+        List.map
+          ~f:(populate_index ~current_type_ast_level ~current_typevars)
+          tlist
+        |> Or_error.combine_errors
+        >>= fun tlist -> Ok (TIdentifier (tlist, id))
     | TFun (t1, t2) ->
         populate_index ~current_type_ast_level ~current_typevars t1
         >>= fun t1 ->
@@ -298,8 +303,11 @@ end = struct
     | TInt -> Ok TInt
     | TChar -> Ok TChar
     | TString -> Ok TString
-    | TIdentifier id ->
-        Ok (TIdentifier id) (*TODO: modify here for polymorphic ADTs*)
+    | TIdentifier (tlist, id) ->
+        List.map ~f:(shift_indices ~type_depth ~type_offset) tlist
+        |> Or_error.combine_errors
+        >>= fun tlist -> Ok (TIdentifier (tlist, id))
+        (*TODO: modify here for polymorphic ADTs*)
     | TFun (t1, t2) ->
         shift_indices ~type_depth ~type_offset t1 >>= fun t1 ->
         shift_indices ~type_depth ~type_offset t2 >>= fun t2 ->
@@ -662,7 +670,7 @@ and Expr : sig
     | LetBox of MetaIdentifier.t * t * t (*let box u = e in e'*)
     | Closure of
         MetaIdentifier.t * Typ.t list * t list (*u with (e1, e2, e3, ...)*)
-    | Constr of Constructor.t * t option (* Constr e*)
+    | Constr of Constructor.t * Typ.t list * t option (* Constr e*)
     | Match of t * (Pattern.t * t) list
     | Lift of Typ.t * t
     | EValue of Value.t
@@ -724,7 +732,7 @@ end = struct
     | LetBox of MetaIdentifier.t * t * t (*let box u = e in e'*)
     | Closure of
         MetaIdentifier.t * Typ.t list * t list (*u with (e1, e2, e3, ...)*)
-    | Constr of Constructor.t * t option (* Constr e*)
+    | Constr of Constructor.t * Typ.t list * t option (* Constr e*)
     | Match of t * (Pattern.t * t) list
     | Lift of Typ.t * t
     | EValue of Value.t
@@ -783,10 +791,16 @@ end = struct
           ( MetaIdentifier.of_past metaid,
             List.map typs ~f:Typ.of_past,
             List.map exprs ~f:of_past )
-    | Past.Expr.Constr (constructor, _, Some value) -> (* TODO: MODIFY *)
-        Constr (Constructor.of_past constructor, Some (Expr.of_past value))
-    | Past.Expr.Constr (constructor, _, None) ->
-        Constr (Constructor.of_past constructor, None) (* TODO: MODIFY *)
+    | Past.Expr.Constr (constructor, tlist, Some value) ->
+        (* TODO: MODIFY *)
+        Constr
+          ( Constructor.of_past constructor,
+            List.map ~f:Typ.of_past tlist,
+            Some (Expr.of_past value) )
+    | Past.Expr.Constr (constructor, tlist, None) ->
+        Constr
+          (Constructor.of_past constructor, List.map ~f:Typ.of_past tlist, None)
+        (* TODO: MODIFY *)
     | Past.Expr.Match (e, pattns) ->
         Match
           ( of_past e,
@@ -1072,17 +1086,21 @@ end = struct
           ~current_level:current_meta_ast_level
           ~current_identifiers:current_meta_identifiers
         >>= fun metaid -> Ok (Closure (metaid, typs, exprs))
-    | Constr (tid, e_opt) -> (
+    | Constr (tid, tlist, e_opt) -> (
         (* Or_error.unimplemented "not implemented" *)
         (* Congruence*)
-        (*TODO: modify for polymorphic ADT*)
+        List.map
+          ~f:(Typ.populate_index ~current_type_ast_level ~current_typevars)
+          tlist
+        |> Or_error.combine_errors
+        >>= fun tlist ->
         match e_opt with
-        | None -> Ok (Constr (tid, None))
+        | None -> Ok (Constr (tid, tlist, None))
         | Some e ->
             populate_index ~current_ast_level ~current_identifiers
               ~current_meta_ast_level ~current_meta_identifiers
               ~current_type_ast_level ~current_typevars e
-            >>= fun e -> Ok (Constr (tid, Some e)))
+            >>= fun e -> Ok (Constr (tid, tlist, Some e)))
     | Match (e, pattn_expr_list) ->
         (* Or_error.unimplemented "Not implemented" *)
         (* Get all binders, and if there are binders, increment level, otherwise don't *)
@@ -1336,13 +1354,16 @@ end = struct
           ~tag:"DeBruijnShiftingError[META]: Shifting meta index failed."
           (MetaIdentifier.shift metaid ~depth:meta_depth ~offset:meta_offset)
         >>= fun metaid -> Ok (Closure (metaid, typs, exprs))
-    | Constr (tid, e_opt) -> (
+    | Constr (tid, tlist, e_opt) -> (
+        List.map ~f:(Typ.shift_indices ~type_depth ~type_offset) tlist
+        |> Or_error.combine_errors
+        >>= fun tlist ->
         match e_opt with
-        | None -> Ok (Constr (tid, None))
+        | None -> Ok (Constr (tid, tlist, None))
         | Some e ->
             shift_indices e ~obj_depth ~meta_depth ~type_depth ~obj_offset
               ~meta_offset ~type_offset
-            >>= fun e -> Ok (Constr (tid, Some e)))
+            >>= fun e -> Ok (Constr (tid, tlist, Some e)))
     | Match (e, pattn_expr_list) ->
         shift_indices e ~obj_depth ~meta_depth ~type_depth ~obj_offset
           ~meta_offset ~type_offset
@@ -1422,10 +1443,11 @@ end = struct
         convert_exprs exprs >>= fun vs -> Some (Value.Prod vs)
     | Lambda (iddef, e) -> Some (Value.Lambda (iddef, e))
     | Box (tvctx, ctx, e) -> Some (Value.Box (tvctx, ctx, e))
-    | Constr (tid, e_opt) -> (
+    | Constr (tid, tlist, e_opt) -> (
         match e_opt with
-        | None -> Some (Value.Constr (tid, None))
-        | Some e -> to_val e >>= fun v -> Some (Value.Constr (tid, Some v)))
+        | None -> Some (Value.Constr (tid, tlist, None))
+        | Some e ->
+            to_val e >>= fun v -> Some (Value.Constr (tid, tlist, Some v)))
     | EValue v -> Some v
     | _ -> None
 end
@@ -1438,7 +1460,7 @@ and Value : sig
     | Right of Typ.t * Typ.t * t (*R[A,B] e*)
     | Lambda of IdentifierDefn.t * Expr.t (*fun (x : A) -> e*)
     | Box of TypeVarContext.t * Context.t * Expr.t (*box (x:A, y:B |- e)*)
-    | Constr of Constructor.t * t option
+    | Constr of Constructor.t * Typ.t list * t option
     | BigLambda of TypeVar.t * Expr.t
   [@@deriving sexp, show, compare, equal]
 
@@ -1452,7 +1474,7 @@ end = struct
     | Right of Typ.t * Typ.t * t (*R[A,B] e*)
     | Lambda of IdentifierDefn.t * Expr.t (*fun (x : A) -> e*)
     | Box of TypeVarContext.t * Context.t * Expr.t (*box (x:A, y:B |- e)*)
-    | Constr of Constructor.t * t option
+    | Constr of Constructor.t * Typ.t list * t option
     | BigLambda of TypeVar.t * Expr.t
   [@@deriving sexp, show, compare, equal]
 
@@ -1463,8 +1485,9 @@ end = struct
     | Right (t1, t2, v) -> Expr.Right (t1, t2, Expr.EValue v)
     | Lambda (iddef, expr) -> Expr.Lambda (iddef, expr)
     | Box (tvctx, ctx, expr) -> Expr.Box (tvctx, ctx, expr)
-    | Constr (constr, Some v) -> Expr.Constr (constr, Some (Expr.EValue v))
-    | Constr (constr, None) -> Expr.Constr (constr, None)
+    | Constr (constr, tlist, Some v) ->
+        Expr.Constr (constr, tlist, Some (Expr.EValue v))
+    | Constr (constr, tlist, None) -> Expr.Constr (constr, tlist, None)
     | BigLambda (typvar, e) -> Expr.BigLambda (typvar, e)
 
   let rec to_expr_intensional = function
@@ -1482,9 +1505,9 @@ end = struct
     | Right (t1, t2, v) -> Expr.Right (t1, t2, to_expr_intensional v)
     | Lambda (iddef, expr) -> Expr.Lambda (iddef, expr)
     | Box (tvctx, ctx, expr) -> Expr.Box (tvctx, ctx, expr)
-    | Constr (constr, Some v) ->
-        Expr.Constr (constr, Some (to_expr_intensional v))
-    | Constr (constr, None) -> Expr.Constr (constr, None)
+    | Constr (constr, tlist, Some v) ->
+        Expr.Constr (constr, tlist, Some (to_expr_intensional v))
+    | Constr (constr, tlist, None) -> Expr.Constr (constr, tlist, None)
     | BigLambda (typvar, e) -> Expr.BigLambda (typvar, e)
 end
 
@@ -1509,7 +1532,10 @@ and TopLevelDefn : sig
     | Expression of Expr.t
     | Directive of Directive.t
     | DatatypeDecl of
-        (TypeIdentifier.t * (Constructor.t * Typ.t option) list) list
+        (TypeVarContext.t
+        * TypeIdentifier.t
+        * (Constructor.t * Typ.t option) list)
+        list
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.TopLevelDefn.t -> t
@@ -1523,7 +1549,10 @@ end = struct
     | Expression of Expr.t
     | Directive of Directive.t
     | DatatypeDecl of
-        (TypeIdentifier.t * (Constructor.t * Typ.t option) list) list
+        (TypeVarContext.t
+        * TypeIdentifier.t
+        * (Constructor.t * Typ.t option) list)
+        list
   [@@deriving sexp, show, compare, equal]
 
   let of_past = function
@@ -1537,10 +1566,13 @@ end = struct
                (IdentifierDefn.of_past iddef, Expr.of_past e)))
     | Past.TopLevelDefn.Expression e -> Expression (Expr.of_past e)
     | Past.TopLevelDefn.Directive d -> Directive (Directive.of_past d)
-    | Past.TopLevelDefn.DatatypeDecl (id_constr_typ_list_list) -> 
+    | Past.TopLevelDefn.DatatypeDecl id_constr_typ_list_list ->
         let new_id_contr_typ_list_list =
-          List.map id_constr_typ_list_list ~f:(fun (_, id, constr_typ_list) ->(* TODO: PolyADT MODIFY *)
-              ( TypeIdentifier.of_past id,
+          List.map id_constr_typ_list_list
+            ~f:(fun (tvctx, id, constr_typ_list) ->
+              (* TODO: PolyADT MODIFY *)
+              ( TypeVarContext.of_past tvctx,
+                TypeIdentifier.of_past id,
                 List.map constr_typ_list ~f:(fun (constr, typ) ->
                     match typ with
                     | None -> (Constructor.of_past constr, None)
@@ -1605,16 +1637,23 @@ end = struct
         (*
             TODO: Modify here for Polymorphic ADT
         *)
-        List.map id_constr_typ_list_list ~f:(fun (typ_id, constr_typ_list) ->
+        List.map id_constr_typ_list_list
+          ~f:(fun (tvctx, typ_id, constr_typ_list) ->
             List.map constr_typ_list ~f:(fun (constr, typ_opt) ->
                 match typ_opt with
                 | None -> Ok (constr, None)
                 | Some typ ->
-                    Typ.populate_index typ ~current_type_ast_level:0
-                      ~current_typevars:String_map.empty
+                    (* If the type doesn't have free variables, then the current ast level is unimportant;
+                       if it does, then we raise it by one and bind them here, so no difference. We don't need to
+                       cater for the case of an empty tvctx.*)
+                    String_map.of_alist_or_error
+                      (List.map ~f:(fun typ -> (TypeVar.get_name typ, 0)) tvctx)
+                    >>= fun new_typevars ->
+                    Typ.populate_index typ ~current_type_ast_level:1
+                      ~current_typevars:new_typevars
                     >>= fun typ -> Ok (constr, Some typ))
             |> Or_error.combine_errors
-            >>= fun constr_typ_list -> Ok (typ_id, constr_typ_list))
+            >>= fun constr_typ_list -> Ok (tvctx, typ_id, constr_typ_list))
         |> Or_error.combine_errors
         >>= fun id_constr_typ_list_list ->
         Ok (DatatypeDecl id_constr_typ_list_list)
@@ -1642,7 +1681,10 @@ module TypedTopLevelDefn : sig
     | Expression of Typ.t * Expr.t
     | Directive of Directive.t
     | DatatypeDecl of
-        (TypeIdentifier.t * (Constructor.t * Typ.t option) list) list
+        (TypeVarContext.t
+        * TypeIdentifier.t
+        * (Constructor.t * Typ.t option) list)
+        list
   [@@deriving sexp, show, compare, equal]
 
   val convert_from_untyped_without_typecheck : TopLevelDefn.t -> t
@@ -1655,7 +1697,10 @@ end = struct
     | Expression of Typ.t * Expr.t
     | Directive of Directive.t
     | DatatypeDecl of
-        (TypeIdentifier.t * (Constructor.t * Typ.t option) list) list
+        (TypeVarContext.t
+        * TypeIdentifier.t
+        * (Constructor.t * Typ.t option) list)
+        list
   [@@deriving sexp, show, compare, equal]
 
   let convert_from_untyped_without_typecheck = function

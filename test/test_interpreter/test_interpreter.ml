@@ -363,8 +363,9 @@ let generate_tests_for_interpreter interpreter =
         assert_equal
           (Some
              (Interpreter_common.TopLevelEvaluationResult.ExprValue
-                ( Ast.Typ.TIdentifier (Ast.TypeIdentifier.of_string "sometype"),
-                  Ast.Value.Constr (Ast.Constructor.of_string "Con2", None),
+                ( Ast.Typ.TIdentifier
+                    ([], Ast.TypeIdentifier.of_string "sometype"),
+                  Ast.Value.Constr (Ast.Constructor.of_string "Con2", [], None),
                   None,
                   None,
                   None )))
@@ -403,21 +404,23 @@ let generate_tests_for_interpreter interpreter =
                 ( Ast.Typ.TBox
                     ( [],
                       [],
-                      Ast.Typ.TIdentifier (Ast.TypeIdentifier.of_string "tree")
-                    ),
+                      Ast.Typ.TIdentifier
+                        ([], Ast.TypeIdentifier.of_string "tree") ),
                   Ast.Value.Box
                     ( [],
                       [],
                       Ast.Expr.Constr
                         ( Ast.Constructor.of_string "Br",
+                          [],
                           Some
                             (Ast.Expr.Prod
                                [
                                  Ast.Expr.Constant (Ast.Constant.Integer 1);
                                  Ast.Expr.Constr
-                                   (Ast.Constructor.of_string "Lf", None);
+                                   (Ast.Constructor.of_string "Lf", [], None);
                                  Ast.Expr.Constr
                                    ( Ast.Constructor.of_string "Br",
+                                     [],
                                      Some
                                        (Ast.Expr.Prod
                                           [
@@ -425,9 +428,11 @@ let generate_tests_for_interpreter interpreter =
                                               (Ast.Constant.Integer 2);
                                             Ast.Expr.Constr
                                               ( Ast.Constructor.of_string "Lf",
+                                                [],
                                                 None );
                                             Ast.Expr.Constr
                                               ( Ast.Constructor.of_string "Lf",
+                                                [],
                                                 None );
                                           ]) );
                                ]) ) ),
@@ -573,15 +578,19 @@ let generate_tests_for_interpreter interpreter =
         assert_equal
           (Some
              (Interpreter_common.TopLevelEvaluationResult.ExprValue
-                ( Ast.Typ.TIdentifier (Ast.TypeIdentifier.of_string "othertype"),
+                ( Ast.Typ.TIdentifier
+                    ([], Ast.TypeIdentifier.of_string "othertype"),
                   Ast.Value.Constr
                     ( Ast.Constructor.of_string "E",
+                      [],
                       Some
                         (Ast.Value.Constr
                            ( Ast.Constructor.of_string "C",
+                             [],
                              Some
                                (Ast.Value.Constr
-                                  (Ast.Constructor.of_string "D", None)) )) ),
+                                  (Ast.Constructor.of_string "D", [], None)) ))
+                    ),
                   None,
                   None,
                   None )))
@@ -988,15 +997,18 @@ let generate_tests_for_interpreter interpreter =
         assert_equal
           (Some
              (Interpreter_common.TopLevelEvaluationResult.ExprValue
-                ( Ast.Typ.TIdentifier (Ast.TypeIdentifier.of_string "intlist"),
+                ( Ast.Typ.TIdentifier
+                    ([], Ast.TypeIdentifier.of_string "intlist"),
                   Ast.Value.Constr
                     ( Ast.Constructor.of_string "Cons",
+                      [],
                       Some
                         (Ast.Value.Prod
                            [
                              Ast.Value.Constant (Ast.Constant.Integer 2);
                              Ast.Value.Constr
                                ( Ast.Constructor.of_string "Cons",
+                                 [],
                                  Some
                                    (Ast.Value.Prod
                                       [
@@ -1004,6 +1016,7 @@ let generate_tests_for_interpreter interpreter =
                                           (Ast.Constant.Integer 4);
                                         Ast.Value.Constr
                                           ( Ast.Constructor.of_string "Cons",
+                                            [],
                                             Some
                                               (Ast.Value.Prod
                                                  [
@@ -1012,6 +1025,7 @@ let generate_tests_for_interpreter interpreter =
                                                    Ast.Value.Constr
                                                      ( Ast.Constructor.of_string
                                                          "Nil",
+                                                       [],
                                                        None );
                                                  ]) );
                                       ]) );

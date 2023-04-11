@@ -19,7 +19,7 @@ let type_infer
         Typing_context.MetaTypingContext.create_empty_context ())
     ?obj_context:(obj_ctx =
         Typing_context.ObjTypingContext.create_empty_context ())
-    ?type_context:(typ_ctx = Typing_context.TypeConstrTypingContext.empty)
+    ?type_context:(typ_ctx = Typing_context.TypeConstrContext.empty)
     ?typevar_context:(typevar_ctx =
         Typing_context.PolyTypeVarContext.create_empty_context ()) lexbuf =
   let open Or_error.Monad_infix in
@@ -36,7 +36,7 @@ let type_infer_from_str
         Typing_context.MetaTypingContext.create_empty_context ())
     ?obj_context:(obj_ctx =
         Typing_context.ObjTypingContext.create_empty_context ())
-    ?type_context:(typ_ctx = Typing_context.TypeConstrTypingContext.empty) str =
+    ?type_context:(typ_ctx = Typing_context.TypeConstrContext.empty) str =
   type_infer ~meta_context:meta_ctx ~obj_context:obj_ctx ~type_context:typ_ctx
     (Lexing.from_string str)
 
@@ -45,7 +45,7 @@ let type_check_program_from_str
         Typing_context.MetaTypingContext.create_empty_context ())
     ?obj_context:(obj_ctx =
         Typing_context.ObjTypingContext.create_empty_context ())
-    ?type_context:(type_ctx = Typing_context.TypeConstrTypingContext.empty) str
+    ?type_context:(type_ctx = Typing_context.TypeConstrContext.empty) str
     =
   str |> Lexing.from_string |> Lys_parsing.Lex_and_parse.parse_program
   |> Lys_ast.Ast.Program.of_past |> Lys_ast.Ast.Program.populate_index |> ok_exn
