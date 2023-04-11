@@ -25,9 +25,9 @@ let type_infer
   let open Or_error.Monad_infix in
   lexbuf |> parse_expr_exn |> Ast.Expr.of_past
   |> Ast.Expr.populate_index ~current_ast_level:0
-       ~current_identifiers:Lys_utils.String_map.empty ~current_meta_ast_level:0
-       ~current_meta_identifiers:Lys_utils.String_map.empty
-       ~current_type_ast_level:0 ~current_typevars:Lys_utils.String_map.empty
+       ~current_identifiers:String.Map.empty ~current_meta_ast_level:0
+       ~current_meta_identifiers:String.Map.empty
+       ~current_type_ast_level:0 ~current_typevars:String.Map.empty
   >>= Lys_typing.Typecore.type_inference_expression meta_ctx obj_ctx typ_ctx
         typevar_ctx
 

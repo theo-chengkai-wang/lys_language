@@ -1,5 +1,4 @@
 open Lys_ast
-open Lys_utils
 open Core
 open Lys_typing
 
@@ -11,7 +10,7 @@ module EvaluationContext : sig
   }
   [@@deriving sexp, show, compare, equal]
 
-  type t = single_record String_map.t [@@deriving sexp, compare, equal]
+  type t = single_record String.Map.t [@@deriving sexp, compare, equal]
 
   (*Map from object id to record (expr and is_rec)*)
   val set : t -> key:string -> data:single_record -> t

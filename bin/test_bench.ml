@@ -8,7 +8,6 @@
 open Core
 open Lys_parsing
 open Lys_typing
-open Lys_utils
 open Lys_ast
 open Lys_substitutions
 open Lys_interpreter
@@ -23,12 +22,12 @@ let loop str () =
     | _ -> failwith "Not supposed to be here" )
   |> fun e ->
   let current_identifiers =
-    String_map.empty |> String_map.set ~key:"y" ~data:0
+    String.Map.empty |> String.Map.set ~key:"y" ~data:0
   in
   let current_meta_identifiers =
-    String_map.empty |> String_map.set ~key:"u" ~data:0
+    String.Map.empty |> String.Map.set ~key:"u" ~data:0
   in
-  let current_typevars = String_map.empty in
+  let current_typevars = String.Map.empty in
   Ast.Expr.populate_index e ~current_ast_level:1 ~current_meta_ast_level:1
     ~current_type_ast_level:1 ~current_identifiers ~current_meta_identifiers
     ~current_typevars

@@ -1,5 +1,4 @@
 open Core
-open Lys_utils
 
 module DeBruijnIndex : sig
   (*Implementation of De Bruijn Indices -- encapsulated*)
@@ -28,7 +27,7 @@ module type Identifier_type = sig
   val populate_index :
     t ->
     current_level:int ->
-    current_identifiers:int String_map.t ->
+    current_identifiers:int String.Map.t ->
     t Or_error.t
 
   val shift : t -> depth:int -> offset:int -> t Or_error.t
@@ -88,7 +87,7 @@ and Typ : sig
   val populate_index :
     t ->
     current_type_ast_level:int ->
-    current_typevars:int String_map.t ->
+    current_typevars:int String.Map.t ->
     t Or_error.t
 
   val shift_indices : t -> type_depth:int -> type_offset:int -> t Or_error.t
@@ -102,7 +101,7 @@ and IdentifierDefn : sig
   val populate_index :
     t ->
     current_type_ast_level:int ->
-    current_typevars:int String_map.t ->
+    current_typevars:int String.Map.t ->
     t Or_error.t
 
   val shift_indices : t -> type_depth:int -> type_offset:int -> t Or_error.t
@@ -141,7 +140,7 @@ and Context : sig
   val populate_index :
     t ->
     current_type_ast_level:int ->
-    current_typevars:int String_map.t ->
+    current_typevars:int String.Map.t ->
     t Or_error.t
 
   val shift_indices : t -> type_depth:int -> type_offset:int -> t Or_error.t
@@ -263,11 +262,11 @@ and Expr : sig
   val populate_index :
     t ->
     current_ast_level:int ->
-    current_identifiers:int String_map.t ->
+    current_identifiers:int String.Map.t ->
     current_meta_ast_level:int ->
-    current_meta_identifiers:int String_map.t ->
+    current_meta_identifiers:int String.Map.t ->
     current_type_ast_level:int ->
-    current_typevars:int String_map.t ->
+    current_typevars:int String.Map.t ->
     t Or_error.t
 
   val shift_indices :

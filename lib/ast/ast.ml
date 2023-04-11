@@ -1,5 +1,4 @@
 open Core
-open Lys_utils
 
 (*Map from Past.Identifier to anything*)
 
@@ -62,7 +61,7 @@ module type Identifier_type = sig
   val populate_index :
     t ->
     current_level:int ->
-    current_identifiers:int String_map.t ->
+    current_identifiers:int String.Map.t ->
     t Or_error.t
 
   val shift : t -> depth:int -> offset:int -> t Or_error.t
@@ -93,7 +92,7 @@ functor
       (* The concept of the De Bruijn index thing is to remember the current level. *)
       (* If ~current_ast_level or ~current_identifiers not given, assume that we're talking about an identifier definition, so the index returned should be Index.none *)
       let open Or_error.Monad_infix in
-      let level_opt = String_map.find current_identifiers id in
+      let level_opt = String.Map.find current_identifiers id in
       (*Get the level at which id is defined.*)
       match level_opt with
       | None ->
@@ -185,7 +184,7 @@ and Typ : sig
   val populate_index :
     t ->
     current_type_ast_level:int ->
-    current_typevars:int String_map.t ->
+    current_typevars:int String.Map.t ->
     t Or_error.t
 
   val shift_indices : t -> type_depth:int -> type_offset:int -> t Or_error.t
@@ -253,7 +252,7 @@ end = struct
             (* Insert context and add level *)
             ( current_type_ast_level + 1,
               List.fold tvctx ~init:current_typevars ~f:(fun acc tv ->
-                  String_map.set acc ~key:(TypeVar.get_name tv)
+                  String.Map.set acc ~key:(TypeVar.get_name tv)
                     ~data:current_type_ast_level) )
         in
         List.map ctx ~f:(fun (x, typ) ->
@@ -287,7 +286,7 @@ end = struct
         >>= fun v -> Ok (TVar v)
     | TForall (v, typ) ->
         let new_typevars =
-          String_map.set current_typevars ~key:(TypeVar.get_name v)
+          String.Map.set current_typevars ~key:(TypeVar.get_name v)
             ~data:current_type_ast_level
         in
         populate_index
@@ -351,7 +350,7 @@ and IdentifierDefn : sig
   val populate_index :
     t ->
     current_type_ast_level:int ->
-    current_typevars:int String_map.t ->
+    current_typevars:int String.Map.t ->
     t Or_error.t
 
   val shift_indices : t -> type_depth:int -> type_offset:int -> t Or_error.t
@@ -436,7 +435,7 @@ and Context : sig
   val populate_index :
     t ->
     current_type_ast_level:int ->
-    current_typevars:int String_map.t ->
+    current_typevars:int String.Map.t ->
     t Or_error.t
 
   val shift_indices : t -> type_depth:int -> type_offset:int -> t Or_error.t
@@ -687,11 +686,11 @@ and Expr : sig
   val populate_index :
     t ->
     current_ast_level:int ->
-    current_identifiers:int String_map.t ->
+    current_identifiers:int String.Map.t ->
     current_meta_ast_level:int ->
-    current_meta_identifiers:int String_map.t ->
+    current_meta_identifiers:int String.Map.t ->
     current_type_ast_level:int ->
-    current_typevars:int String_map.t ->
+    current_typevars:int String.Map.t ->
     t Or_error.t
 
   val shift_indices :
@@ -882,12 +881,12 @@ end = struct
         let id1, _ = iddef1 and id2, _ = iddef2 in
 
         let new_current_identifiers_1 =
-          String_map.set current_identifiers
+          String.Map.set current_identifiers
             ~key:(ObjIdentifier.get_name id1)
             ~data:current_ast_level
         in
         let new_current_identifiers_2 =
-          String_map.set current_identifiers
+          String.Map.set current_identifiers
             ~key:(ObjIdentifier.get_name id2)
             ~data:current_ast_level
         in
@@ -913,7 +912,7 @@ end = struct
         (*Addition for De Bruijn*)
         let id, _ = iddef in
         let new_current_identifiers =
-          String_map.set current_identifiers
+          String.Map.set current_identifiers
             ~key:(ObjIdentifier.get_name id)
             ~data:current_ast_level
         in
@@ -950,7 +949,7 @@ end = struct
         >>= fun iddef ->
         let id, _ = iddef in
         let new_current_identifiers =
-          String_map.set current_identifiers
+          String.Map.set current_identifiers
             ~key:(ObjIdentifier.get_name id)
             ~data:current_ast_level
         in
@@ -972,7 +971,7 @@ end = struct
         let id, _ = iddef in
         let new_level = current_ast_level + 1 in
         let new_current_identifiers =
-          String_map.set current_identifiers
+          String.Map.set current_identifiers
             ~key:(ObjIdentifier.get_name id)
             ~data:current_ast_level
         in
@@ -989,7 +988,7 @@ end = struct
         let new_current_identifiers =
           List.fold iddef_e_list ~init:current_identifiers
             ~f:(fun acc ((id, _), _) ->
-              String_map.set acc
+              String.Map.set acc
                 ~key:(ObjIdentifier.get_name id)
                 ~data:current_ast_level)
         in
@@ -1026,7 +1025,7 @@ end = struct
             (* Insert context and add level *)
             ( current_type_ast_level + 1,
               List.fold tvctx ~init:current_typevars ~f:(fun acc tv ->
-                  String_map.set acc ~key:(TypeVar.get_name tv)
+                  String.Map.set acc ~key:(TypeVar.get_name tv)
                     ~data:current_type_ast_level) )
         in
         Context.populate_index ~current_type_ast_level:new_typ_level
@@ -1036,7 +1035,7 @@ end = struct
           ~tag:
             "DeBruijnPopulationError[OBJECT]: There are duplicated identifier \
              definitions in the box context."
-          (String_map.of_alist_or_error
+          (String.Map.of_alist_or_error
              (List.map ctx ~f:(fun (id, _) -> (ObjIdentifier.get_name id, 0))))
         >>= fun new_current_identifiers ->
         (* Actually we need to populate the types *)
@@ -1047,7 +1046,7 @@ end = struct
         >>= fun e -> Ok (Box (tvctx, ctx, e))
     | LetBox (metaid, e, e2) ->
         let new_current_meta_identifiers =
-          String_map.set current_meta_identifiers
+          String.Map.set current_meta_identifiers
             ~key:(MetaIdentifier.get_name metaid)
             ~data:current_meta_ast_level
         in
@@ -1120,7 +1119,7 @@ end = struct
             (* Add the binders in obj context *)
             let new_current_identifiers =
               List.fold binders ~init:current_identifiers ~f:(fun acc binder ->
-                  String_map.set acc
+                  String.Map.set acc
                     ~key:(ObjIdentifier.get_name binder)
                     ~data:current_ast_level)
             in
@@ -1186,7 +1185,7 @@ end = struct
         >>= fun e3 -> Ok (ArrayAssign (e1, e2, e3))
     | BigLambda (v, e) ->
         let new_typevars =
-          String_map.set current_typevars ~key:(TypeVar.get_name v)
+          String.Map.set current_typevars ~key:(TypeVar.get_name v)
             ~data:current_type_ast_level
         in
         populate_index ~current_ast_level ~current_identifiers
@@ -1586,51 +1585,51 @@ end = struct
     function
     | Definition ((id, typ2), expr) ->
         Typ.populate_index typ2 ~current_type_ast_level:0
-          ~current_typevars:String_map.empty
+          ~current_typevars:String.Map.empty
         >>= fun typ2 ->
         Expr.populate_index expr ~current_ast_level:0
-          ~current_identifiers:String_map.empty ~current_meta_ast_level:0
-          ~current_meta_identifiers:String_map.empty ~current_type_ast_level:0
-          ~current_typevars:String_map.empty
+          ~current_identifiers:String.Map.empty ~current_meta_ast_level:0
+          ~current_meta_identifiers:String.Map.empty ~current_type_ast_level:0
+          ~current_typevars:String.Map.empty
         >>= fun expr -> Ok (Definition ((id, typ2), expr))
     | RecursiveDefinition ((id, typ2), expr) ->
         Typ.populate_index typ2 ~current_type_ast_level:0
-          ~current_typevars:String_map.empty
+          ~current_typevars:String.Map.empty
         >>= fun typ2 ->
         let new_current_identifiers =
-          String_map.set String_map.empty
+          String.Map.set String.Map.empty
             ~key:(ObjIdentifier.get_name id)
             ~data:0
         in
         Expr.populate_index expr ~current_ast_level:1
           ~current_identifiers:new_current_identifiers ~current_meta_ast_level:0
-          ~current_meta_identifiers:String_map.empty ~current_type_ast_level:0
-          ~current_typevars:String_map.empty
+          ~current_meta_identifiers:String.Map.empty ~current_type_ast_level:0
+          ~current_typevars:String.Map.empty
         >>= fun expr -> Ok (RecursiveDefinition ((id, typ2), expr))
     | MutualRecursiveDefinition typ_iddef_e_list ->
         let new_current_identifiers =
-          List.fold typ_iddef_e_list ~init:String_map.empty
+          List.fold typ_iddef_e_list ~init:String.Map.empty
             ~f:(fun acc ((id, _), _) ->
-              String_map.set acc ~key:(ObjIdentifier.get_name id) ~data:0)
+              String.Map.set acc ~key:(ObjIdentifier.get_name id) ~data:0)
         in
         List.map typ_iddef_e_list ~f:(fun (iddef, e) ->
             IdentifierDefn.populate_index iddef ~current_type_ast_level:0
-              ~current_typevars:String_map.empty
+              ~current_typevars:String.Map.empty
             >>= fun iddef ->
             Expr.populate_index e ~current_ast_level:1
               ~current_identifiers:new_current_identifiers
               ~current_meta_ast_level:0
-              ~current_meta_identifiers:String_map.empty
-              ~current_type_ast_level:0 ~current_typevars:String_map.empty
+              ~current_meta_identifiers:String.Map.empty
+              ~current_type_ast_level:0 ~current_typevars:String.Map.empty
             >>= fun e -> Ok (iddef, e))
         |> Or_error.combine_errors
         >>= fun typ_iddef_e_list ->
         Ok (MutualRecursiveDefinition typ_iddef_e_list)
     | Expression expr ->
         Expr.populate_index expr ~current_ast_level:0
-          ~current_identifiers:String_map.empty ~current_meta_ast_level:0
-          ~current_meta_identifiers:String_map.empty ~current_type_ast_level:0
-          ~current_typevars:String_map.empty
+          ~current_identifiers:String.Map.empty ~current_meta_ast_level:0
+          ~current_meta_identifiers:String.Map.empty ~current_type_ast_level:0
+          ~current_typevars:String.Map.empty
         >>= fun expr -> Ok (Expression expr)
     | Directive d -> Ok (Directive d)
     | DatatypeDecl id_constr_typ_list_list ->
@@ -1646,7 +1645,7 @@ end = struct
                     (* If the type doesn't have free variables, then the current ast level is unimportant;
                        if it does, then we raise it by one and bind them here, so no difference. We don't need to
                        cater for the case of an empty tvctx.*)
-                    String_map.of_alist_or_error
+                    String.Map.of_alist_or_error
                       (List.map ~f:(fun typ -> (TypeVar.get_name typ, 0)) tvctx)
                     >>= fun new_typevars ->
                     Typ.populate_index typ ~current_type_ast_level:1

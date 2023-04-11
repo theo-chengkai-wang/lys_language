@@ -1,5 +1,3 @@
-open Core
-
 module type Context_type = sig
   type ('a, 'b) s [@@deriving sexp, equal, compare]
 

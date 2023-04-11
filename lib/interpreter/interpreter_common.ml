@@ -1,6 +1,5 @@
 open Lys_ast
 open Core
-open Lys_utils
 open Lys_typing
 
 (* Top level evaluation context *)
@@ -12,7 +11,7 @@ module EvaluationContext : sig
   }
   [@@deriving show, sexp, compare, equal]
 
-  type t = single_record String_map.t [@@deriving sexp, compare, equal]
+  type t = single_record String.Map.t [@@deriving sexp, compare, equal]
 
   val set : t -> key:string -> data:single_record -> t
   val set_all : t -> (string * single_record) list -> t
@@ -31,30 +30,30 @@ end = struct
   }
   [@@deriving show, sexp, compare, equal]
 
-  type t = single_record String_map.t [@@deriving sexp, compare, equal]
+  type t = single_record String.Map.t [@@deriving sexp, compare, equal]
 
-  let set = String_map.set
+  let set = String.Map.set
 
   let set_all m kvs =
     List.fold kvs ~init:m ~f:(fun acc (key, data) ->
-        String_map.set acc ~key ~data)
+        String.Map.set acc ~key ~data)
 
   let find_or_error map key =
-    match String_map.find map key with
+    match String.Map.find map key with
     | Some v -> Ok v
     | None ->
         error "EvaluationContextError: Key not found." key [%sexp_of: string]
 
-  let empty = String_map.empty
+  let empty = String.Map.empty
 
   let show v =
-    v |> String_map.to_alist
+    v |> String.Map.to_alist
     |> List.fold ~init:"" ~f:(fun acc (id, record) ->
            acc ^ Printf.sprintf "(%s, %s);" id (show_single_record record))
     |> fun str -> Printf.sprintf "[\n%s]" str
 
   let to_typing_obj_context v =
-    v |> String_map.to_alist
+    v |> String.Map.to_alist
     |> List.map ~f:(fun (id, record) ->
            (Ast.ObjIdentifier.of_string id, record.typ))
     |> Typing_context.ObjTypingContext.add_all_mappings
