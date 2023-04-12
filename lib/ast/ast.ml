@@ -1524,6 +1524,9 @@ end = struct
         | Some e ->
             to_val e >>= fun v -> Some (Value.Constr (tid, tlist, Some v)))
     | EValue v -> Some v
+    | BigLambda (tv, e) -> Some (Value.BigLambda (tv, e))
+    | Pack (interface, typ, e) ->
+        to_val e >>= fun v -> Some (Value.Pack (interface, typ, v))
     | _ -> None
 end
 

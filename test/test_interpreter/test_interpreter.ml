@@ -917,6 +917,29 @@ let generate_tests_for_interpreter interpreter =
                   None )))
           (List.last results)
   in
+  let test_pack_defn_and_use _ =
+    let program =
+      "let module_impl: exists 'a. ('a * ('a -> 'a) * ('a -> int)) = \n\
+      \      pack (exists 'a. ('a * ('a -> 'a) * ('a -> int)), int, (0, fun \
+       (x: int) -> x + 1, fun (x: int) -> x));;\n\
+      \      let pack ('a, m) = module_impl in (m[2]) ((m[1]) ((m[1]) \
+       (m[0])));;"
+    in
+    let res_opt = exec_program interpreter program in
+    match res_opt with
+    | None -> assert_string "Program Execution Failed"
+    | Some results ->
+        assert_equal
+          (Some
+             (Interpreter_common.TopLevelEvaluationResult.ExprValue
+                ( Ast.Typ.TInt,
+                  Ast.Value.Constant (Ast.Constant.Integer 2),
+                  None,
+                  None,
+                  None )))
+          (List.last results)
+  in
+
   let interpreter_suite =
     "interpreter_main_suite"
     >::: [
@@ -951,6 +974,7 @@ let generate_tests_for_interpreter interpreter =
            "test_poly_box" >:: test_poly_box;
            "test_poly_box_compose" >:: test_poly_box_compose;
            "test_poly_box_unbox_close" >:: test_poly_box_unbox_close;
+           "test_pack_defn_and_use" >:: test_pack_defn_and_use;
          ]
   in
   let test_intlist_map _ =
@@ -1133,6 +1157,29 @@ let generate_tests_for_interpreter interpreter =
                   None )))
           (List.last results)
   in
+  let test_pack_defn_use_and_other_things _ =
+    let program =
+      "let module_impl: exists 'a. ('a * ('a -> 'a) * ('a -> int)) = \n\
+      \      pack (exists 'a. ('a * ('a -> 'a) * ('a -> int)), int, (0, fun \
+       (x: int) -> x + 1, fun (x: int) -> x));;  \n\
+      \  ('a. fun (x: int) -> let pack ('a, m) = module_impl in (m[2]) ((m[1]) \
+       ((m[1]) (m[0]))))[int] (1);;"
+    in
+    let res_opt = exec_program interpreter program in
+    match res_opt with
+    | None -> assert_string "Program Execution Failed"
+    | Some results ->
+        assert_equal
+          (Some
+             (Interpreter_common.TopLevelEvaluationResult.ExprValue
+                ( Ast.Typ.TInt,
+                  Ast.Value.Constant (Ast.Constant.Integer 2),
+                  None,
+                  None,
+                  None )))
+          (List.last results)
+  in
+
   let interpreter_regression_suite =
     "interpreter_regression_suite"
     >::: [
@@ -1140,6 +1187,8 @@ let generate_tests_for_interpreter interpreter =
            "test_arr_equality" >:: test_arr_equality;
            "test_ref_equality" >:: test_ref_equality;
            "test_polybox_map_staged" >:: test_polybox_map_staged;
+           "test_pack_defn_use_and_other_things"
+           >:: test_pack_defn_use_and_other_things;
          ]
   in
   let suite =

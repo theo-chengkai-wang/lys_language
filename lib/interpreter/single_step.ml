@@ -850,10 +850,44 @@ let rec reduce ~top_level_context ~type_constr_context expr =
                       Ok (ReduceResult.ReducedToExpr substitued_e)
                   | _ ->
                       Or_error.error
-                        "EvaluationError: FATAL: can only type apply on a big \
+                        "SingleStepReductionError: FATAL: can only type apply on a big \
                          lambda. (term)"
                         (Ast.Expr.TypeApply (e, typ))
-                        [%sexp_of: Ast.Expr.t]))
+                        [%sexp_of: Ast.Expr.t])
+      | Ast.Expr.Pack (interface, typ, e) ->
+          reduce ~top_level_context ~type_constr_context e
+          >>= ReduceResult.process
+                ~reduced:(fun e ->
+                  Ok
+                    (ReduceResult.ReducedToExpr
+                       (Ast.Expr.Pack (interface, typ, e))))
+                ~not_reduced:(fun v ->
+                  Ok
+                    (ReduceResult.NotReduced
+                       (Ast.Value.Pack (interface, typ, v))))
+      | Ast.Expr.LetPack (tv, oid, e1, e2) ->
+          reduce ~top_level_context ~type_constr_context e1
+          >>= ReduceResult.process
+                ~reduced:(fun e ->
+                  Ok
+                    (ReduceResult.ReducedToExpr
+                       (Ast.Expr.LetPack (tv, oid, e, e2))))
+                ~not_reduced:(fun v ->
+                  match v with
+                  | Ast.Value.Pack ((_, i_typ), typ, v) ->
+                      (* Here we use tv and not i_tv because the actual type variable used is tv.
+                         i_tv is only there to specify the interface and has no influence whatsoever to
+                         what comes next because it doesn't act as a binder anywhere. *)
+                      Substitutions.sim_substitute_with_types [ typ ] [ tv ]
+                        [ Ast.Value.to_expr v ]
+                        [ (oid, i_typ) ]
+                        e2 (* Note: i_typ here serves as a dummy *)
+                      >>= fun e2 -> Ok (ReduceResult.ReducedToExpr e2)
+                  | _ ->
+                      Or_error.error
+                        "SingleStepReductionError: FATAL: value given to unpack doesn't \
+                         reduce to a pack. (e_to_unpack)"
+                        e1 [%sexp_of: Ast.Expr.t]))
 
 let multi_step_reduce ~top_level_context ~type_constr_context ?(verbose = false)
     expr =

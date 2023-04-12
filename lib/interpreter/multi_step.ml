@@ -357,12 +357,17 @@ let rec multi_step_reduce ~top_level_context ~type_constr_context ~expr =
       >>= fun box_v ->
       match box_v with
       | Ast.Value.Box (tvctx, ctx, e_box) ->
-          Substitutions.meta_substitute tvctx ctx e_box metaid e2 |> fun or_error ->
+          Substitutions.meta_substitute tvctx ctx e_box metaid e2
+          |> fun or_error ->
           Or_error.tag_arg or_error
             "EvaluationError: Meta substitution error: metaid, e->v, ctx, v"
             (metaid, box_v, tvctx, ctx, e2)
             [%sexp_of:
-              Ast.MetaIdentifier.t * Ast.Value.t * Ast.TypeVarContext.t * Ast.Context.t * Ast.Expr.t]
+              Ast.MetaIdentifier.t
+              * Ast.Value.t
+              * Ast.TypeVarContext.t
+              * Ast.Context.t
+              * Ast.Expr.t]
           >>= fun res_meta_sub ->
           multi_step_reduce ~top_level_context ~type_constr_context
             ~expr:res_meta_sub
@@ -435,7 +440,8 @@ let rec multi_step_reduce ~top_level_context ~type_constr_context ~expr =
                   multi_step_reduce ~top_level_context ~type_constr_context
                     ~expr:substituted_expr)
             |> Some
-        | Ast.Pattern.Datatype (constr, []), Ast.Value.Constr (constr2, _, None) ->
+        | Ast.Pattern.Datatype (constr, []), Ast.Value.Constr (constr2, _, None)
+          ->
             (* Here the constructor doesn't take any argument so we don't need it to do anything with the types *)
             (* CHECK IF constr exists *)
             if
@@ -452,7 +458,7 @@ let rec multi_step_reduce ~top_level_context ~type_constr_context ~expr =
               |> Some
         | ( Ast.Pattern.Datatype (constr, [ id ]),
             Ast.Value.Constr (constr2, _, Some v) ) ->
-              (* Ignore the types *)
+            (* Ignore the types *)
             if
               Option.is_none
                 (TypeConstrContext.get_typ_from_constr type_constr_context
@@ -472,7 +478,7 @@ let rec multi_step_reduce ~top_level_context ~type_constr_context ~expr =
               |> Some
         | ( Ast.Pattern.Datatype (constr, id_list),
             Ast.Value.Constr (constr2, _, Some (Ast.Value.Prod vlist)) ) ->
-              (* I can ignore the types safely *)
+            (* I can ignore the types safely *)
             if
               Option.is_none
                 (TypeConstrContext.get_typ_from_constr type_constr_context
@@ -591,13 +597,36 @@ let rec multi_step_reduce ~top_level_context ~type_constr_context ~expr =
       | BigLambda (tv, inner_e) ->
           Substitutions.type_term_substitute typ tv inner_e
           >>= fun substituted_e ->
-          multi_step_reduce ~top_level_context ~type_constr_context ~expr:substituted_e
+          multi_step_reduce ~top_level_context ~type_constr_context
+            ~expr:substituted_e
       | _ ->
           Or_error.error
             "EvaluationError: FATAL: can only type apply on a big lambda. \
              (term)"
             (Ast.Expr.TypeApply (e, typ))
             [%sexp_of: Ast.Expr.t])
+  | Ast.Expr.Pack ((i_tv, i_typ), typ, e) ->
+      multi_step_reduce ~top_level_context ~type_constr_context ~expr:e
+      >>= fun pack_val -> Ok (Ast.Value.Pack ((i_tv, i_typ), typ, pack_val))
+  | Ast.Expr.LetPack (tv, oid, e1, e2) -> (
+      multi_step_reduce ~top_level_context ~type_constr_context ~expr:e1
+      >>= fun v1 ->
+      match v1 with
+      | Ast.Value.Pack ((_, i_typ), typ, v) ->
+          (* Here we use tv and not i_tv because the actual type variable used is tv.
+             i_tv is only there to specify the interface and has no influence whatsoever to
+             what comes next because it doesn't act as a binder anywhere. *)
+          Substitutions.sim_substitute_with_types [ typ ] [ tv ]
+            [ Ast.Value.to_expr v ]
+            [ (oid, i_typ) ]
+            e2 (* Note: i_typ here serves as a dummy *)
+          >>= fun e2 ->
+          multi_step_reduce ~top_level_context ~type_constr_context ~expr:e2
+      | _ ->
+          Or_error.error
+            "EvaluationError: FATAL: value given to unpack doesn't reduce to a \
+             pack. (e_to_unpack)"
+            e1 [%sexp_of: Ast.Expr.t])
 
 let evaluate_top_level_defn ?(top_level_context = EvaluationContext.empty)
     ?(type_constr_context = TypeConstrContext.empty) ?(time_exec = false)

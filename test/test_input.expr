@@ -1,4 +1,7 @@
-let x: ['a; x: 'a]'a = box ('a; x: 'a |- x);;
-            let y: int =
-            let box u = x in
-              u with [int](1);;
+let module_impl: exists 'a. ('a * ('a -> 'a) * ('a -> int)) = 
+    pack (exists 'a. ('a * ('a -> 'a) * ('a -> int)), int, (0, fun (x: int) -> x + 1, fun (x: int) -> x));;
+
+let pack ('a, m) = module_impl in (m[2]) ((m[1]) ((m[1]) (m[0])));;
+
+
+('a. fun (x: int) -> let pack ('a, m) = module_impl in (m[2]) ((m[1]) ((m[1]) (m[0]))))[int] (1);;
