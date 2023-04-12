@@ -1067,12 +1067,79 @@ let generate_tests_for_interpreter interpreter =
                   None )))
           (List.last results)
   in
+  let test_polybox_map_staged _ =
+    let program =
+      "datatype 'a list = Nil | Cons of ('a * 'a list);; \n\
+       let rec map_staged: forall 'a. ([]'a) list -> ['b; f:'a -> 'b |- 'b \
+       list] =\n\
+      \        'a. fun (xs: ([]'a) list) ->\n\
+      \            match xs with\n\
+      \            | Nil -> box ('b; f: 'a -> 'b |- Nil['b])\n\
+      \            | Cons (x, xs) -> \n\
+      \                let box u = map_staged ['a] xs in\n\
+      \                let box x = x in \n\
+      \                box ('b; f: 'a -> 'b |- Cons['b] (f (x with ()), u with \
+       ['b](f)))\n\
+      \    ;;\n\
+      \    \n\
+      \       let box u = map_staged [int] (Cons[[]int] (box(|-1), Cons \
+       [[]int] (box(|-2), Cons[[]int] (box (|-3), Nil[[]int]))))\n\
+      \            in u with [int](fun (x:int) -> x * 2)\n\
+      \            ;;\n\
+      \  "
+    in
+    let res_opt = exec_program interpreter program in
+    match res_opt with
+    | None -> assert_string "Program Execution Failed"
+    | Some results ->
+        assert_equal
+          (Some
+             (Interpreter_common.TopLevelEvaluationResult.ExprValue
+                ( Ast.Typ.TIdentifier
+                    ([ Ast.Typ.TInt ], Ast.TypeIdentifier.of_string "list"),
+                  Ast.Value.Constr
+                    ( Ast.Constructor.of_string "Cons",
+                      [ Ast.Typ.TInt ],
+                      Some
+                        (Ast.Value.Prod
+                           [
+                             Ast.Value.Constant (Ast.Constant.Integer 2);
+                             Ast.Value.Constr
+                               ( Ast.Constructor.of_string "Cons",
+                                 [ Ast.Typ.TInt ],
+                                 Some
+                                   (Ast.Value.Prod
+                                      [
+                                        Ast.Value.Constant
+                                          (Ast.Constant.Integer 4);
+                                        Ast.Value.Constr
+                                          ( Ast.Constructor.of_string "Cons",
+                                            [ Ast.Typ.TInt ],
+                                            Some
+                                              (Ast.Value.Prod
+                                                 [
+                                                   Ast.Value.Constant
+                                                     (Ast.Constant.Integer 6);
+                                                   Ast.Value.Constr
+                                                     ( Ast.Constructor.of_string
+                                                         "Nil",
+                                                       [ Ast.Typ.TInt ],
+                                                       None );
+                                                 ]) );
+                                      ]) );
+                           ]) ),
+                  None,
+                  None,
+                  None )))
+          (List.last results)
+  in
   let interpreter_regression_suite =
     "interpreter_regression_suite"
     >::: [
            "test_intlist_map" >:: test_intlist_map;
            "test_arr_equality" >:: test_arr_equality;
            "test_ref_equality" >:: test_ref_equality;
+           "test_polybox_map_staged" >:: test_polybox_map_staged;
          ]
   in
   let suite =
