@@ -1,0 +1,28 @@
+datatype 'a list = Nil | Cons of ('a * 'a list);; 
+
+let rec map: forall 'a. forall 'b. 'a list -> ('a -> 'b) -> 'b list = 
+    'a. 'b. fun (xs: 'a list) -> fun (f: 'a -> 'b) ->
+        match xs with
+        | Nil -> Nil['b]
+        | Cons (x, xs) -> 
+            Cons['b] (f x, map ['a] ['b] xs f);;
+
+map [int] [int] (Cons[int] (1, Cons [int] (2, Cons [int] (3, Nil [int])))) (fun (x:int) -> 2 * x);;
+
+(* Limitation: can't lift arbitrary values *)
+
+let rec map_staged: forall 'a. ([]'a) list -> ['b; f:'a -> 'b |- 'b list] =
+    'a. fun (xs: ([]'a) list) ->
+        match xs with
+        | Nil -> box ('b; f: 'a -> 'b |- Nil['b])
+        | Cons (x, xs) -> 
+            let box u = map_staged ['a] xs in
+            let box x = x in 
+            box ('b; f: 'a -> 'b |- Cons['b] (f (x with ()), u with ['b](f)))
+;;
+
+let box u = map_staged [int] (Cons[[]int] (box(|-1), Cons [[]int] (box(|-2), Cons[[]int] (box (|-3), Nil[[]int]))))
+in u with [int](fun (x:int) -> x * 2)
+;;
+
+
