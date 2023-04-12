@@ -567,6 +567,45 @@ let test_reg_typecheck_map_staged _ =
   assert_bool "Type check has failed"
     (Option.is_some (type_check_program_from_str program))
 
+let test_pack_defn _ =
+  let program =
+    "let module_impl: exists 'a. ('a * ('a -> 'a) * ('a -> int)) = \n\
+    \    pack (exists 'a. ('a * ('a -> 'a) * ('a -> int)), int, (0, fun (x: \
+     int) -> x + 1, fun (x: int) -> x));;"
+  in
+  assert_bool "Type check has failed"
+    (Option.is_some (type_check_program_from_str program))
+
+let test_unpack_succeeds _ =
+  let program =
+    "let module_impl: exists 'a. ('a * ('a -> 'a) * ('a -> int)) = \n\
+    \    pack (exists 'a. ('a * ('a -> 'a) * ('a -> int)), int, (0, fun (x: \
+     int) -> x + 1, fun (x: int) -> x));;\n\
+    \    let x:int = let pack ('a, m) = module_impl in (m[2]) (m[0]);;"
+  in
+  assert_bool "Type check has failed"
+    (Option.is_some (type_check_program_from_str program))
+
+let test_unpack_fails_because_leaks_inner_type _ =
+  let program =
+    "let module_impl: exists 'a. ('a * ('a -> 'a) * ('a -> int)) = \n\
+    \        pack (exists 'a. ('a * ('a -> 'a) * ('a -> int)), int, (0, fun \
+     (x: int) -> x + 1, fun (x: int) -> x));;\n\
+     let pack ('a, m) = module_impl in (m[1]) (m[0]);;"
+  in
+  assert_bool "Expecting type check to fail but it hasn't failed"
+    (Option.is_none (type_check_program_from_str program))
+
+let test_reg_unpack_fails_because_leaks_inner_type_even_if_shadowing _ =
+  let program =
+    "let module_impl: exists 'a. ('a * ('a -> 'a) * ('a -> int)) = \n\
+    \        pack (exists 'a. ('a * ('a -> 'a) * ('a -> int)), int, (0, fun \
+     (x: int) -> x + 1, fun (x: int) -> x));;\n\
+     'a. let pack ('a, m) = module_impl in (m[1]) (m[0]);;"
+  in
+  assert_bool "Expecting type check to fail but it hasn't failed"
+    (Option.is_none (type_check_program_from_str program))
+
 let polymorphism_suite =
   "polymorphism_suite"
   >::: [
@@ -586,6 +625,11 @@ let polymorphism_suite =
          "test_reg_typecheck_with_mismatched_type_depth_meta"
          >:: test_reg_typecheck_with_mismatched_type_depth_meta;
          "test_reg_typecheck_map_staged" >:: test_reg_typecheck_map_staged;
+         "test_unpack_succeeds" >:: test_unpack_succeeds;
+         "test_unpack_fails_because_leaks_inner_type"
+         >:: test_unpack_fails_because_leaks_inner_type;
+         "test_reg_unpack_fails_because_leaks_inner_type_even_if_shadowing"
+         >:: test_reg_unpack_fails_because_leaks_inner_type_even_if_shadowing;
        ]
 
 let suite =

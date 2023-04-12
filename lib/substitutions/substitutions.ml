@@ -204,6 +204,15 @@ let rec substitute_aux expr_subst_for id_str current_depth current_meta_depth
   | Ast.Expr.TypeApply (e, t) ->
       substitute_aux expr_subst_for id_str current_depth current_meta_depth e
       >>= fun e -> Ok (Ast.Expr.TypeApply (e, t))
+  | Ast.Expr.Pack ((i_tv, i_typ), typ, e) ->
+      substitute_aux expr_subst_for id_str current_depth current_meta_depth e
+      >>= fun e -> Ok (Ast.Expr.Pack ((i_tv, i_typ), typ, e))
+  | Ast.Expr.LetPack (tv, oid, e1, e2) ->
+      substitute_aux expr_subst_for id_str current_depth current_meta_depth e1
+      >>= fun e1 ->
+      substitute_aux expr_subst_for id_str (current_depth + 1)
+        current_meta_depth e2
+      >>= fun e2 -> Ok (Ast.Expr.LetPack (tv, oid, e1, e2))
 
 let substitute expr_subst_for id expr_subst_in =
   (*Assume that the id has De Bruijn index 0*)
@@ -422,6 +431,17 @@ let rec sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth
       sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth
         current_type_depth e
       >>= fun e -> Ok (Ast.Expr.TypeApply (e, t))
+  | Ast.Expr.Pack (interface, typ, e) ->
+      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth
+        current_type_depth e
+      >>= fun e -> Ok (Ast.Expr.Pack (interface, typ, e))
+  | Ast.Expr.LetPack (tv, oid, e1, e2) ->
+      sim_substitute_aux zipped_exprs_ids current_depth current_meta_depth
+        current_type_depth e1
+      >>= fun e1 ->
+      sim_substitute_aux zipped_exprs_ids (current_depth + 1) current_meta_depth
+        (current_type_depth + 1) e2
+      >>= fun e2 -> Ok (Ast.Expr.LetPack (tv, oid, e1, e2))
 
 let sim_substitute_from_zipped_list expr_id_zipped expr_subst_in =
   sim_substitute_aux expr_id_zipped 0 0 0 expr_subst_in
@@ -522,6 +542,9 @@ and type_type_substitute (t_sub_for : Ast.Typ.t) (v : Ast.TypeVar.t)
   | Ast.Typ.TForall (id, typ) ->
       type_type_substitute ~current_depth:(current_depth + 1) t_sub_for v typ
       >>= fun typ -> Ok (Ast.Typ.TForall (id, typ))
+  | Ast.Typ.TExists (id, typ) ->
+      type_type_substitute ~current_depth:(current_depth + 1) t_sub_for v typ
+      >>= fun typ -> Ok (Ast.Typ.TExists (id, typ))
 
 and type_term_substitute t_sub_for v ?(current_depth = 0) expr_subst_in =
   let open Or_error.Monad_infix in
@@ -674,6 +697,15 @@ and type_term_substitute t_sub_for v ?(current_depth = 0) expr_subst_in =
       type_term_substitute t_sub_for v ~current_depth e >>= fun e ->
       type_type_substitute t_sub_for v t ~current_depth >>= fun t ->
       Ok (Ast.Expr.TypeApply (e, t))
+  | Ast.Expr.Pack ((i_tv, i_typ), typ, e) ->
+    type_type_substitute t_sub_for v ~current_depth:(current_depth + 1) i_typ >>= fun i_typ ->
+      type_type_substitute t_sub_for v ~current_depth typ >>= fun typ ->
+      type_term_substitute t_sub_for v ~current_depth e >>= fun e ->
+      Ok (Ast.Expr.Pack ((i_tv, i_typ), typ, e))
+  | Ast.Expr.LetPack (tv, oid, e1, e2) ->
+      type_term_substitute t_sub_for v ~current_depth e1 >>= fun e1 ->
+      type_term_substitute t_sub_for v ~current_depth:(current_depth + 1) e2
+      >>= fun e2 -> Ok (Ast.Expr.LetPack (tv, oid, e1, e2))
 
 let sim_type_type_substitute typs tvctx type_sub_in =
   let open Or_error.Monad_infix in
@@ -681,7 +713,9 @@ let sim_type_type_substitute typs tvctx type_sub_in =
       typ_sub_in >>= fun typ_sub_in -> type_type_substitute typ tv typ_sub_in)
   |> function
   | List.Or_unequal_lengths.Unequal_lengths ->
-      error "SimultaneousTypeTypeSubtitutionError: Unequal Length types and terms, (typs, tvctx)"
+      error
+        "SimultaneousTypeTypeSubtitutionError: Unequal Length types and terms, \
+         (typs, tvctx)"
         (typs, tvctx) [%sexp_of: Ast.Typ.t list * Ast.TypeVarContext.t]
   | List.Or_unequal_lengths.Ok expr_subst_in -> expr_subst_in
 
@@ -691,7 +725,9 @@ let sim_type_term_substitute typs tvctx expr_sub_in =
       e >>= fun e -> type_term_substitute typ tv e)
   |> function
   | List.Or_unequal_lengths.Unequal_lengths ->
-      error "SimultaneousTypeTermSubtitutionError: Unequal Length types and terms, (typs, tvctx)"
+      error
+        "SimultaneousTypeTermSubtitutionError: Unequal Length types and terms, \
+         (typs, tvctx)"
         (typs, tvctx) [%sexp_of: Ast.Typ.t list * Ast.TypeVarContext.t]
   | List.Or_unequal_lengths.Ok expr_subst_in -> expr_subst_in
 
@@ -938,6 +974,17 @@ let rec meta_substitute_aux tvctx ctx expr_subst_for meta_id_str
       meta_substitute_aux tvctx ctx expr_subst_for meta_id_str
         current_meta_depth e
       >>= fun e -> Ok (Ast.Expr.TypeApply (e, t))
+  | Ast.Expr.Pack ((i_tv, i_typ), typ, e) ->
+      meta_substitute_aux tvctx ctx expr_subst_for meta_id_str
+        current_meta_depth e
+      >>= fun e -> Ok (Ast.Expr.Pack ((i_tv, i_typ), typ, e))
+  | Ast.Expr.LetPack (tv, oid, e1, e2) ->
+      meta_substitute_aux tvctx ctx expr_subst_for meta_id_str
+        current_meta_depth e1
+      >>= fun e1 ->
+      meta_substitute_aux tvctx ctx expr_subst_for meta_id_str
+        current_meta_depth e2
+      >>= fun e2 -> Ok (Ast.Expr.LetPack (tv, oid, e1, e2))
 
 let meta_substitute tvctx ctx expr meta_id expr_subst_in =
   let meta_id_str = Ast.MetaIdentifier.get_name meta_id in

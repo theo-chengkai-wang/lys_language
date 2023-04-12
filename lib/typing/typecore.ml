@@ -59,7 +59,7 @@ let includes_function_type ~(type_ctx : Typing_context.TypeConstrContext.t)
   let res, _ = includes_function_type_aux ~type_ctx ~types_visited typ in
   res
 
-let rec is_valid_type type_ctx typevar_ctx typ =
+let rec is_valid_type type_ctx typevar_ctx typ ~current_type_depth =
   let open Or_error.Monad_infix in
   match typ with
   | Ast.Typ.TUnit -> Ok ()
@@ -97,35 +97,74 @@ let rec is_valid_type type_ctx typevar_ctx typ =
                    gave %i type params"
                   type_param_length tlist_length))
   | Ast.Typ.TFun (t1, t2) | Ast.Typ.TSum (t1, t2) ->
-      is_valid_type type_ctx typevar_ctx t1 >>= fun () ->
-      is_valid_type type_ctx typevar_ctx t2
+      is_valid_type type_ctx typevar_ctx ~current_type_depth t1 >>= fun () ->
+      is_valid_type type_ctx typevar_ctx ~current_type_depth t2
   | Ast.Typ.TBox (tvctx, ctx, t) ->
       let new_typevar_ctx =
         Typing_context.PolyTypeVarContext.add_all_mappings typevar_ctx
-          (List.map ~f:(fun v -> (v, ())) tvctx)
+          (List.map ~f:(fun v -> (v, current_type_depth)) tvctx)
+      in
+      let new_current_type_depth =
+        if Ast.TypeVarContext.is_empty tvctx then current_type_depth
+        else current_type_depth + 1
       in
       List.map
-        ~f:(fun (_, typ) -> is_valid_type type_ctx new_typevar_ctx typ)
+        ~f:(fun (_, typ) ->
+          is_valid_type type_ctx new_typevar_ctx typ
+            ~current_type_depth:new_current_type_depth)
         ctx
       |> Or_error.combine_errors_unit
-      >>= fun () -> is_valid_type type_ctx new_typevar_ctx t
+      >>= fun () ->
+      is_valid_type type_ctx new_typevar_ctx
+        ~current_type_depth:new_current_type_depth t
   | Ast.Typ.TProd tlist ->
-      List.map tlist ~f:(fun t -> is_valid_type type_ctx typevar_ctx t)
+      List.map tlist ~f:(fun t ->
+          is_valid_type type_ctx typevar_ctx t ~current_type_depth)
       |> Or_error.combine_errors_unit
-  | Ast.Typ.TRef t | Ast.Typ.TArray t -> is_valid_type type_ctx typevar_ctx t
-  | Ast.Typ.TVar id ->
-      if Typing_context.PolyTypeVarContext.is_in_context typevar_ctx id then
-        Ok ()
-      else
-        error
-          "TypeValidityCheckError: The given type is invalid: unbound type var \
-           '[v]"
-          id [%sexp_of: Ast.TypeVar.t]
-  | Ast.Typ.TForall (id, typ) ->
-      let new_typevar_context =
-        Typing_context.PolyTypeVarContext.add_mapping typevar_ctx id ()
+  | Ast.Typ.TRef t | Ast.Typ.TArray t ->
+      is_valid_type type_ctx typevar_ctx ~current_type_depth t
+  | Ast.Typ.TVar id -> (
+      (* Get all mappings as list *)
+      let id_str = id |> Ast.TypeVar.get_name in
+      let debruijn_index =
+        id |> Ast.TypeVar.get_debruijn_index
+        |> Ast.DeBruijnIndex.value ~default:(-1)
+        (* Default at -1 because this would NEVER match *)
       in
-      is_valid_type type_ctx new_typevar_context typ
+      let all_mappings =
+        Typing_context.PolyTypeVarContext.get_all_mappings_as_list typevar_ctx
+      in
+      (* Check if defn level matches: if current level is L, and De Bruijn index of 0, then
+         should be defined at level L-1 -- in general , at level L - D - 1 where D is the DB index.*)
+      let matched =
+        List.find all_mappings ~f:(fun (tvar, defn_level) ->
+            String.equal (Ast.TypeVar.get_name tvar) id_str
+            && defn_level = current_type_depth - debruijn_index - 1)
+      in
+      match matched with
+      | None ->
+          error
+            "TypeValidityCheckError: The given type is invalid: unbound type \
+             var ('[v], typevar_context, current_type_depth)"
+            (id, typevar_ctx, current_type_depth)
+            [%sexp_of:
+              Ast.TypeVar.t * int Typing_context.PolyTypeVarContext.t * int]
+      | Some (_, _) ->
+          (* Check if defn level matches: if current level is L, and De Bruijn index of 0, then
+             should be defined at level L-1 -- in general , at level L - D - 1 where D is the DB index.*)
+          (* let debruijn_index =
+               id |> Ast.TypeVar.get_debruijn_index
+               |> Ast.DeBruijnIndex.value ~default:(-1)
+               (* Default at -1 because this would NEVER match *)
+             in *)
+          Ok ())
+  | Ast.Typ.TForall (id, typ) | Ast.Typ.TExists (id, typ) ->
+      let new_typevar_context =
+        Typing_context.PolyTypeVarContext.add_mapping typevar_ctx id
+          current_type_depth
+      in
+      is_valid_type type_ctx new_typevar_context
+        ~current_type_depth:(current_type_depth + 1) typ
 
 let rec is_valid_type_for_recursion typ =
   match typ with
@@ -139,10 +178,14 @@ let rec is_valid_type_for_recursion typ =
 
 let rec type_check_expression meta_ctx ctx
     (type_ctx : Typing_context.TypeConstrContext.t)
-    (typevar_ctx : unit Typing_context.PolyTypeVarContext.t) ?(current_type_depth=0)
-    expr typ =
+    (typevar_ctx : int Typing_context.PolyTypeVarContext.t)
+    ?(current_type_depth = 0) expr typ =
   let open Or_error.Monad_infix in
-  is_valid_type type_ctx typevar_ctx typ >>= fun () ->
+  is_valid_type type_ctx typevar_ctx ~current_type_depth typ |> fun or_error ->
+  Or_error.tag_arg or_error
+    "TypeCheckError: Validity error for type given (typ, depth)"
+    (typ, current_type_depth) [%sexp_of: Ast.Typ.t * int]
+  >>= fun () ->
   type_inference_expression meta_ctx ctx type_ctx typevar_ctx
     ~current_type_depth expr
   >>= fun inferred_typ ->
@@ -168,7 +211,7 @@ let rec type_check_expression meta_ctx ctx
           Typing_context.MetaTypingContext.t]
 
 and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
-    ?(current_type_depth=0) e =
+    ?(current_type_depth = 0) e =
   (* Invariant: type_inference at type_depth d should yield DB indices which correspond to this exact type depth *)
   let open Or_error.Monad_infix in
   match e with
@@ -559,7 +602,7 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
       >>= fun () ->
       let new_typevar_ctx =
         Typing_context.PolyTypeVarContext.add_all_mappings typevar_ctx
-          (List.map box_tvctx ~f:(fun v -> (v, ())))
+          (List.map box_tvctx ~f:(fun v -> (v, current_type_depth)))
       in
       (* Compute the new depth for types in the context *)
       let new_type_depth =
@@ -995,7 +1038,8 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
             arr [%sexp_of: Ast.Expr.t])
   | Ast.Expr.BigLambda (v, e) ->
       let new_typevar_ctx =
-        Typing_context.PolyTypeVarContext.add_mapping typevar_ctx v ()
+        Typing_context.PolyTypeVarContext.add_mapping typevar_ctx v
+          current_type_depth
       in
       type_inference_expression meta_ctx ctx type_ctx new_typevar_ctx
         ~current_type_depth:(current_type_depth + 1) e
@@ -1008,13 +1052,93 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
       match e_typ with
       | Ast.Typ.TForall (v, typ) ->
           (* Check type validity *)
-          is_valid_type type_ctx typevar_ctx t >>= fun () ->
+          is_valid_type type_ctx typevar_ctx ~current_type_depth t >>= fun () ->
           Substitutions.type_type_substitute t v typ
       | _ ->
           error
             "TypeInferenceError: At type apply, the left operand must be a big \
              lambda term. (left, right)"
             (e, t) [%sexp_of: Ast.Expr.t * Ast.Typ.t])
+  | Ast.Expr.Pack ((i_tv, i_typ), typ, e) ->
+      is_valid_type type_ctx
+        (Typing_context.PolyTypeVarContext.add_mapping typevar_ctx i_tv
+           current_type_depth)
+        ~current_type_depth:(current_type_depth + 1) i_typ
+      >>= fun () ->
+      is_valid_type type_ctx typevar_ctx ~current_type_depth typ >>= fun () ->
+      Substitutions.type_type_substitute typ i_tv i_typ
+      |> Or_error.tag
+           ~tag:
+             "TypeInferenceError: At Pack, error when substituting the hidden \
+              type in \n\
+             \        the interface"
+      >>= fun e_typ ->
+      type_check_expression meta_ctx ctx type_ctx typevar_ctx
+        ~current_type_depth e e_typ
+      |> Or_error.tag
+           ~tag:
+             "TypeInferenceError: at Pack, mismatch between interface type and \
+              implementation type."
+      >>= fun () -> Ok (Ast.Typ.TExists (i_tv, i_typ))
+  | Ast.Expr.LetPack (tv, oid, e1, e2) ->
+      type_inference_expression meta_ctx ctx type_ctx typevar_ctx
+        ~current_type_depth e1
+      >>= fun e1_typ ->
+      (match e1_typ with
+      | Ast.Typ.TExists (exists_tv, exists_typ) -> Ok (exists_tv, exists_typ)
+      | _ ->
+          Or_error.error
+            "TypeInferenceError: Can only unpack packed values. (expr)"
+            (Ast.Expr.LetPack (tv, oid, e1, e2))
+            [%sexp_of: Ast.Expr.t])
+      >>= fun (exists_tv, exists_typ) ->
+      (* Substitute tv for exists_tv in exists_typ so we have an existential
+         typ that depends on tv. *)
+      Ast.DeBruijnIndex.create 0 >>= fun db_index ->
+      Substitutions.type_type_substitute
+        (Ast.Typ.TVar
+           (Ast.TypeVar.of_string_and_index (Ast.TypeVar.get_name tv) db_index))
+        exists_tv exists_typ
+      >>= fun new_exists_typ ->
+      let new_typevar_ctx =
+        Typing_context.PolyTypeVarContext.add_mapping typevar_ctx tv
+          current_type_depth
+      in
+      let new_type_depth = current_type_depth + 1 in
+      let new_obj_ctx =
+        Typing_context.ObjTypingContext.add_mapping ctx oid
+          (new_exists_typ, new_type_depth)
+        (* This new type depends on the typevar declaration for `tv` *)
+      in
+      type_inference_expression meta_ctx new_obj_ctx type_ctx new_typevar_ctx
+        ~current_type_depth:new_type_depth e2
+      |> fun or_error ->
+      Or_error.tag_arg or_error
+        "TypeInferenceError: at let pack, error at infering the body \
+         expression. (new_obj_ctx, new_typevar_ctx, new_type_depth, e2)"
+        (new_obj_ctx, new_typevar_ctx, new_type_depth, e2)
+        [%sexp_of:
+          (Ast.Typ.t * int) Typing_context.ObjTypingContext.t
+          * int Typing_context.PolyTypeVarContext.t
+          * int
+          * Ast.Expr.t]
+      >>= fun e2_typ ->
+      (* the hidden type mustn't go out -- could loosen *)
+      is_valid_type type_ctx typevar_ctx
+        ~current_type_depth:(current_type_depth + 1) e2_typ
+      |> fun or_error ->
+      Or_error.tag_arg or_error
+        "TypeInferenceError: let pack in result type must NOT depend on the \
+         packed type."
+        (Ast.Expr.LetPack (tv, oid, e1, e2))
+        [%sexp_of: Ast.Expr.t]
+      >>= fun () ->
+      (* Now e2_typ is valid at level current_type_depth + 1, but
+         we know it doesn't depend on types at that depth so we shift the indices
+         >= 1 (so above the index added because of the pack) back
+         by 1 to get the type at current_type_depth *)
+      Ast.Typ.shift_indices e2_typ ~type_depth:1 ~type_offset:(-1)
+      >>= fun e2_typ -> Ok e2_typ
 
 let process_top_level meta_ctx ctx type_ctx typevar_ctx = function
   | Ast.TopLevelDefn.Definition (iddef, e) ->
@@ -1094,7 +1218,8 @@ let process_top_level meta_ctx ctx type_ctx typevar_ctx = function
           typevar_ctx )
   | Ast.TopLevelDefn.Expression e ->
       let open Or_error.Monad_infix in
-      type_inference_expression meta_ctx ctx type_ctx typevar_ctx ~current_type_depth:0 e
+      type_inference_expression meta_ctx ctx type_ctx typevar_ctx
+        ~current_type_depth:0 e
       >>= fun typ ->
       Ok
         ( Ast.TypedTopLevelDefn.Expression (typ, e),

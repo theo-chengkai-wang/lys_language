@@ -177,6 +177,7 @@ and Typ : sig
     | TArray of t
     | TVar of TypeVar.t
     | TForall of TypeVar.t * t
+    | TExists of TypeVar.t * t
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.Typ.t -> t
@@ -204,6 +205,7 @@ end = struct
     | TArray of t
     | TVar of TypeVar.t
     | TForall of TypeVar.t * t
+    | TExists of TypeVar.t * t
   [@@deriving sexp, show, compare, equal]
 
   let rec of_past = function
@@ -223,6 +225,8 @@ end = struct
     | Past.Typ.TArray t -> TArray (of_past t)
     | Past.Typ.TForall (v, t) -> TForall (TypeVar.of_past v, of_past t)
     | Past.Typ.TVar v -> TVar (TypeVar.of_past v)
+    | Past.Typ.TExists (var, typ) ->
+        TExists (TypeVar.of_past var, Typ.of_past typ)
 
   let rec populate_index typ ~current_type_ast_level ~current_typevars =
     let open Or_error.Monad_infix in
@@ -293,6 +297,15 @@ end = struct
           ~current_type_ast_level:(current_type_ast_level + 1)
           ~current_typevars:new_typevars typ
         >>= fun typ -> Ok (TForall (v, typ))
+    | TExists (v, typ) ->
+        let new_typevars =
+          String.Map.set current_typevars ~key:(TypeVar.get_name v)
+            ~data:current_type_ast_level
+        in
+        populate_index
+          ~current_type_ast_level:(current_type_ast_level + 1)
+          ~current_typevars:new_typevars typ
+        >>= fun typ -> Ok (TExists (v, typ))
 
   let rec shift_indices typ ~type_depth ~type_offset =
     let open Or_error.Monad_infix in
@@ -340,6 +353,9 @@ end = struct
     | TForall (v, typ) ->
         shift_indices ~type_depth:(type_depth + 1) ~type_offset typ
         >>= fun typ -> Ok (TForall (v, typ))
+    | TExists (v, typ) ->
+        shift_indices ~type_depth:(type_depth + 1) ~type_offset typ
+        >>= fun typ -> Ok (TExists (v, typ))
 end
 
 and IdentifierDefn : sig
@@ -679,6 +695,9 @@ and Expr : sig
     | ArrayAssign of t * t * t
     | BigLambda of TypeVar.t * t
     | TypeApply of t * Typ.t
+    | Pack of (TypeVar.t * Typ.t) * Typ.t * t
+    | LetPack of
+        TypeVar.t * ObjIdentifier.t * t * t (* let pack ('a, x) = e in e' *)
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.Expr.t -> t
@@ -741,6 +760,9 @@ end = struct
     | ArrayAssign of t * t * t
     | BigLambda of TypeVar.t * t
     | TypeApply of t * Typ.t
+    | Pack of (TypeVar.t * Typ.t) * Typ.t * t
+    | LetPack of
+        TypeVar.t * ObjIdentifier.t * t * t (* let pack ('a, x) = e in e' *)
   [@@deriving sexp, show, compare, equal]
 
   (* TODO: let rec pp_to_code expr = () *)
@@ -813,6 +835,14 @@ end = struct
         ArrayAssign (of_past arr, of_past index, of_past assign_to)
     | Past.Expr.BigLambda (v, e) -> BigLambda (TypeVar.of_past v, of_past e)
     | Past.Expr.TypeApply (e, t) -> TypeApply (of_past e, Typ.of_past t)
+    | Past.Expr.Pack ((tv, interface_typ), typ, e) ->
+        Pack
+          ( (TypeVar.of_past tv, Typ.of_past interface_typ),
+            Typ.of_past typ,
+            of_past e )
+    | Past.Expr.LetPack (tv, oid, e1, e2) ->
+        LetPack
+          (TypeVar.of_past tv, ObjIdentifier.of_past oid, of_past e1, of_past e2)
 
   let rec populate_index expr ~current_ast_level ~current_identifiers
       ~current_meta_ast_level ~current_meta_identifiers ~current_type_ast_level
@@ -1200,6 +1230,37 @@ end = struct
           ~current_meta_ast_level ~current_meta_identifiers
           ~current_type_ast_level ~current_typevars e
         >>= fun e -> Ok (TypeApply (e, t))
+    | Pack ((interface_tv, interface_typ), typ, e) ->
+        Typ.populate_index
+          ~current_type_ast_level:(current_type_ast_level + 1)
+          ~current_typevars:
+            (String.Map.set current_typevars
+               ~key:(TypeVar.get_name interface_tv)
+               ~data:current_type_ast_level)
+          interface_typ
+        >>= fun interface_typ ->
+        Typ.populate_index typ ~current_type_ast_level ~current_typevars
+        >>= fun typ ->
+        populate_index e ~current_ast_level ~current_identifiers
+          ~current_meta_ast_level ~current_meta_identifiers
+          ~current_type_ast_level ~current_typevars
+        >>= fun e -> Ok (Pack ((interface_tv, interface_typ), typ, e))
+    | LetPack (tv, oid, e1, e2) ->
+        populate_index e1 ~current_ast_level ~current_identifiers
+          ~current_meta_ast_level ~current_meta_identifiers
+          ~current_type_ast_level ~current_typevars
+        >>= fun e1 ->
+        populate_index e2 ~current_ast_level:(current_ast_level + 1)
+          ~current_identifiers:
+            (String.Map.set current_identifiers
+               ~key:(ObjIdentifier.get_name oid)
+               ~data:current_ast_level)
+          ~current_meta_ast_level ~current_meta_identifiers
+          ~current_type_ast_level:(current_type_ast_level + 1)
+          ~current_typevars:
+            (String.Map.set current_typevars ~key:(TypeVar.get_name tv)
+               ~data:current_type_ast_level)
+        >>= fun e2 -> Ok (LetPack (tv, oid, e1, e2))
 
   let rec shift_indices expr ~obj_depth ~meta_depth ~type_depth ~obj_offset
       ~meta_offset ~type_offset =
@@ -1426,6 +1487,21 @@ end = struct
         shift_indices ~obj_depth ~meta_depth ~type_depth ~obj_offset
           ~meta_offset ~type_offset e
         >>= fun e -> Ok (TypeApply (e, t))
+    | Pack ((interface_tv, interface_typ), typ, e) ->
+        Typ.shift_indices ~type_depth:(type_depth + 1) ~type_offset
+          interface_typ
+        >>= fun interface_typ ->
+        Typ.shift_indices ~type_depth ~type_offset typ >>= fun typ ->
+        shift_indices ~obj_depth ~meta_depth ~type_depth ~obj_offset
+          ~meta_offset ~type_offset e
+        >>= fun e -> Ok (Pack ((interface_tv, interface_typ), typ, e))
+    | LetPack (tv, oid, e1, e2) ->
+        shift_indices ~obj_depth ~meta_depth ~type_depth ~obj_offset
+          ~meta_offset ~type_offset e1
+        >>= fun e1 ->
+        shift_indices ~obj_depth:(obj_depth + 1) ~meta_depth
+          ~type_depth:(type_depth + 1) ~obj_offset ~meta_offset ~type_offset e2
+        >>= fun e2 -> Ok (LetPack (tv, oid, e1, e2))
 
   let rec to_val expr =
     let open Option.Monad_infix in
@@ -1448,6 +1524,9 @@ end = struct
         | Some e ->
             to_val e >>= fun v -> Some (Value.Constr (tid, tlist, Some v)))
     | EValue v -> Some v
+    | BigLambda (tv, e) -> Some (Value.BigLambda (tv, e))
+    | Pack (interface, typ, e) ->
+        to_val e >>= fun v -> Some (Value.Pack (interface, typ, v))
     | _ -> None
 end
 
@@ -1461,6 +1540,7 @@ and Value : sig
     | Box of TypeVarContext.t * Context.t * Expr.t (*box (x:A, y:B |- e)*)
     | Constr of Constructor.t * Typ.t list * t option
     | BigLambda of TypeVar.t * Expr.t
+    | Pack of (TypeVar.t * Typ.t) * Typ.t * t
   [@@deriving sexp, show, compare, equal]
 
   val to_expr : Value.t -> Expr.t
@@ -1475,6 +1555,7 @@ end = struct
     | Box of TypeVarContext.t * Context.t * Expr.t (*box (x:A, y:B |- e)*)
     | Constr of Constructor.t * Typ.t list * t option
     | BigLambda of TypeVar.t * Expr.t
+    | Pack of (TypeVar.t * Typ.t) * Typ.t * t
   [@@deriving sexp, show, compare, equal]
 
   let to_expr = function
@@ -1488,6 +1569,8 @@ end = struct
         Expr.Constr (constr, tlist, Some (Expr.EValue v))
     | Constr (constr, tlist, None) -> Expr.Constr (constr, tlist, None)
     | BigLambda (typvar, e) -> Expr.BigLambda (typvar, e)
+    | Pack ((interface_tv, interface_typ), typ, v) ->
+        Expr.Pack ((interface_tv, interface_typ), typ, Expr.EValue v)
 
   let rec to_expr_intensional = function
     (*This function does not preserve semantics for impure terms, but rather converts to an intensional representation*)
@@ -1508,6 +1591,8 @@ end = struct
         Expr.Constr (constr, tlist, Some (to_expr_intensional v))
     | Constr (constr, tlist, None) -> Expr.Constr (constr, tlist, None)
     | BigLambda (typvar, e) -> Expr.BigLambda (typvar, e)
+    | Pack ((interface_tv, interface_typ), typ, v) ->
+        Expr.Pack ((interface_tv, interface_typ), typ, to_expr_intensional v)
 end
 
 and Directive : sig

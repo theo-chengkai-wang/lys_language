@@ -10,7 +10,7 @@ val type_inference_expression :
   Typing_context.MetaTypingContext.t ->
   (Ast.Typ.t * int) Typing_context.ObjTypingContext.t ->
   Typing_context.TypeConstrContext.t ->
-  unit Typing_context.PolyTypeVarContext.t ->
+  int Typing_context.PolyTypeVarContext.t -> (* int = type_depth *)
   ?current_type_depth:int ->
   Ast.Expr.t ->
   Ast.Typ.t Or_error.t
@@ -20,7 +20,7 @@ val type_check_expression :
   Typing_context.MetaTypingContext.t ->
   (Ast.Typ.t * int) Typing_context.ObjTypingContext.t ->
   Typing_context.TypeConstrContext.t ->
-  unit Typing_context.PolyTypeVarContext.t ->
+  int Typing_context.PolyTypeVarContext.t ->
   ?current_type_depth:int ->
   Ast.Expr.t ->
   Ast.Typ.t ->
@@ -32,6 +32,6 @@ val type_check_program :
     Typing_context.MetaTypingContext.t ->
   ?obj_ctx:(Ast.Typ.t * int) Typing_context.ObjTypingContext.t ->
   ?type_ctx:Typing_context.TypeConstrContext.t ->
-  ?typevar_ctx:unit Typing_context.PolyTypeVarContext.t ->
+  ?typevar_ctx:int Typing_context.PolyTypeVarContext.t ->
   Ast.Program.t ->
   Ast.TypedProgram.t Or_error.t
