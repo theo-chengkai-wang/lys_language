@@ -274,7 +274,7 @@ expr:
     | BOX LEFT_PAREN typ_decl_list = separated_nonempty_list(COMMA, TYPEVAR) TURNSTILE e = expr RIGHT_PAREN {Expr.Box (typ_decl_list, [], e)}
     | LET BOX u = identifier EQ e1 = expr IN e2 = expr {Expr.LetBox (u, e1, e2)}
     | MATCH e = simple_expr WITH option("|") pattern_list = separated_nonempty_list("|", pattern_expr) {Expr.Match (e, pattern_list)}
-    | PACK "(" t = typ "," e = expr ")" {Pack (t, e)}
+    | PACK "(" EXISTS v = TYPEVAR DOT t1 = typ "," t2 = typ "," e = expr ")" {Pack ((v, t1), t2, e)}
     | LET PACK "(" v = TYPEVAR "," x = ID ")" "=" e = expr IN e2 = expr {LetPack (v, x, e, e2)};
 
 constant:

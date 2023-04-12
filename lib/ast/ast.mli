@@ -80,6 +80,7 @@ and Typ : sig
     | TArray of t
     | TVar of TypeVar.t
     | TForall of TypeVar.t * t
+    | TExists of TypeVar.t * t
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.Typ.t -> t
@@ -255,6 +256,9 @@ and Expr : sig
     | ArrayAssign of t * t * t
     | BigLambda of TypeVar.t * t
     | TypeApply of t * Typ.t
+    | Pack of  (TypeVar.t * Typ.t) * Typ.t * t
+    | LetPack of
+        TypeVar.t * ObjIdentifier.t * t * t (* let pack ('a, x) = e in e' *)
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.Expr.t -> t
@@ -292,6 +296,7 @@ and Value : sig
     | Box of TypeVarContext.t * Context.t * Expr.t (*box (x:A, y:B |- e)*)
     | Constr of Constructor.t * Typ.t list * t option
     | BigLambda of TypeVar.t * Expr.t
+    | Pack of  (TypeVar.t * Typ.t) * Typ.t * t
   [@@deriving sexp, show, compare, equal]
 
   val to_expr : Value.t -> Expr.t

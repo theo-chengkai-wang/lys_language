@@ -210,7 +210,7 @@ and Expr : sig
     | ArrayAssign of t * t * t (* arr.(i) <- e *)
     | BigLambda of TypeVar.t * t
     | TypeApply of t * Typ.t
-    | Pack of Typ.t * t
+    | Pack of (TypeVar.t * Typ.t) * Typ.t * t (* pack (exists 'a. B, A, e) *)
     | LetPack of TypeVar.t * Identifier.t * t * t (* let pack ('a, x) = e in e' *)
   (*|arr|*) [@@deriving sexp, show, equal, compare]
 end = struct
@@ -249,7 +249,7 @@ end = struct
     | ArrayAssign of t * t * t (* arr.(i) <- e  ternary operator *)
     | BigLambda of TypeVar.t * t
     | TypeApply of t * Typ.t
-    | Pack of Typ.t * t
+    | Pack of (TypeVar.t * Typ.t) * Typ.t * t
     | LetPack of TypeVar.t * Identifier.t * t * t (* let pack ('a, x) = e in e' *)
   [@@deriving sexp, show, equal, compare]
 end
