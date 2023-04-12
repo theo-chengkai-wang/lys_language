@@ -39,7 +39,12 @@ rule read =
     | newline  { next_line lexbuf; read lexbuf }
     | "(*" {comment lexbuf}
     | '"' {read_string (Buffer.create 100) lexbuf }
-    | "'" {character lexbuf}
+    | "'" '\\'(backslash_escapes as c)'\'' {CHAR (char_for_backslash c)}
+    | '\'' (_ as c) '\'' {CHAR (c)}
+    | '\'' (id as i) {TYPEVAR (i)}
+    | '\'' {QUOTE}
+    | "forall" {FORALL}
+    | "exists" {EXISTS}
     | ";;" {EOL}
     | ";" {SEMICOLON}
     | "ref" {REF}
@@ -120,10 +125,6 @@ and comment =
   | "*)" {read lexbuf}
   | newline  { next_line lexbuf; comment lexbuf }
   | _ (*skip*) {comment lexbuf}
-and character = 
-  parse
-  | '\\'(backslash_escapes as c)'\'' {CHAR (char_for_backslash c)}
-  | _ as c '\'' {CHAR (c)}
 and read_string buf =
 (*Code from https://dev.realworldocaml.org/parsing-with-ocamllex-and-menhir.html*)
   parse

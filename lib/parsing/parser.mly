@@ -29,6 +29,7 @@ let list_to_tuple l =
 %token <string> CONSTR
 %token <char> CHAR
 %token <string> STRING
+%token <string> TYPEVAR
 %token BOOL_typ
 %token INT_typ
 %token STRING_typ
@@ -36,6 +37,9 @@ let list_to_tuple l =
 %token AND_WORD "and"
 %token CHAR_typ
 %token UNIT_typ
+%token FORALL
+%token EXISTS
+%token QUOTE
 %token ARR_OPEN
 %token ARR_CLOSE
 %token EOL ";;"
@@ -109,6 +113,8 @@ let list_to_tuple l =
 %left typ_SUM typ_PRODUCT
 
 // Functions
+%right DOT_BIG_LAMBDA
+%nonassoc forall
 %right "->"
 
 // Bracket
@@ -187,8 +193,10 @@ mutual_rec:
     | LET REC r = single_rec "and" l=separated_nonempty_list("and", single_rec) {r::l}
 
 datatype_decl:
-    | i = identifier EQ l = separated_nonempty_list ("|", datatype_decl_clause) {(i, l)}
-    | i = identifier {(i,[])}
+    | i = identifier EQ l = separated_nonempty_list ("|", datatype_decl_clause) {([], i, l)}
+    | tv = TYPEVAR i = identifier EQ l = separated_nonempty_list ("|", datatype_decl_clause) {([tv], i, l)}
+    | "(" tl = separated_nonempty_list(COMMA, TYPEVAR) ")" i = identifier EQ l = separated_nonempty_list ("|", datatype_decl_clause) {(tl, i, l)}
+    | i = identifier {([], i, [])}
 
 top_level:
     | d = directive {TopLevelDefn.Directive d}
@@ -208,11 +216,12 @@ simple_expr:
     | c = constant {Expr.Constant c}
     | i = identifier {Expr.Identifier i}
     | LEFT_PAREN e1=expr COMMA l = separated_nonempty_list(COMMA, expr) RIGHT_PAREN {Expr.Prod (e1::l)} (*Hack to ensure at least 2 things*)
-    | e = simple_expr; LEFT_BRACKET i = INT RIGHT_BRACKET {Expr.Nth(e, i)}
 
 application_expr:
+    | s = application_expr; "[" t = typ "]" {Expr.TypeApply (s, t)}
+    | s = simple_expr; "[" t = typ "]" {Expr.TypeApply (s, t)}
     | s1 = application_expr; s2 = simple_expr  {Expr.Application (s1, s2)}
-    | s1 = simple_expr; s2 = simple_expr {Expr.Application (s1, s2)};
+    | s1 = simple_expr; s2 = simple_expr {Expr.Application (s1, s2)}
 
 pattern: 
     | UNDERSCORE {Pattern.Wildcard}
@@ -242,12 +251,15 @@ expr:
     | c = comp { c }
     | s = string_op { s }
     | b = bool { b }
-    | c = CONSTR e = option(simple_expr) {Expr.Constr (c, e)}
+    | c = CONSTR e = option(simple_expr) {Expr.Constr (c, [], e)}
+    | c = CONSTR LEFT_BRACKET tl = separated_nonempty_list(COMMA, typ) RIGHT_BRACKET e = option(simple_expr) {Expr.Constr (c, tl, e)}
     | LIFT LEFT_BRACKET t = typ RIGHT_BRACKET e = simple_expr {Expr.Lift (t, e)}
-    | u = identifier; WITH; s = sim_sub {Expr.Closure (u, s)} // not a simple_expr because it contains a WITH application
+    | u = identifier; WITH; s = sim_sub {let (l1, l2) = s in Expr.Closure (u, l1, l2)} // not a simple_expr because it contains a WITH application
     (* bigger constructs *)
     | IF e1 = expr THEN e2 = expr ELSE e3=expr {Expr.IfThenElse (e1, e2, e3)}
     | FUN arg = id_typ_declaration "->" e = expr {Expr.Lambda (arg, e)}
+    | v = TYPEVAR DOT e = expr %prec DOT_BIG_LAMBDA {Expr.BigLambda (v, e)}
+    | e = simple_expr; LEFT_BRACKET i = INT RIGHT_BRACKET {Expr.Nth(e, i)}
     // | FST e = expr {Expr.Fst e}
     // | SND e = expr {Expr.Snd e}
     | INL LEFT_BRACKET t1=typ COMMA t2=typ RIGHT_BRACKET e = expr {Expr.Left (t1, t2, e)}
@@ -256,7 +268,9 @@ expr:
     | LET decl = id_typ_declaration EQ e1 = expr IN e2 = expr %prec DEFN_EQ {Expr.LetBinding (decl, e1, e2)}
     | LET REC r = single_rec IN e2 = expr %prec DEFN_EQ {let (decl, e1) = r in Expr.LetRec (decl, e1, e2)}
     | m = mutual_rec IN e2 = expr %prec DEFN_EQ {Expr.LetRecMutual (m, e2)}
-    | BOX LEFT_PAREN decl_list = separated_list(COMMA, id_typ_declaration) TURNSTILE e = expr RIGHT_PAREN {Expr.Box (decl_list, e)}
+    | BOX LEFT_PAREN decl_list = separated_list(COMMA, id_typ_declaration) TURNSTILE e = expr RIGHT_PAREN {Expr.Box ([], decl_list, e)}
+    | BOX LEFT_PAREN typ_decl_list = separated_nonempty_list(COMMA, TYPEVAR) SEMICOLON decl_list = separated_nonempty_list(COMMA, id_typ_declaration) TURNSTILE e = expr RIGHT_PAREN {Expr.Box (typ_decl_list, decl_list, e)}
+    | BOX LEFT_PAREN typ_decl_list = separated_nonempty_list(COMMA, TYPEVAR) TURNSTILE e = expr RIGHT_PAREN {Expr.Box (typ_decl_list, [], e)}
     | LET BOX u = identifier EQ e1 = expr IN e2 = expr {Expr.LetBox (u, e1, e2)}
     | MATCH e = simple_expr WITH option("|") pattern_list = separated_nonempty_list("|", pattern_expr) {Expr.Match (e, pattern_list)};
 
@@ -276,7 +290,8 @@ id_typ_declaration:
     | LEFT_PAREN d = id_typ_declaration RIGHT_PAREN {d};
 
 sim_sub: 
-    | LEFT_PAREN l = separated_list(COMMA, expr) RIGHT_PAREN {l} 
+    | LEFT_PAREN l = separated_list(COMMA, expr) RIGHT_PAREN {([], l)}
+    | LEFT_BRACKET tl = separated_nonempty_list(COMMA, typ) RIGHT_BRACKET LEFT_PAREN l = separated_list(COMMA, expr) RIGHT_PAREN {(tl, l)}
 
 typ:
     | BOOL_typ {Typ.TBool}
@@ -285,13 +300,25 @@ typ:
     | CHAR_typ {Typ.TChar}
     | t = typ ARR_typ {Typ.TArray (t)}
     | t = typ REF {Typ.TRef(t)}
+    | FORALL v = TYPEVAR DOT t=typ %prec DOT_BIG_LAMBDA {Typ.TForall (v, t)} // Polymorphic stuff
+    | v = TYPEVAR {Typ.TVar (v)}
     | STRING_typ {Typ.TString}
-    | i = ID {Typ.TIdentifier (i)}
+    | i = ID {Typ.TIdentifier ([], i)}
+    | t = typ i = ID {Typ.TIdentifier ([t], i)}
+    | "(" tl = separated_nonempty_list(COMMA, typ) ")" i = ID {Typ.TIdentifier (tl, i)}
     | t1 = typ; "->"; t2 = typ /*%prec typ_FUNCTION_ARROW*/ {Typ.TFun (t1, t2)}
     | LEFT_PAREN t = typ "*" ts = separated_nonempty_list("*", typ) RIGHT_PAREN %prec typ_PRODUCT {Typ.TProd (t::ts)}
     | t1 = typ; "+"; t2 = typ %prec typ_SUM {Typ.TSum (t1, t2)}
-    | LEFT_BRACKET decl_list = separated_list(COMMA, id_typ_declaration) RIGHT_BRACKET t = typ {Typ.TBox (decl_list, t)}
+    | b = box_typ {b}
     | LEFT_PAREN t = typ RIGHT_PAREN {t};
+
+box_typ:
+    | LEFT_BRACKET decl_list = separated_list(COMMA, id_typ_declaration) RIGHT_BRACKET t = typ {Typ.TBox ([], decl_list, t)}
+    | LEFT_BRACKET typ_decl_list = separated_nonempty_list(COMMA, TYPEVAR) RIGHT_BRACKET t = typ {Typ.TBox (typ_decl_list, [], t)}
+    | LEFT_BRACKET typ_decl_list = separated_nonempty_list(COMMA, TYPEVAR) SEMICOLON decl_list = separated_nonempty_list(COMMA, id_typ_declaration) RIGHT_BRACKET t = typ {Typ.TBox (typ_decl_list, decl_list, t)}
+    | LEFT_BRACKET decl_list = separated_list(COMMA, id_typ_declaration) TURNSTILE t = typ RIGHT_BRACKET  {Typ.TBox ([], decl_list, t)}
+    | LEFT_BRACKET typ_decl_list = separated_nonempty_list(COMMA, TYPEVAR) TURNSTILE t = typ RIGHT_BRACKET  {Typ.TBox (typ_decl_list, [], t)}
+    | LEFT_BRACKET typ_decl_list = separated_nonempty_list(COMMA, TYPEVAR) SEMICOLON decl_list = separated_nonempty_list(COMMA, id_typ_declaration) TURNSTILE t = typ RIGHT_BRACKET  {Typ.TBox (typ_decl_list, decl_list, t)}
 
 arith:
     | e1 = expr "+" e2 = expr {Expr.BinaryOp (BinaryOperator.ADD, e1, e2)}

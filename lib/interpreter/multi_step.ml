@@ -1,4 +1,5 @@
 open Lys_ast
+open Lys_substitutions
 open Core
 open Interpreter_common
 open Lys_utils
@@ -348,20 +349,20 @@ let rec multi_step_reduce ~top_level_context ~type_constr_context ~expr =
       Substitutions.sim_substitute substituted_expr_list iddefs e2
       >>= fun ev2 ->
       multi_step_reduce ~top_level_context ~type_constr_context ~expr:ev2
-  | Ast.Expr.Box (ctx, e) -> Ok (Ast.Value.Box (ctx, e))
+  | Ast.Expr.Box (tvctx, ctx, e) -> Ok (Ast.Value.Box (tvctx, ctx, e))
   | Ast.Expr.LetBox (metaid, e, e2) -> (
       (* Debug code here
          let () = if String.equal (Ast.MetaIdentifier.get_name metaid) ("res2_") || String.equal (Ast.MetaIdentifier.get_name metaid) ("res1_") then print_endline (Ast.Expr.show expr) in *)
       multi_step_reduce ~top_level_context ~type_constr_context ~expr:e
       >>= fun box_v ->
       match box_v with
-      | Ast.Value.Box (ctx, e_box) ->
-          Substitutions.meta_substitute ctx e_box metaid e2 |> fun or_error ->
+      | Ast.Value.Box (tvctx, ctx, e_box) ->
+          Substitutions.meta_substitute tvctx ctx e_box metaid e2 |> fun or_error ->
           Or_error.tag_arg or_error
             "EvaluationError: Meta substitution error: metaid, e->v, ctx, v"
-            (metaid, box_v, ctx, e2)
+            (metaid, box_v, tvctx, ctx, e2)
             [%sexp_of:
-              Ast.MetaIdentifier.t * Ast.Value.t * Ast.Context.t * Ast.Expr.t]
+              Ast.MetaIdentifier.t * Ast.Value.t * Ast.TypeVarContext.t * Ast.Context.t * Ast.Expr.t]
           >>= fun res_meta_sub ->
           multi_step_reduce ~top_level_context ~type_constr_context
             ~expr:res_meta_sub
@@ -370,15 +371,15 @@ let rec multi_step_reduce ~top_level_context ~type_constr_context ~expr =
             "EvaluationError: type mismatch at LetBox. [FATAL] should not \
              happen! Type check should have prevented this."
             expr [%sexp_of: Ast.Expr.t])
-  | Ast.Expr.Closure (_, _) ->
+  | Ast.Expr.Closure (_, _, _) ->
       error "EvaluationError: One should never have to evaluate a raw closure."
         expr [%sexp_of: Ast.Expr.t]
   | Ast.Expr.Lift (_, expr) ->
       multi_step_reduce ~top_level_context ~type_constr_context ~expr
       >>= fun v ->
       let expr_v = Ast.Value.to_expr_intensional v in
-      Ok (Ast.Value.Box ([], expr_v))
-  | Ast.Expr.Constr (constr, e_opt) -> (
+      Ok (Ast.Value.Box ([], [], expr_v))
+  | Ast.Expr.Constr (constr, tlist, e_opt) -> (
       if
         Option.is_none
           (TypeConstrContext.get_typ_from_constr type_constr_context constr)
@@ -387,10 +388,10 @@ let rec multi_step_reduce ~top_level_context ~type_constr_context ~expr =
           [%sexp_of: Ast.Constructor.t]
       else
         match e_opt with
-        | None -> Ok (Ast.Value.Constr (constr, None))
+        | None -> Ok (Ast.Value.Constr (constr, tlist, None))
         | Some e ->
             multi_step_reduce ~top_level_context ~type_constr_context ~expr:e
-            >>= fun v -> Ok (Ast.Value.Constr (constr, Some v)))
+            >>= fun v -> Ok (Ast.Value.Constr (constr, tlist, Some v)))
   | Ast.Expr.Match (e, pattn_expr_list) -> (
       multi_step_reduce ~top_level_context ~type_constr_context ~expr:e
       >>= fun v ->
@@ -434,7 +435,8 @@ let rec multi_step_reduce ~top_level_context ~type_constr_context ~expr =
                   multi_step_reduce ~top_level_context ~type_constr_context
                     ~expr:substituted_expr)
             |> Some
-        | Ast.Pattern.Datatype (constr, []), Ast.Value.Constr (constr2, None) ->
+        | Ast.Pattern.Datatype (constr, []), Ast.Value.Constr (constr2, _, None) ->
+            (* Here the constructor doesn't take any argument so we don't need it to do anything with the types *)
             (* CHECK IF constr exists *)
             if
               Option.is_none
@@ -449,7 +451,8 @@ let rec multi_step_reduce ~top_level_context ~type_constr_context ~expr =
               multi_step_reduce ~top_level_context ~type_constr_context ~expr
               |> Some
         | ( Ast.Pattern.Datatype (constr, [ id ]),
-            Ast.Value.Constr (constr2, Some v) ) ->
+            Ast.Value.Constr (constr2, _, Some v) ) ->
+              (* Ignore the types *)
             if
               Option.is_none
                 (TypeConstrContext.get_typ_from_constr type_constr_context
@@ -468,7 +471,8 @@ let rec multi_step_reduce ~top_level_context ~type_constr_context ~expr =
                       ~expr:substituted_expr)
               |> Some
         | ( Ast.Pattern.Datatype (constr, id_list),
-            Ast.Value.Constr (constr2, Some (Ast.Value.Prod vlist)) ) ->
+            Ast.Value.Constr (constr2, _, Some (Ast.Value.Prod vlist)) ) ->
+              (* I can ignore the types safely *)
             if
               Option.is_none
                 (TypeConstrContext.get_typ_from_constr type_constr_context
@@ -578,6 +582,21 @@ let rec multi_step_reduce ~top_level_context ~type_constr_context ~expr =
                 index [%sexp_of: Ast.Expr.t])
       | _ ->
           Or_error.error "EvaluationError: FATAL: arr is not an array [arr]" arr
+            [%sexp_of: Ast.Expr.t])
+  | Ast.Expr.BigLambda (typevar, e) -> Ok (Ast.Value.BigLambda (typevar, e))
+  | Ast.Expr.TypeApply (e, typ) -> (
+      multi_step_reduce ~top_level_context ~type_constr_context ~expr:e
+      >>= fun value ->
+      match value with
+      | BigLambda (tv, inner_e) ->
+          Substitutions.type_term_substitute typ tv inner_e
+          >>= fun substituted_e ->
+          multi_step_reduce ~top_level_context ~type_constr_context ~expr:substituted_e
+      | _ ->
+          Or_error.error
+            "EvaluationError: FATAL: can only type apply on a big lambda. \
+             (term)"
+            (Ast.Expr.TypeApply (e, typ))
             [%sexp_of: Ast.Expr.t])
 
 let evaluate_top_level_defn ?(top_level_context = EvaluationContext.empty)
@@ -695,10 +714,10 @@ let evaluate_top_level_defn ?(top_level_context = EvaluationContext.empty)
               type_constr_context ))
   | Ast.TypedTopLevelDefn.DatatypeDecl id_constr_typ_list_list ->
       List.fold id_constr_typ_list_list ~init:(Ok type_constr_context)
-        ~f:(fun acc (tid, constructor_type_list) ->
+        ~f:(fun acc (tvctx, tid, constructor_type_list) ->
           acc >>= fun new_typ_ctx ->
           TypeConstrContext.add_typ_from_decl new_typ_ctx
-            (tid, constructor_type_list))
+            (tvctx, tid, constructor_type_list))
       >>= fun new_typ_context ->
       Ok
         ( TopLevelEvaluationResult.DatatypeDecl id_constr_typ_list_list,

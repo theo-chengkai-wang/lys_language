@@ -1,4 +1,5 @@
 open Lys_ast
+open Lys_substitutions
 open Core
 open Interpreter_common
 open Lys_utils
@@ -523,8 +524,8 @@ let rec reduce ~top_level_context ~type_constr_context expr =
             (* [substituted_v/f; substituted_v2/g]e2 *)
             Substitutions.sim_substitute substituted_expr_list iddefs e2
             >>= fun ev2 -> Ok (ReduceResult.ReducedToExpr ev2)
-      | Ast.Expr.Box (ctx, e) ->
-          Ok (ReduceResult.NotReduced (Ast.Value.Box (ctx, e)))
+      | Ast.Expr.Box (tvctx, ctx, e) ->
+          Ok (ReduceResult.NotReduced (Ast.Value.Box (tvctx, ctx, e)))
       | Ast.Expr.LetBox (metaid, e, e2) ->
           reduce ~top_level_context ~type_constr_context e >>= fun box_res ->
           ReduceResult.process box_res
@@ -534,8 +535,8 @@ let rec reduce ~top_level_context ~type_constr_context expr =
                    (Ast.Expr.LetBox (metaid, box_e, e2))))
             ~not_reduced:(fun box_v ->
               match box_v with
-              | Ast.Value.Box (ctx, e_box) ->
-                  Substitutions.meta_substitute ctx e_box metaid e2
+              | Ast.Value.Box (tvctx, ctx, e_box) ->
+                  Substitutions.meta_substitute tvctx ctx e_box metaid e2
                   |> fun or_error ->
                   Or_error.tag_arg or_error
                     "SingleStepReductionError: Meta substitution error: \
@@ -554,7 +555,7 @@ let rec reduce ~top_level_context ~type_constr_context expr =
                      [FATAL] should not happen! Type check should have \
                      prevented this."
                     expr [%sexp_of: Ast.Expr.t])
-      | Ast.Expr.Closure (_, _) ->
+      | Ast.Expr.Closure (_, _, _) ->
           error
             "SingleStepReductionError: One should never have to evaluate a raw \
              closure."
@@ -566,8 +567,8 @@ let rec reduce ~top_level_context ~type_constr_context expr =
               Ok (ReduceResult.ReducedToExpr (Ast.Expr.Lift (t, new_e))))
             ~not_reduced:(fun v ->
               let expr_v = Ast.Value.to_expr_intensional v in
-              Ok (ReduceResult.ReducedToVal (Ast.Value.Box ([], expr_v))))
-      | Ast.Expr.Constr (constr, e_opt) -> (
+              Ok (ReduceResult.ReducedToVal (Ast.Value.Box ([], [], expr_v))))
+      | Ast.Expr.Constr (constr, tlist, e_opt) -> (
           if
             Option.is_none
               (TypeConstrContext.get_typ_from_constr type_constr_context constr)
@@ -577,22 +578,24 @@ let rec reduce ~top_level_context ~type_constr_context expr =
           else
             match e_opt with
             | None ->
-                Ok (ReduceResult.NotReduced (Ast.Value.Constr (constr, None)))
+                Ok
+                  (ReduceResult.NotReduced
+                     (Ast.Value.Constr (constr, tlist, None)))
             | Some e ->
                 reduce ~top_level_context ~type_constr_context e >>= fun res ->
                 ReduceResult.process res
                   ~reduced:(fun new_e ->
                     Ok
                       (ReduceResult.ReducedToExpr
-                         (Ast.Expr.Constr (constr, Some new_e))))
+                         (Ast.Expr.Constr (constr, tlist, Some new_e))))
                   ~reduced_to_val:(fun v ->
                     Ok
                       (ReduceResult.ReducedToVal
-                         (Ast.Value.Constr (constr, Some v))))
+                         (Ast.Value.Constr (constr, tlist, Some v))))
                   ~not_reduced:(fun v ->
                     Ok
                       (ReduceResult.NotReduced
-                         (Ast.Value.Constr (constr, Some v)))))
+                         (Ast.Value.Constr (constr, tlist, Some v)))))
       | Ast.Expr.Match (e, pattn_expr_list) ->
           reduce ~top_level_context ~type_constr_context e >>= fun res ->
           ReduceResult.process res
@@ -636,7 +639,7 @@ let rec reduce ~top_level_context ~type_constr_context expr =
                           >>= fun substituted_expr -> Ok substituted_expr)
                     |> Some
                 | ( Ast.Pattern.Datatype (constr, []),
-                    Ast.Value.Constr (constr2, None) ) ->
+                    Ast.Value.Constr (constr2, _, None) ) ->
                     (* CHECK IF constr exists *)
                     if
                       Option.is_none
@@ -650,7 +653,7 @@ let rec reduce ~top_level_context ~type_constr_context expr =
                     else if not (Ast.Constructor.equal constr constr2) then None
                     else Ok expr |> Some
                 | ( Ast.Pattern.Datatype (constr, [ id ]),
-                    Ast.Value.Constr (constr2, Some v) ) ->
+                    Ast.Value.Constr (constr2, _, Some v) ) ->
                     if
                       Option.is_none
                         (TypeConstrContext.get_typ_from_constr
@@ -668,7 +671,8 @@ let rec reduce ~top_level_context ~type_constr_context expr =
                       >>= (fun substituted_expr -> Ok substituted_expr)
                       |> Some
                 | ( Ast.Pattern.Datatype (constr, id_list),
-                    Ast.Value.Constr (constr2, Some (Ast.Value.Prod vlist)) ) ->
+                    Ast.Value.Constr (constr2, _, Some (Ast.Value.Prod vlist)) )
+                  ->
                     if
                       Option.is_none
                         (TypeConstrContext.get_typ_from_constr
@@ -830,7 +834,26 @@ let rec reduce ~top_level_context ~type_constr_context expr =
                       Or_error.error
                         "SingleStepReductionError: FATAL: arr is not an array \
                          [arr]"
-                        arr [%sexp_of: Ast.Expr.t]))
+                        arr [%sexp_of: Ast.Expr.t])
+      | Ast.Expr.BigLambda (typevar, e) ->
+          Ok (ReduceResult.NotReduced (Ast.Value.BigLambda (typevar, e)))
+      | Ast.Expr.TypeApply (e, typ) ->
+          reduce ~top_level_context ~type_constr_context e
+          >>= ReduceResult.process
+                ~reduced:(fun e ->
+                  Ok (ReduceResult.ReducedToExpr (Ast.Expr.TypeApply (e, typ))))
+                ~not_reduced:(fun value ->
+                  match value with
+                  | BigLambda (tv, inner_e) ->
+                      Substitutions.type_term_substitute typ tv inner_e
+                      >>= fun substitued_e ->
+                      Ok (ReduceResult.ReducedToExpr substitued_e)
+                  | _ ->
+                      Or_error.error
+                        "EvaluationError: FATAL: can only type apply on a big \
+                         lambda. (term)"
+                        (Ast.Expr.TypeApply (e, typ))
+                        [%sexp_of: Ast.Expr.t]))
 
 let multi_step_reduce ~top_level_context ~type_constr_context ?(verbose = false)
     expr =
@@ -992,10 +1015,10 @@ let evaluate_top_level_defn ?(top_level_context = EvaluationContext.empty)
               type_constr_context ))
   | Ast.TypedTopLevelDefn.DatatypeDecl id_constr_typ_list_list ->
       List.fold id_constr_typ_list_list ~init:(Ok type_constr_context)
-        ~f:(fun acc (tid, constructor_type_list) ->
+        ~f:(fun acc (tvctx, tid, constructor_type_list) ->
           acc >>= fun new_typ_ctx ->
           TypeConstrContext.add_typ_from_decl new_typ_ctx
-            (tid, constructor_type_list))
+            (tvctx, tid, constructor_type_list))
       >>= fun new_typ_context ->
       Ok
         ( TopLevelEvaluationResult.DatatypeDecl id_constr_typ_list_list,

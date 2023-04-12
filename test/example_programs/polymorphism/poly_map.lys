@@ -1,9 +1,4 @@
 datatype 'a list = Nil | Cons of ('a * 'a list);; 
-datatype ('a, 'b) sum = Left of ('a) | Right of ('b);;
-
-Left[int, string] 1;; 
-Nil[int];;
-Cons[int] (2, Cons[int] (1, Nil[int]));;
 
 let rec map: forall 'a. forall 'b. 'a list -> ('a -> 'b) -> 'b list = 
     'a. 'b. fun (xs: 'a list) -> fun (f: 'a -> 'b) ->
@@ -25,11 +20,6 @@ let rec map_staged: forall 'a. ([]'a) list -> ['b; f:'a -> 'b |- 'b list] =
             let box x = x in 
             box ('b; f: 'a -> 'b |- Cons['b] (f (x with ()), u with ['b](f)))
 ;;
-
-(*
-'a. fun (x: 'a) -> 'b. fun (y: 'b) -> let z: 'a = x in z;;
-'a. fun (x: []'a) -> 'b. let box u = x in u with ();;
-*)
 
 let box u = map_staged [int] (Cons[[]int] (box(|-1), Cons [[]int] (box(|-2), Cons[[]int] (box (|-3), Nil[[]int]))))
 in u with [int](fun (x:int) -> x * 2)

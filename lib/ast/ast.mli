@@ -1,5 +1,4 @@
 open Core
-open Lys_utils
 
 module DeBruijnIndex : sig
   (*Implementation of De Bruijn Indices -- encapsulated*)
@@ -12,25 +11,30 @@ module DeBruijnIndex : sig
   val value : t -> default:int -> int
 end
 
-module type ObjIdentifier_type = sig
+module type Identifier_type = sig
+  module PastModule : sig
+    type t [@@deriving sexp, show, compare, equal]
+  end
+
   type t [@@deriving sexp, show, compare, equal]
 
   val of_string : string -> t
-  val of_past : Past.Identifier.t -> t
+  val of_past : PastModule.t -> t
   val of_string_and_index : string -> DeBruijnIndex.t -> t
   val get_name : t -> string
   val get_debruijn_index : t -> DeBruijnIndex.t
 
   val populate_index :
     t ->
-    current_ast_level:int ->
-    current_identifiers:int String_map.t ->
-    current_meta_ast_level:int ->
-    current_meta_identifiers:int String_map.t ->
+    current_level:int ->
+    current_identifiers:int String.Map.t ->
     t Or_error.t
 
   val shift : t -> depth:int -> offset:int -> t Or_error.t
 end
+
+module type ObjIdentifier_type =
+  Identifier_type with module PastModule = Past.Identifier
 
 module type Constructor_type = sig
   type t [@@deriving sexp, show, compare, equal]
@@ -49,30 +53,16 @@ module type TypeIdentifier_type = sig
   val of_past : Past.Identifier.t -> t
 end
 
-module type MetaIdentifier_type = sig
-  type t [@@deriving sexp, show, compare, equal]
+module type MetaIdentifier_type =
+  Identifier_type with module PastModule = Past.Identifier
 
-  val of_string : string -> t
-  val of_past : Past.Identifier.t -> t
-  val of_string_and_index : string -> DeBruijnIndex.t -> t
-  val get_name : t -> string
-  val get_debruijn_index : t -> DeBruijnIndex.t
-
-  val populate_index :
-    t ->
-    current_ast_level:int ->
-    current_identifiers:int String_map.t ->
-    current_meta_ast_level:int ->
-    current_meta_identifiers:int String_map.t ->
-    t Or_error.t
-
-  val shift : t -> depth:int -> offset:int -> t Or_error.t
-end
+module type TypeVar_type = Identifier_type with module PastModule = Past.TypeVar
 
 module rec ObjIdentifier : ObjIdentifier_type
 and MetaIdentifier : MetaIdentifier_type
 and TypeIdentifier : TypeIdentifier_type
 and Constructor : Constructor_type
+and TypeVar : TypeVar_type
 
 and Typ : sig
   type t =
@@ -81,22 +71,40 @@ and Typ : sig
     | TInt
     | TChar
     | TString
-    | TIdentifier of TypeIdentifier.t
+    | TIdentifier of t list * TypeIdentifier.t
     | TFun of t * t
-    | TBox of Context.t * t
+    | TBox of TypeVarContext.t * Context.t * t
     | TProd of t list
     | TSum of t * t
     | TRef of t
     | TArray of t
+    | TVar of TypeVar.t
+    | TForall of TypeVar.t * t
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.Typ.t -> t
+
+  val populate_index :
+    t ->
+    current_type_ast_level:int ->
+    current_typevars:int String.Map.t ->
+    t Or_error.t
+
+  val shift_indices : t -> type_depth:int -> type_offset:int -> t Or_error.t
 end
 
 and IdentifierDefn : sig
   type t = ObjIdentifier.t * Typ.t [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.IdentifierDefn.t -> t
+
+  val populate_index :
+    t ->
+    current_type_ast_level:int ->
+    current_typevars:int String.Map.t ->
+    t Or_error.t
+
+  val shift_indices : t -> type_depth:int -> type_offset:int -> t Or_error.t
 end
 
 and RefCell : sig
@@ -128,6 +136,23 @@ and Context : sig
   type t = IdentifierDefn.t list [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.Context.t -> t
+
+  val populate_index :
+    t ->
+    current_type_ast_level:int ->
+    current_typevars:int String.Map.t ->
+    t Or_error.t
+
+  val shift_indices : t -> type_depth:int -> type_offset:int -> t Or_error.t
+  val contains_duplicate_ids : t -> bool
+end
+
+and TypeVarContext : sig
+  type t = TypeVar.t list [@@deriving sexp, show, equal, compare]
+
+  val of_past : Past.TypeVarContext.t -> t
+  val is_empty : t -> bool
+  val contains_duplicates : t -> bool
 end
 
 and BinaryOperator : sig
@@ -216,10 +241,11 @@ and Expr : sig
     (*let rec f: A->B =
       e[f] in e'*)
     | LetRecMutual of (IdentifierDefn.t * t) list * t
-    | Box of Context.t * t (*box (x:A, y:B |- e)*)
+    | Box of TypeVarContext.t * Context.t * t (*box (x:A, y:B |- e)*)
     | LetBox of MetaIdentifier.t * t * t (*let box u = e in e'*)
-    | Closure of MetaIdentifier.t * t list (*u with (e1, e2, e3, ...)*)
-    | Constr of Constructor.t * t option (* Constr e*)
+    | Closure of
+        MetaIdentifier.t * Typ.t list * t list (*u with (e1, e2, e3, ...)*)
+    | Constr of Constructor.t * Typ.t list * t option (* Constr e*)
     | Match of t * (Pattern.t * t) list
     | Lift of Typ.t * t
     | EValue of Value.t
@@ -227,6 +253,8 @@ and Expr : sig
     | While of t * t
     | Array of t list
     | ArrayAssign of t * t * t
+    | BigLambda of TypeVar.t * t
+    | TypeApply of t * Typ.t
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.Expr.t -> t
@@ -234,17 +262,21 @@ and Expr : sig
   val populate_index :
     t ->
     current_ast_level:int ->
-    current_identifiers:int String_map.t ->
+    current_identifiers:int String.Map.t ->
     current_meta_ast_level:int ->
-    current_meta_identifiers:int String_map.t ->
+    current_meta_identifiers:int String.Map.t ->
+    current_type_ast_level:int ->
+    current_typevars:int String.Map.t ->
     t Or_error.t
 
   val shift_indices :
     t ->
     obj_depth:int ->
     meta_depth:int ->
+    type_depth:int ->
     obj_offset:int ->
     meta_offset:int ->
+    type_offset:int ->
     t Or_error.t
 
   val to_val : t -> Value.t option
@@ -257,8 +289,9 @@ and Value : sig
     | Left of Typ.t * Typ.t * t (*L[A,B] e*)
     | Right of Typ.t * Typ.t * t (*R[A,B] e*)
     | Lambda of IdentifierDefn.t * Expr.t (*fun (x : A) -> e*)
-    | Box of Context.t * Expr.t (*box (x:A, y:B |- e)*)
-    | Constr of Constructor.t * t option
+    | Box of TypeVarContext.t * Context.t * Expr.t (*box (x:A, y:B |- e)*)
+    | Constr of Constructor.t * Typ.t list * t option
+    | BigLambda of TypeVar.t * Expr.t
   [@@deriving sexp, show, compare, equal]
 
   val to_expr : Value.t -> Expr.t
@@ -279,16 +312,21 @@ and TopLevelDefn : sig
     | Expression of Expr.t
     | Directive of Directive.t
     | DatatypeDecl of
-        (TypeIdentifier.t * (Constructor.t * Typ.t option) list) list
+        (TypeVarContext.t
+        * TypeIdentifier.t
+        * (Constructor.t * Typ.t option) list)
+        list
   [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.TopLevelDefn.t -> t
+  val populate_index : t -> t Or_error.t
 end
 
 and Program : sig
   type t = TopLevelDefn.t list [@@deriving sexp, show, compare, equal]
 
   val of_past : Past.Program.t -> t
+  val populate_index : t -> t Or_error.t
 end
 
 module TypedTopLevelDefn : sig
@@ -299,16 +337,17 @@ module TypedTopLevelDefn : sig
     | Expression of Typ.t * Expr.t
     | Directive of Directive.t
     | DatatypeDecl of
-        (TypeIdentifier.t * (Constructor.t * Typ.t option) list) list
+        (TypeVarContext.t
+        * TypeIdentifier.t
+        * (Constructor.t * Typ.t option) list)
+        list
   [@@deriving sexp, show, compare, equal]
 
-  val populate_index : t -> t Or_error.t
   val convert_from_untyped_without_typecheck : TopLevelDefn.t -> t
 end
 
 module TypedProgram : sig
   type t = TypedTopLevelDefn.t list [@@deriving sexp, show, compare, equal]
 
-  val populate_index : t -> t Or_error.t
   val convert_from_untyped_without_typecheck : Program.t -> t
 end

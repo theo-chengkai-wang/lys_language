@@ -1,0 +1,11 @@
+let pow: int -> [x: int |- int] = fun (n: int) -> 
+    let c: [x: int |- int] ref = ref (box (x:int |- 1)) in
+    let cnt: int ref = ref 0 in
+    while (!cnt) < n do
+        let box u = (!c) in
+        c := box (x: int |- (u with (x)) * x);
+        cnt := !cnt + 1
+    done;
+    !c;;
+
+pow 2;;

@@ -7,8 +7,8 @@ open Core
 
 let exec_program interpreter str =
   str |> Lexing.from_string |> Lex_and_parse.parse_program
-  |> Ast.Program.of_past |> Typecore.type_check_program |> ok_exn
-  |> Ast.TypedProgram.populate_index |> ok_exn
+  |> Ast.Program.of_past |> Ast.Program.populate_index |> ok_exn
+  |> Typecore.type_check_program |> ok_exn
   |> Interpreter.evaluate_program ~interpreter
   |> Or_error.ok
 
@@ -159,7 +159,8 @@ let generate_tests_for_interpreter interpreter =
                  Ast.Typ.TFun
                    ( Ast.Typ.TInt,
                      Ast.Typ.TBox
-                       ( [ (Ast.ObjIdentifier.of_string "b", Ast.Typ.TInt) ],
+                       ( [],
+                         [ (Ast.ObjIdentifier.of_string "b", Ast.Typ.TInt) ],
                          Ast.Typ.TInt ) ) ),
                Ast.Value.Lambda
                  ( (Ast.ObjIdentifier.of_string "n", Ast.Typ.TInt),
@@ -171,7 +172,8 @@ let generate_tests_for_interpreter interpreter =
                                 (create_debruijn_exn 0)),
                            Ast.Expr.Constant (Ast.Constant.Integer 0) ),
                        Ast.Expr.Box
-                         ( [ (Ast.ObjIdentifier.of_string "b", Ast.Typ.TInt) ],
+                         ( [],
+                           [ (Ast.ObjIdentifier.of_string "b", Ast.Typ.TInt) ],
                            Ast.Expr.Constant (Ast.Constant.Integer 1) ),
                        Ast.Expr.LetBox
                          ( Ast.MetaIdentifier.of_string "u",
@@ -187,7 +189,8 @@ let generate_tests_for_interpreter interpreter =
                                    Ast.Expr.Constant (Ast.Constant.Integer 1) )
                              ),
                            Ast.Expr.Box
-                             ( [
+                             ( [],
+                               [
                                  (Ast.ObjIdentifier.of_string "b", Ast.Typ.TInt);
                                ],
                                Ast.Expr.BinaryOp
@@ -198,6 +201,7 @@ let generate_tests_for_interpreter interpreter =
                                    Ast.Expr.Closure
                                      ( Ast.MetaIdentifier.of_string_and_index
                                          "u" (create_debruijn_exn 0),
+                                       [],
                                        [
                                          Ast.Expr.Identifier
                                            (Ast.ObjIdentifier
@@ -209,10 +213,12 @@ let generate_tests_for_interpreter interpreter =
                None );
            Interpreter_common.TopLevelEvaluationResult.ExprValue
              ( Ast.Typ.TBox
-                 ( [ (Ast.ObjIdentifier.of_string "b", Ast.Typ.TInt) ],
+                 ( [],
+                   [ (Ast.ObjIdentifier.of_string "b", Ast.Typ.TInt) ],
                    Ast.Typ.TInt ),
                Ast.Value.Box
-                 ( [ (Ast.ObjIdentifier.of_string "b", Ast.Typ.TInt) ],
+                 ( [],
+                   [ (Ast.ObjIdentifier.of_string "b", Ast.Typ.TInt) ],
                    Ast.Expr.BinaryOp
                      ( Ast.BinaryOperator.MUL,
                        Ast.Expr.Identifier
@@ -357,8 +363,9 @@ let generate_tests_for_interpreter interpreter =
         assert_equal
           (Some
              (Interpreter_common.TopLevelEvaluationResult.ExprValue
-                ( Ast.Typ.TIdentifier (Ast.TypeIdentifier.of_string "sometype"),
-                  Ast.Value.Constr (Ast.Constructor.of_string "Con2", None),
+                ( Ast.Typ.TIdentifier
+                    ([], Ast.TypeIdentifier.of_string "sometype"),
+                  Ast.Value.Constr (Ast.Constructor.of_string "Con2", [], None),
                   None,
                   None,
                   None )))
@@ -373,8 +380,9 @@ let generate_tests_for_interpreter interpreter =
         assert_equal
           (Some
              (Interpreter_common.TopLevelEvaluationResult.ExprValue
-                ( Ast.Typ.TBox ([], Ast.Typ.TInt),
-                  Ast.Value.Box ([], Ast.Expr.Constant (Ast.Constant.Integer 1)),
+                ( Ast.Typ.TBox ([], [], Ast.Typ.TInt),
+                  Ast.Value.Box
+                    ([], [], Ast.Expr.Constant (Ast.Constant.Integer 1)),
                   None,
                   None,
                   None )))
@@ -395,20 +403,24 @@ let generate_tests_for_interpreter interpreter =
              (Interpreter_common.TopLevelEvaluationResult.ExprValue
                 ( Ast.Typ.TBox
                     ( [],
-                      Ast.Typ.TIdentifier (Ast.TypeIdentifier.of_string "tree")
-                    ),
+                      [],
+                      Ast.Typ.TIdentifier
+                        ([], Ast.TypeIdentifier.of_string "tree") ),
                   Ast.Value.Box
                     ( [],
+                      [],
                       Ast.Expr.Constr
                         ( Ast.Constructor.of_string "Br",
+                          [],
                           Some
                             (Ast.Expr.Prod
                                [
                                  Ast.Expr.Constant (Ast.Constant.Integer 1);
                                  Ast.Expr.Constr
-                                   (Ast.Constructor.of_string "Lf", None);
+                                   (Ast.Constructor.of_string "Lf", [], None);
                                  Ast.Expr.Constr
                                    ( Ast.Constructor.of_string "Br",
+                                     [],
                                      Some
                                        (Ast.Expr.Prod
                                           [
@@ -416,9 +428,11 @@ let generate_tests_for_interpreter interpreter =
                                               (Ast.Constant.Integer 2);
                                             Ast.Expr.Constr
                                               ( Ast.Constructor.of_string "Lf",
+                                                [],
                                                 None );
                                             Ast.Expr.Constr
                                               ( Ast.Constructor.of_string "Lf",
+                                                [],
                                                 None );
                                           ]) );
                                ]) ) ),
@@ -564,15 +578,19 @@ let generate_tests_for_interpreter interpreter =
         assert_equal
           (Some
              (Interpreter_common.TopLevelEvaluationResult.ExprValue
-                ( Ast.Typ.TIdentifier (Ast.TypeIdentifier.of_string "othertype"),
+                ( Ast.Typ.TIdentifier
+                    ([], Ast.TypeIdentifier.of_string "othertype"),
                   Ast.Value.Constr
                     ( Ast.Constructor.of_string "E",
+                      [],
                       Some
                         (Ast.Value.Constr
                            ( Ast.Constructor.of_string "C",
+                             [],
                              Some
                                (Ast.Value.Constr
-                                  (Ast.Constructor.of_string "D", None)) )) ),
+                                  (Ast.Constructor.of_string "D", [], None)) ))
+                    ),
                   None,
                   None,
                   None )))
@@ -724,15 +742,176 @@ let generate_tests_for_interpreter interpreter =
         assert_equal
           (Some
              (Interpreter_common.TopLevelEvaluationResult.ExprValue
-                ( Ast.Typ.TBox ([], Ast.Typ.TArray Ast.Typ.TInt),
+                ( Ast.Typ.TBox ([], [], Ast.Typ.TArray Ast.Typ.TInt),
                   Ast.Value.Box
                     ( [],
+                      [],
                       Ast.Expr.Array
                         [
                           Ast.Expr.Constant (Ast.Constant.Integer 1);
                           Ast.Expr.Constant (Ast.Constant.Integer 2);
                           Ast.Expr.Constant (Ast.Constant.Integer 3);
                         ] ),
+                  None,
+                  None,
+                  None )))
+          (List.last results)
+  in
+  let test_poly_define _ =
+    let program = "'a. fun (x: 'a) -> 'b. fun (y: 'b) -> 1;;" in
+    let res_opt = exec_program interpreter program in
+    match res_opt with
+    | None -> assert_string "Program Execution Failed"
+    | Some results ->
+        assert_equal
+          (Some
+             (Interpreter_common.TopLevelEvaluationResult.ExprValue
+                ( Ast.Typ.TForall
+                    ( Ast.TypeVar.of_string "a",
+                      Ast.Typ.TFun
+                        ( Ast.Typ.TVar
+                            (Ast.TypeVar.of_string_and_index "a"
+                               (Ast.DeBruijnIndex.create 0 |> ok_exn)),
+                          Ast.Typ.TForall
+                            ( Ast.TypeVar.of_string "b",
+                              Ast.Typ.TFun
+                                ( Ast.Typ.TVar
+                                    (Ast.TypeVar.of_string_and_index "b"
+                                       (Ast.DeBruijnIndex.create 0 |> ok_exn)),
+                                  Ast.Typ.TInt ) ) ) ),
+                  Ast.Value.BigLambda
+                    ( Ast.TypeVar.of_string "a",
+                      Ast.Expr.Lambda
+                        ( ( Ast.ObjIdentifier.of_string "x",
+                            Ast.Typ.TVar
+                              (Ast.TypeVar.of_string_and_index "a"
+                                 (Ast.DeBruijnIndex.create 0 |> ok_exn)) ),
+                          Ast.Expr.BigLambda
+                            ( Ast.TypeVar.of_string "b",
+                              Ast.Expr.Lambda
+                                ( ( Ast.ObjIdentifier.of_string "y",
+                                    Ast.Typ.TVar
+                                      (Ast.TypeVar.of_string_and_index "b"
+                                         (Ast.DeBruijnIndex.create 0 |> ok_exn))
+                                  ),
+                                  Ast.Expr.Constant (Ast.Constant.Integer 1) )
+                            ) ) ),
+                  None,
+                  None,
+                  None )))
+          (List.last results)
+  in
+  let test_poly_apply _ =
+    let program =
+      "let rec b_f_2: forall 'a. 'a -> forall 'b. 'b -> int = 'a. fun (x: 'a) \
+       -> 'b. fun (y: 'b) -> 1;;\n\
+      \       b_f_2 [int] 1 [string] \"123\";;"
+    in
+    let res_opt = exec_program interpreter program in
+    match res_opt with
+    | None -> assert_string "Program Execution Failed"
+    | Some results ->
+        assert_equal
+          (Some
+             (Interpreter_common.TopLevelEvaluationResult.ExprValue
+                ( Ast.Typ.TInt,
+                  Ast.Value.Constant (Ast.Constant.Integer 1),
+                  None,
+                  None,
+                  None )))
+          (List.last results)
+  in
+  let test_poly_box _ =
+    let program = "box ('a; x: 'a |- x);;" in
+    let res_opt = exec_program interpreter program in
+    match res_opt with
+    | None -> assert_string "Program Execution Failed"
+    | Some results ->
+        assert_equal
+          (Some
+             (Interpreter_common.TopLevelEvaluationResult.ExprValue
+                ( Ast.Typ.TBox
+                    ( [ Ast.TypeVar.of_string "a" ],
+                      [
+                        ( Ast.ObjIdentifier.of_string "x",
+                          Ast.Typ.TVar
+                            (Ast.TypeVar.of_string_and_index "a"
+                               (Ast.DeBruijnIndex.create 0 |> ok_exn)) );
+                      ],
+                      Ast.Typ.TVar
+                        (Ast.TypeVar.of_string_and_index "a"
+                           (Ast.DeBruijnIndex.create 0 |> ok_exn)) ),
+                  Ast.Value.Box
+                    ( [ Ast.TypeVar.of_string "a" ],
+                      [
+                        ( Ast.ObjIdentifier.of_string "x",
+                          Ast.Typ.TVar
+                            (Ast.TypeVar.of_string_and_index "a"
+                               (Ast.DeBruijnIndex.create 0 |> ok_exn)) );
+                      ],
+                      Ast.Expr.Identifier
+                        (Ast.ObjIdentifier.of_string_and_index "x"
+                           (Ast.DeBruijnIndex.create 0 |> ok_exn)) ),
+                  None,
+                  None,
+                  None )))
+          (List.last results)
+  in
+  let test_poly_box_compose _ =
+    let program =
+      "let x: ['a; x: 'a]'a = box ('a; x: 'a |- x);;\n\
+      \      let box u = x in\n\
+      \        box ('b; y: 'b  |- u with ['b](y));;"
+    in
+    let res_opt = exec_program interpreter program in
+    match res_opt with
+    | None -> assert_string "Program Execution Failed"
+    | Some results ->
+        assert_equal
+          (Some
+             (Interpreter_common.TopLevelEvaluationResult.ExprValue
+                ( Ast.Typ.TBox
+                    ( [ Ast.TypeVar.of_string "b" ],
+                      [
+                        ( Ast.ObjIdentifier.of_string "y",
+                          Ast.Typ.TVar
+                            (Ast.TypeVar.of_string_and_index "b"
+                               (Ast.DeBruijnIndex.create 0 |> ok_exn)) );
+                      ],
+                      Ast.Typ.TVar
+                        (Ast.TypeVar.of_string_and_index "b"
+                           (Ast.DeBruijnIndex.create 0 |> ok_exn)) ),
+                  Ast.Value.Box
+                    ( [ Ast.TypeVar.of_string "b" ],
+                      [
+                        ( Ast.ObjIdentifier.of_string "y",
+                          Ast.Typ.TVar
+                            (Ast.TypeVar.of_string_and_index "b"
+                               (Ast.DeBruijnIndex.create 0 |> ok_exn)) );
+                      ],
+                      Ast.Expr.Identifier
+                        (Ast.ObjIdentifier.of_string_and_index "y"
+                           (Ast.DeBruijnIndex.create 0 |> ok_exn)) ),
+                  None,
+                  None,
+                  None )))
+          (List.last results)
+  in
+  let test_poly_box_unbox_close _ =
+    let program =
+      "let x: ['a; x: 'a]'a = box ('a; x: 'a |- x);;\n\
+      \        let box u = x in\n\
+      \          u with [int](1);;"
+    in
+    let res_opt = exec_program interpreter program in
+    match res_opt with
+    | None -> assert_string "Program Execution Failed"
+    | Some results ->
+        assert_equal
+          (Some
+             (Interpreter_common.TopLevelEvaluationResult.ExprValue
+                ( Ast.Typ.TInt,
+                  Ast.Value.Constant (Ast.Constant.Integer 1),
                   None,
                   None,
                   None )))
@@ -767,6 +946,11 @@ let generate_tests_for_interpreter interpreter =
            "test_array_len" >:: test_array_len;
            "test_array_get_set" >:: test_array_get_set;
            "test_array_lift" >:: test_array_lift;
+           "test_poly_define" >:: test_poly_define;
+           "test_poly_apply" >:: test_poly_apply;
+           "test_poly_box" >:: test_poly_box;
+           "test_poly_box_compose" >:: test_poly_box_compose;
+           "test_poly_box_unbox_close" >:: test_poly_box_unbox_close;
          ]
   in
   let test_intlist_map _ =
@@ -813,15 +997,18 @@ let generate_tests_for_interpreter interpreter =
         assert_equal
           (Some
              (Interpreter_common.TopLevelEvaluationResult.ExprValue
-                ( Ast.Typ.TIdentifier (Ast.TypeIdentifier.of_string "intlist"),
+                ( Ast.Typ.TIdentifier
+                    ([], Ast.TypeIdentifier.of_string "intlist"),
                   Ast.Value.Constr
                     ( Ast.Constructor.of_string "Cons",
+                      [],
                       Some
                         (Ast.Value.Prod
                            [
                              Ast.Value.Constant (Ast.Constant.Integer 2);
                              Ast.Value.Constr
                                ( Ast.Constructor.of_string "Cons",
+                                 [],
                                  Some
                                    (Ast.Value.Prod
                                       [
@@ -829,6 +1016,7 @@ let generate_tests_for_interpreter interpreter =
                                           (Ast.Constant.Integer 4);
                                         Ast.Value.Constr
                                           ( Ast.Constructor.of_string "Cons",
+                                            [],
                                             Some
                                               (Ast.Value.Prod
                                                  [
@@ -837,6 +1025,7 @@ let generate_tests_for_interpreter interpreter =
                                                    Ast.Value.Constr
                                                      ( Ast.Constructor.of_string
                                                          "Nil",
+                                                       [],
                                                        None );
                                                  ]) );
                                       ]) );
@@ -878,12 +1067,79 @@ let generate_tests_for_interpreter interpreter =
                   None )))
           (List.last results)
   in
+  let test_polybox_map_staged _ =
+    let program =
+      "datatype 'a list = Nil | Cons of ('a * 'a list);; \n\
+       let rec map_staged: forall 'a. ([]'a) list -> ['b; f:'a -> 'b |- 'b \
+       list] =\n\
+      \        'a. fun (xs: ([]'a) list) ->\n\
+      \            match xs with\n\
+      \            | Nil -> box ('b; f: 'a -> 'b |- Nil['b])\n\
+      \            | Cons (x, xs) -> \n\
+      \                let box u = map_staged ['a] xs in\n\
+      \                let box x = x in \n\
+      \                box ('b; f: 'a -> 'b |- Cons['b] (f (x with ()), u with \
+       ['b](f)))\n\
+      \    ;;\n\
+      \    \n\
+      \       let box u = map_staged [int] (Cons[[]int] (box(|-1), Cons \
+       [[]int] (box(|-2), Cons[[]int] (box (|-3), Nil[[]int]))))\n\
+      \            in u with [int](fun (x:int) -> x * 2)\n\
+      \            ;;\n\
+      \  "
+    in
+    let res_opt = exec_program interpreter program in
+    match res_opt with
+    | None -> assert_string "Program Execution Failed"
+    | Some results ->
+        assert_equal
+          (Some
+             (Interpreter_common.TopLevelEvaluationResult.ExprValue
+                ( Ast.Typ.TIdentifier
+                    ([ Ast.Typ.TInt ], Ast.TypeIdentifier.of_string "list"),
+                  Ast.Value.Constr
+                    ( Ast.Constructor.of_string "Cons",
+                      [ Ast.Typ.TInt ],
+                      Some
+                        (Ast.Value.Prod
+                           [
+                             Ast.Value.Constant (Ast.Constant.Integer 2);
+                             Ast.Value.Constr
+                               ( Ast.Constructor.of_string "Cons",
+                                 [ Ast.Typ.TInt ],
+                                 Some
+                                   (Ast.Value.Prod
+                                      [
+                                        Ast.Value.Constant
+                                          (Ast.Constant.Integer 4);
+                                        Ast.Value.Constr
+                                          ( Ast.Constructor.of_string "Cons",
+                                            [ Ast.Typ.TInt ],
+                                            Some
+                                              (Ast.Value.Prod
+                                                 [
+                                                   Ast.Value.Constant
+                                                     (Ast.Constant.Integer 6);
+                                                   Ast.Value.Constr
+                                                     ( Ast.Constructor.of_string
+                                                         "Nil",
+                                                       [ Ast.Typ.TInt ],
+                                                       None );
+                                                 ]) );
+                                      ]) );
+                           ]) ),
+                  None,
+                  None,
+                  None )))
+          (List.last results)
+  in
   let interpreter_regression_suite =
     "interpreter_regression_suite"
     >::: [
            "test_intlist_map" >:: test_intlist_map;
            "test_arr_equality" >:: test_arr_equality;
            "test_ref_equality" >:: test_ref_equality;
+           "test_polybox_map_staged" >:: test_polybox_map_staged;
          ]
   in
   let suite =
@@ -900,3 +1156,5 @@ let suite =
          generate_tests_for_interpreter
            (Interpreter.MultiStep { show_time = false });
        ]
+
+let () = run_test_tt_main suite

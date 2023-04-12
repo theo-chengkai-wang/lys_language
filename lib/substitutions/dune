@@ -1,0 +1,4 @@
+(library
+ (name lys_substitutions)
+ (libraries core lys_ast mtime mtime.clock.os)
+ (preprocess (pps ppx_jane ppx_deriving.show)))

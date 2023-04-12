@@ -32,3 +32,5 @@ _opam/
 .ipynb_checkpoints
 
 traces/
+
+deps.png

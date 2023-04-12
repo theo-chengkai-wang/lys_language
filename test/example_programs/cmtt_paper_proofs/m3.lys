@@ -1,2 +1,2 @@
-let m3:[x: _a]_a = box (x: _a |- x) in ()
+let m3: forall '_a. [x: '_a]'_a = '_a. box (x: '_a |- x) in ()
 ;;

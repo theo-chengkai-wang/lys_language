@@ -1,4 +1,4 @@
-let m2: ([x1: _c, x2: _c] _a) -> ([y: _c] _a) = 
-    fun (z: [x1: _c, x2: _c] _a) -> let box u = z in box (y: _c |- u with (y, y))
+let m2: forall '_c. forall '_a. ([x1: '_c, x2: '_c] '_a) -> ([y: '_c] '_a) = '_c.'_a.
+    fun (z: [x1: '_c, x2: '_c] '_a) -> let box u = z in box (y: '_c |- u with (y, y))
 in ()
 ;;

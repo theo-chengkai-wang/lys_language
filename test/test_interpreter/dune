@@ -1,4 +1,4 @@
-(library
+(test
  (name test_interpreter)
  (modules test_interpreter)
  (libraries ounit2 lys_ast lys_parsing lys_typing lys_interpreter))

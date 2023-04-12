@@ -15,6 +15,11 @@ module rec Identifier : Identifier_type = struct
   type t = string [@@deriving sexp, show, equal, compare]
 end
 
+and TypeVar : Identifier_type = struct
+  (*Convention is that 'a gets translated to Identifier "a"*)
+  type t = string [@@deriving sexp, show, equal, compare]
+end
+
 and Typ : sig
   type t =
     | TUnit
@@ -22,13 +27,15 @@ and Typ : sig
     | TInt
     | TChar
     | TString
-    | TIdentifier of Identifier.t
+    | TIdentifier of t list * Identifier.t
     | TFun of t * t
-    | TBox of Context.t * t
+    | TBox of TypeVarContext.t * Context.t * t
     | TProd of t list
     | TSum of t * t
     | TRef of t
     | TArray of t
+    | TVar of TypeVar.t
+    | TForall of TypeVar.t * t
   [@@deriving sexp, show, equal, compare]
 end = struct
   type t =
@@ -37,13 +44,15 @@ end = struct
     | TInt
     | TChar
     | TString
-    | TIdentifier of Identifier.t
+    | TIdentifier of t list * Identifier.t
     | TFun of t * t
-    | TBox of Context.t * t
+    | TBox of TypeVarContext.t * Context.t * t
     | TProd of t list
     | TSum of t * t
     | TRef of t
     | TArray of t
+    | TVar of TypeVar.t
+    | TForall of TypeVar.t * t
   [@@deriving sexp, show, equal, compare]
 end
 
@@ -57,6 +66,12 @@ and Context : sig
   type t = IdentifierDefn.t list [@@deriving sexp, show, equal, compare]
 end = struct
   type t = IdentifierDefn.t list [@@deriving sexp, show, equal, compare]
+end
+
+and TypeVarContext : sig
+  type t = TypeVar.t list [@@deriving sexp, show, equal, compare]
+end = struct
+  type t = TypeVar.t list [@@deriving sexp, show, equal, compare]
 end
 
 and BinaryOperator : sig
@@ -104,9 +119,11 @@ end = struct
 end
 
 and UnaryOperator : sig
-  type t = NEG | NOT | DEREF | ARRAY_LEN [@@deriving sexp, show, equal, compare]
+  type t = NEG | NOT | DEREF | ARRAY_LEN
+  [@@deriving sexp, show, equal, compare]
 end = struct
-  type t = NEG | NOT | DEREF | ARRAY_LEN [@@deriving sexp, show, equal, compare]
+  type t = NEG | NOT | DEREF | ARRAY_LEN
+  [@@deriving sexp, show, equal, compare]
 end
 
 and Constant : sig
@@ -179,16 +196,18 @@ and Expr : sig
     (*let rec f: A->B =
       e[f] in e'*)
     | LetRecMutual of (IdentifierDefn.t * t) list * t
-    | Box of Context.t * t (*box (x:A, y:B |- e)*)
+    | Box of TypeVarContext.t * Context.t * t (*box (x:A, y:B |- e)*)
     | LetBox of Identifier.t * t * t (*let box u = e in e'*)
-    | Closure of Identifier.t * t list (*u with (e1, e2, e3, ...)*)
-    | Constr of Constructor.t * t option (* Constr e*)
+    | Closure of Identifier.t * Typ.t list * t list (*u with (e1, e2, e3, ...)*)
+    | Constr of Constructor.t * Typ.t list * t option (* Constr e*)
     | Match of t * (Pattern.t * t) list
     | Lift of Typ.t * t (* lift[typ] e*)
     | Ref of t
     | While of t * t (*while p do e done*)
     | Array of t list (* list representation because just syntactic *)
     | ArrayAssign of t * t * t (* arr.(i) <- e *)
+    | BigLambda of TypeVar.t * t
+    | TypeApply of t * Typ.t
   (*|arr|*) [@@deriving sexp, show, equal, compare]
 end = struct
   type t =
@@ -213,10 +232,10 @@ end = struct
       (*let rec f: A->B =
         e[f] in e'*)
     | LetRecMutual of (IdentifierDefn.t * t) list * t
-    | Box of Context.t * t (*box (x:A, y:B |- e)*)
+    | Box of TypeVarContext.t * Context.t * t (*box (x:A, y:B |- e)*)
     | LetBox of Identifier.t * t * t (*let box u = e in e'*)
-    | Closure of Identifier.t * t list (*u with (e1, e2, e3, ...)*)
-    | Constr of Constructor.t * t option (* Constr e*)
+    | Closure of Identifier.t * Typ.t list * t list (*u with (e1, e2, e3, ...)*)
+    | Constr of Constructor.t * Typ.t list * t option (* Constr e*)
     | Match of t * (Pattern.t * t) list
       (*match e with pattern -> ... | ... -> ... | ... -> ... | ...*)
     | Lift of Typ.t * t
@@ -224,6 +243,8 @@ end = struct
     | While of t * t (*while p do e done*)
     | Array of t list (* list representation because just syntactic *)
     | ArrayAssign of t * t * t (* arr.(i) <- e  ternary operator *)
+    | BigLambda of TypeVar.t * t
+    | TypeApply of t * Typ.t
   [@@deriving sexp, show, equal, compare]
 end
 
@@ -240,7 +261,9 @@ and TopLevelDefn : sig
     | MutualRecursiveDefinition of (IdentifierDefn.t * Expr.t) list
     | Expression of Expr.t
     | Directive of Directive.t
-    | DatatypeDecl of (Identifier.t * (Constructor.t * Typ.t option) list) list
+    | DatatypeDecl of
+        (TypeVarContext.t * Identifier.t * (Constructor.t * Typ.t option) list)
+        list
   [@@deriving sexp, show, equal, compare]
 end = struct
   type t =
@@ -249,7 +272,9 @@ end = struct
     | MutualRecursiveDefinition of (IdentifierDefn.t * Expr.t) list
     | Expression of Expr.t
     | Directive of Directive.t
-    | DatatypeDecl of (Identifier.t * (Constructor.t * Typ.t option) list) list
+    | DatatypeDecl of
+        (TypeVarContext.t * Identifier.t * (Constructor.t * Typ.t option) list)
+        list
   [@@deriving sexp, show, equal, compare]
 end
 
