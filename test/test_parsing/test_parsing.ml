@@ -978,6 +978,52 @@ let test_constr_with_type_app _ =
           "Left[int, string] 1;; Nil[int];; Cons[int] (2, Cons[int] (1, \
            Nil[int]));;"))
 
+let test_pack _ =
+  assert_equal
+    [
+      Past.TopLevelDefn.Definition
+        ( ( "module_impl",
+            Past.Typ.TExists
+              ( "a",
+                Past.Typ.TProd
+                  [
+                    Past.Typ.TVar "a";
+                    Past.Typ.TFun (Past.Typ.TVar "a", Past.Typ.TVar "a");
+                    Past.Typ.TFun (Past.Typ.TVar "a", Past.Typ.TInt);
+                  ] ) ),
+          Past.Expr.Pack
+            ( Past.Typ.TInt,
+              Past.Expr.Prod
+                [
+                  Past.Expr.Constant (Past.Constant.Integer 0);
+                  Past.Expr.Lambda
+                    ( ("x", Past.Typ.TInt),
+                      Past.Expr.BinaryOp
+                        ( Past.BinaryOperator.ADD,
+                          Past.Expr.Identifier "x",
+                          Past.Expr.Constant (Past.Constant.Integer 1) ) );
+                  Past.Expr.Lambda
+                    (("x", Past.Typ.TInt), Past.Expr.Identifier "x");
+                ] ) );
+    ]
+    (parse_program
+       (Lexing.from_string
+          "let module_impl: exists 'a. ('a * ('a -> 'a) * ('a -> int)) = pack \
+           (int, (0, fun (x: int) -> x + 1, fun (x: int) -> x));;"))
+
+let test_unpack _ =
+  assert_equal
+    [
+      Past.TopLevelDefn.Expression
+        (Past.Expr.LetPack
+           ( "a",
+             "m",
+             Past.Expr.Identifier "module_impl",
+             Past.Expr.Nth (Past.Expr.Identifier "m", 0) ));
+    ]
+    (parse_program
+       (Lexing.from_string "let pack ('a, m) = module_impl in m[0];;"))
+
 (* Name the test cases and group them together *)
 let suite =
   "parsing_suite"
@@ -1050,6 +1096,8 @@ let suite =
          "test_datatype_def_list" >:: test_datatype_def_list;
          "test_datatype_def_sum" >:: test_datatype_def_sum;
          "test_constr_with_type_app" >:: test_constr_with_type_app;
+         "test_pack" >:: test_pack;
+         "test_unpack" >:: test_unpack;
        ]
 
 let () = run_test_tt_main suite

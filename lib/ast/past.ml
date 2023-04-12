@@ -36,6 +36,7 @@ and Typ : sig
     | TArray of t
     | TVar of TypeVar.t
     | TForall of TypeVar.t * t
+    | TExists of TypeVar.t * t
   [@@deriving sexp, show, equal, compare]
 end = struct
   type t =
@@ -53,6 +54,7 @@ end = struct
     | TArray of t
     | TVar of TypeVar.t
     | TForall of TypeVar.t * t
+    | TExists of TypeVar.t * t
   [@@deriving sexp, show, equal, compare]
 end
 
@@ -208,6 +210,8 @@ and Expr : sig
     | ArrayAssign of t * t * t (* arr.(i) <- e *)
     | BigLambda of TypeVar.t * t
     | TypeApply of t * Typ.t
+    | Pack of Typ.t * t
+    | LetPack of TypeVar.t * Identifier.t * t * t (* let pack ('a, x) = e in e' *)
   (*|arr|*) [@@deriving sexp, show, equal, compare]
 end = struct
   type t =
@@ -245,6 +249,8 @@ end = struct
     | ArrayAssign of t * t * t (* arr.(i) <- e  ternary operator *)
     | BigLambda of TypeVar.t * t
     | TypeApply of t * Typ.t
+    | Pack of Typ.t * t
+    | LetPack of TypeVar.t * Identifier.t * t * t (* let pack ('a, x) = e in e' *)
   [@@deriving sexp, show, equal, compare]
 end
 

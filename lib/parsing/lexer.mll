@@ -45,6 +45,7 @@ rule read =
     | '\'' {QUOTE}
     | "forall" {FORALL}
     | "exists" {EXISTS}
+    | "pack" {PACK}
     | ";;" {EOL}
     | ";" {SEMICOLON}
     | "ref" {REF}
