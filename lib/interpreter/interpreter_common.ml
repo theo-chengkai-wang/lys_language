@@ -18,7 +18,10 @@ module EvaluationContext : sig
   val find_or_error : t -> string -> single_record Or_error.t
   val empty : t
   val show : t -> string
-  val to_typing_obj_context : t -> Ast.Typ.t Typing_context.ObjTypingContext.t
+
+  val to_typing_obj_context :
+    t -> (Ast.Typ.t * int) Typing_context.ObjTypingContext.t
+
   val is_not_rec : single_record -> bool
   val is_single_rec : single_record -> bool
   val is_mut_rec : single_record -> bool
@@ -55,7 +58,7 @@ end = struct
   let to_typing_obj_context v =
     v |> String.Map.to_alist
     |> List.map ~f:(fun (id, record) ->
-           (Ast.ObjIdentifier.of_string id, record.typ))
+           (Ast.ObjIdentifier.of_string id, (record.typ, 0)))
     |> Typing_context.ObjTypingContext.add_all_mappings
          (Typing_context.ObjTypingContext.create_empty_context ())
 

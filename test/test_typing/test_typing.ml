@@ -26,8 +26,8 @@ let type_infer
   lexbuf |> parse_expr_exn |> Ast.Expr.of_past
   |> Ast.Expr.populate_index ~current_ast_level:0
        ~current_identifiers:String.Map.empty ~current_meta_ast_level:0
-       ~current_meta_identifiers:String.Map.empty
-       ~current_type_ast_level:0 ~current_typevars:String.Map.empty
+       ~current_meta_identifiers:String.Map.empty ~current_type_ast_level:0
+       ~current_typevars:String.Map.empty
   >>= Lys_typing.Typecore.type_inference_expression meta_ctx obj_ctx typ_ctx
         typevar_ctx
 
@@ -45,8 +45,7 @@ let type_check_program_from_str
         Typing_context.MetaTypingContext.create_empty_context ())
     ?obj_context:(obj_ctx =
         Typing_context.ObjTypingContext.create_empty_context ())
-    ?type_context:(type_ctx = Typing_context.TypeConstrContext.empty) str
-    =
+    ?type_context:(type_ctx = Typing_context.TypeConstrContext.empty) str =
   str |> Lexing.from_string |> Lys_parsing.Lex_and_parse.parse_program
   |> Lys_ast.Ast.Program.of_past |> Lys_ast.Ast.Program.populate_index |> ok_exn
   |> Lys_typing.Typecore.type_check_program ~meta_ctx ~obj_ctx ~type_ctx
@@ -190,7 +189,7 @@ let test_bound_identifier _ =
             |> fun ctx ->
               Typing_context.ObjTypingContext.add_mapping ctx
                 (Ast.ObjIdentifier.of_string "x")
-                Ast.Typ.TInt )
+                (Ast.Typ.TInt, 0) )
           "x;;"))
     (Some Ast.Typ.TInt)
 
@@ -498,6 +497,76 @@ let test_polybox_unbox_close _ =
   assert_bool "Type check has failed"
     (Option.is_some (type_check_program_from_str program))
 
+let test_polyadt_with_multiple_args _ =
+  let program =
+    "datatype ('a, 'b) sum = Left of ('a) | Right of ('b);; Left[int, string] \
+     1;;"
+  in
+  assert_bool "Type check has failed"
+    (Option.is_some (type_check_program_from_str program))
+
+let test_polymap_typechecks _ =
+  let program =
+    "datatype 'a list = Nil | Cons of ('a * 'a list);;\n\
+    \    let rec map: forall 'a. forall 'b. 'a list -> ('a -> 'b) -> 'b list = \n\
+    \      'a. 'b. fun (xs: 'a list) -> fun (f: 'a -> 'b) ->\n\
+    \          match xs with\n\
+    \          | Nil -> Nil['b]\n\
+    \          | Cons (x, xs) -> \n\
+    \              Cons['b] (f x, map ['a] ['b] xs f);;\n\
+    \    map [int] [int] (Cons[int] (1, Cons [int] (2, Cons [int] (3, Nil \
+     [int])))) (fun (x:int) -> 2 * x);;"
+  in
+  assert_bool "Type check has failed"
+    (Option.is_some (type_check_program_from_str program))
+
+let test_reg_typecheck_with_mismatched_type_depth_obj _ =
+  let program = "'a. fun (x: 'a) -> 'b. fun (y: 'b) -> let z: 'a = x in z;;" in
+  assert_bool "Type check has failed"
+    (Option.is_some (type_check_program_from_str program))
+
+let test_reg_typecheck_with_mismatched_type_depth_meta _ =
+  assert_equal
+    (Some
+       (Ast.Typ.TForall
+          ( Ast.TypeVar.of_string "a",
+            Ast.Typ.TFun
+              ( Ast.Typ.TBox
+                  ( [],
+                    [],
+                    Ast.Typ.TVar
+                      (Ast.TypeVar.of_string_and_index "a"
+                         (Ast.DeBruijnIndex.create 0 |> ok_exn)) ),
+                Ast.Typ.TForall
+                  ( Ast.TypeVar.of_string "b",
+                    Ast.Typ.TVar
+                      (Ast.TypeVar.of_string_and_index "a"
+                         (Ast.DeBruijnIndex.create 1 |> ok_exn)) ) ) )))
+    (Or_error.ok
+       (type_infer_from_str
+          "'a. fun (x: []'a) -> 'b. let box u = x in u with ();;"))
+
+let test_reg_typecheck_map_staged _ =
+  let program =
+    "datatype 'a list = Nil | Cons of ('a * 'a list);;\n\
+    \    let rec map_staged: forall 'a. ([]'a) list -> ['b; f:'a -> 'b |- 'b \
+     list] =\n\
+    \      'a. fun (xs: ([]'a) list) ->\n\
+    \          match xs with\n\
+    \          | Nil -> box ('b; f: 'a -> 'b |- Nil['b])\n\
+    \          | Cons (x, xs) -> \n\
+    \              let box u = map_staged ['a] xs in\n\
+    \              let box x = x in \n\
+    \              box ('b; f: 'a -> 'b |- Cons['b] (f (x with ()), u with \
+     ['b](f)));;\n\
+    \     let box u = map_staged [int] (Cons[[]int] (box(|-1), Cons [[]int] \
+     (box(|-2), Cons[[]int] (box (|-3), Nil[[]int]))))\n\
+     in u with [int](fun (x:int) -> x * 2)\n\
+     ;;"
+  in
+  assert_bool "Type check has failed"
+    (Option.is_some (type_check_program_from_str program))
+
 let polymorphism_suite =
   "polymorphism_suite"
   >::: [
@@ -510,6 +579,13 @@ let polymorphism_suite =
          >:: test_basic_polybox_with_alt_syntax;
          "test_polybox_compose" >:: test_polybox_compose;
          "test_polybox_unbox_close" >:: test_polybox_unbox_close;
+         "test_polymap_typechecks" >:: test_polymap_typechecks;
+         "test_polyadt_with_multiple_args" >:: test_polyadt_with_multiple_args;
+         "test_reg_typecheck_with_mismatched_type_depth_obj"
+         >:: test_reg_typecheck_with_mismatched_type_depth_obj;
+         "test_reg_typecheck_with_mismatched_type_depth_meta"
+         >:: test_reg_typecheck_with_mismatched_type_depth_meta;
+         "test_reg_typecheck_map_staged" >:: test_reg_typecheck_map_staged;
        ]
 
 let suite =

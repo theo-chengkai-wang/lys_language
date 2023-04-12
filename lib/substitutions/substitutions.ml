@@ -681,7 +681,7 @@ let sim_type_type_substitute typs tvctx type_sub_in =
       typ_sub_in >>= fun typ_sub_in -> type_type_substitute typ tv typ_sub_in)
   |> function
   | List.Or_unequal_lengths.Unequal_lengths ->
-      error "SimultaneousSubtitutionError: Unequal Length typs and terms"
+      error "SimultaneousTypeTypeSubtitutionError: Unequal Length types and terms, (typs, tvctx)"
         (typs, tvctx) [%sexp_of: Ast.Typ.t list * Ast.TypeVarContext.t]
   | List.Or_unequal_lengths.Ok expr_subst_in -> expr_subst_in
 
@@ -691,7 +691,7 @@ let sim_type_term_substitute typs tvctx expr_sub_in =
       e >>= fun e -> type_term_substitute typ tv e)
   |> function
   | List.Or_unequal_lengths.Unequal_lengths ->
-      error "SimultaneousSubtitutionError: Unequal Length typs and terms"
+      error "SimultaneousTypeTermSubtitutionError: Unequal Length types and terms, (typs, tvctx)"
         (typs, tvctx) [%sexp_of: Ast.Typ.t list * Ast.TypeVarContext.t]
   | List.Or_unequal_lengths.Ok expr_subst_in -> expr_subst_in
 
@@ -811,10 +811,10 @@ let rec meta_substitute_aux tvctx ctx expr_subst_for meta_id_str
       meta_substitute_aux tvctx ctx expr_subst_for meta_id_str
         current_meta_depth e2
       >>= fun e2 -> Ok (Ast.Expr.LetRecMutual (iddef_e_list, e2))
-  | Ast.Expr.Box (tvctx, ctx2, e) ->
+  | Ast.Expr.Box (tvctx2, ctx2, e) ->
       meta_substitute_aux tvctx ctx expr_subst_for meta_id_str
         current_meta_depth e
-      >>= fun e -> Ok (Ast.Expr.Box (tvctx, ctx2, e))
+      >>= fun e -> Ok (Ast.Expr.Box (tvctx2, ctx2, e))
   | Ast.Expr.LetBox (metaid, e, e2) ->
       meta_substitute_aux tvctx ctx expr_subst_for meta_id_str
         current_meta_depth e
