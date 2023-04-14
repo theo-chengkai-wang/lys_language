@@ -17,4 +17,7 @@ let rec list_pretty_print ?(sep = ", ") ~pretty_print xs =
   | [] -> ""
   | [ x ] -> Printf.sprintf "%s" (pretty_print x)
   | x :: xs ->
-      Printf.sprintf "%s%s%s" (pretty_print x) sep (list_pretty_print ~sep ~pretty_print xs)
+      Printf.sprintf "%s%s%s" (pretty_print x) sep
+        (list_pretty_print ~sep ~pretty_print xs)
+
+let generate_alinea size = String.init size ~f:(fun _ -> '\t')

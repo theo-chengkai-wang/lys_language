@@ -10,8 +10,7 @@ let loop interpreter lexbuf context typ_context () =
   |> Typecore.type_check_program
        ~obj_ctx:
          (Interpreter_common.EvaluationContext.to_typing_obj_context context)
-       ~type_ctx:
-         (typ_context)
+       ~type_ctx:typ_context
   |> ok_exn
   |> Interpreter.evaluate_top_level_defns ~top_level_context:context
        ~type_constr_context:typ_context ~interpreter
@@ -21,7 +20,7 @@ let read_line () =
   Out_channel.(flush stdout);
   In_channel.(input_line_exn stdin)
 
-let print_exec_result res continue evaluation_context typ_context =
+let print_exec_result res continue evaluation_context typ_context pp =
   match res with
   | Error e ->
       print_endline "ERROR";
@@ -29,7 +28,8 @@ let print_exec_result res continue evaluation_context typ_context =
   | Ok (res, new_context, new_typ_context) ->
       (List.iter res ~f:(fun res ->
            print_endline
-             (Interpreter_common.TopLevelEvaluationResult.get_str_output res);
+             (Interpreter_common.TopLevelEvaluationResult.get_str_output
+                ~pretty_print:pp res);
            print_endline "");
        (*Now just stop when we have to stop*)
        let last_res_opt = List.last res in
@@ -44,7 +44,7 @@ let print_exec_result res continue evaluation_context typ_context =
       evaluation_context := new_context;
       typ_context := new_typ_context
 
-let main_loop interpreter pre_load_opt () =
+let main_loop interpreter pp pre_load_opt () =
   let continue = ref true in
   let accumulated_program = ref "" in
   let evaluation_context = ref Interpreter_common.EvaluationContext.empty in
@@ -62,7 +62,7 @@ let main_loop interpreter pre_load_opt () =
                  !evaluation_context !typ_context)
           in
           print_endline "-------------------";
-          print_exec_result res continue evaluation_context typ_context));
+          print_exec_result res continue evaluation_context typ_context pp));
   print_endline "-------------------";
   print_string "# ";
   while !continue do
@@ -77,7 +77,7 @@ let main_loop interpreter pre_load_opt () =
              !evaluation_context !typ_context)
       in
       print_endline "-------------------";
-      print_exec_result res continue evaluation_context typ_context;
+      print_exec_result res continue evaluation_context typ_context pp;
       accumulated_program := "";
       print_endline "-------------------";
       print_string "# ")
@@ -98,6 +98,7 @@ let () =
              "Interpreter choices: choose from m (multi-step), mt (timed \
               multi-step), s (single step), ss (step-counted single_step), ssv \
               (step-counted verbose single step)."
+      +> flag "-pp" no_arg ~doc:"Include this flag to pretty print"
       +> flag "withfile" (optional Command.Spec.string) ~doc:"Pre-load file")
     main_loop
   |> Command_unix.run

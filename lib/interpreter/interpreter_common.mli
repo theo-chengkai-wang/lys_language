@@ -63,5 +63,5 @@ module TopLevelEvaluationResult : sig
         list
   [@@deriving sexp, compare, equal, show]
 
-  val get_str_output : t -> string
+  val get_str_output : ?pretty_print:bool -> t -> string
 end

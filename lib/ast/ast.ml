@@ -12,6 +12,7 @@ module DeBruijnIndex : sig
   val create : int -> t Or_error.t
   val shift : t -> int -> int -> t Or_error.t
   val value : t -> default:int -> int
+  val pretty_print : t -> string
 end = struct
   type t = NotSet | TopLevel | InExpr of int
   [@@deriving sexp, show, compare, equal]
@@ -44,6 +45,11 @@ end = struct
     | _ -> Ok i
 
   let value x ~default = match x with InExpr v -> v | _ -> default
+
+  let pretty_print = function
+    | InExpr v -> Int.to_string v
+    | NotSet -> "N"
+    | TopLevel -> "T"
 end
 
 module type Identifier_type = sig
@@ -117,7 +123,7 @@ functor
       Ok (id, new_index)
 
     let pretty_print (id, db_index) =
-      Printf.sprintf "%s{%s}" id (DeBruijnIndex.show db_index)
+      Printf.sprintf "%s{%s}" id (DeBruijnIndex.pretty_print db_index)
   end
 
 module type ObjIdentifier_type =
@@ -842,7 +848,11 @@ and Expr : sig
     t Or_error.t
 
   val to_val : t -> Value.t option
-  val pretty_print : t -> string
+
+  val pretty_print_aux :
+    bool -> int -> t -> string (* Not exposed to outside of the module Ast *)
+
+  val pretty_print : ?alinea_size:int -> t -> string
 end = struct
   type t =
     | Identifier of ObjIdentifier.t (*x*)
@@ -1649,13 +1659,11 @@ end = struct
         to_val e >>= fun v -> Some (Value.Pack (interface, typ, v))
     | _ -> None
 
-  let generate_alinea size = String.init size ~f:(fun _ -> '\t')
-
   let rec pretty_print_aux (insert_line_break : bool) (alinea_size : int) expr =
     (* Maintain invariant: the value itself ALWAYS puts parens when needed *)
     Printf.sprintf "%s%s%s"
       (if insert_line_break then "\n" else "")
-      (if insert_line_break then generate_alinea alinea_size else "")
+      (if insert_line_break then Utils.generate_alinea alinea_size else "")
       (match expr with
       | Identifier id -> ObjIdentifier.pretty_print id
       | Constant c -> Constant.pretty_print c
@@ -1667,7 +1675,7 @@ end = struct
           Printf.sprintf "(%s)"
             (BinaryOperator.pretty_print op
                (pretty_print_aux false alinea_size expr1)
-               (pretty_print_aux false false alinea_size expr2))
+               (pretty_print_aux false alinea_size expr2))
       | Prod exprs ->
           Printf.sprintf "(%s)"
             (Utils.list_pretty_print
@@ -1686,10 +1694,10 @@ end = struct
       | Case (e, iddef1, e1, iddef2, e2) ->
           Printf.sprintf "(case (%s) of \n%s L(%s) -> %s \n%s| R(%s) -> %s)"
             (pretty_print_aux false alinea_size e)
-            (generate_alinea alinea_size)
+            (Utils.generate_alinea alinea_size)
             (IdentifierDefn.pretty_print iddef1)
             (pretty_print_aux true (alinea_size + 1) e1)
-            (generate_alinea alinea_size)
+            (Utils.generate_alinea alinea_size)
             (IdentifierDefn.pretty_print iddef2)
             (pretty_print_aux true (alinea_size + 1) e2)
       | Lambda (iddef, e) ->
@@ -1704,29 +1712,146 @@ end = struct
           Printf.sprintf "(if (%s) then %s \n%s else %s)"
             (pretty_print_aux false alinea_size b)
             (pretty_print_aux true (alinea_size + 1) e1)
-            (generate_alinea alinea_size)
+            (Utils.generate_alinea alinea_size)
             (pretty_print_aux true (alinea_size + 1) e2)
-      | LetBinding (iddef, e, e2) -> Printf.sprintf "let (%s) = %s \n%s in %s" (IdentifierDefn.pretty_print iddef) (pretty_print_aux true (alinea_size + 1) e) (generate_alinea alinea_size) (pretty_print_aux true (alinea_size + 1) e2)
-      | LetRec (iddef, e, e2) -> Printf.sprintf "let rec (%s) = %s \n%s in %s" (IdentifierDefn.pretty_print iddef) (pretty_print_aux true (alinea_size + 1) e) (generate_alinea alinea_size) (pretty_print_aux true (alinea_size + 1) e2)
-      | LetRecMutual (iddef_e_list, e2) -> 
-        
-      | Box (tvctx, ctx, e) -> ""
-      | LetBox (metaid, e, e2) -> ""
-      | Closure (metaid, typs, exprs) -> ""
-      | Constr (tid, tlist, e_opt) -> ""
-      | Match (e, pattn_expr_list) -> ""
-      | Lift (typ, expr) -> ""
-      | EValue v -> ""
-      | Ref e -> ""
-      | While (p, e) -> ""
-      | Array es -> ""
-      | ArrayAssign (e1, e2, e3) -> ""
-      | BigLambda (v, e) -> ""
-      | TypeApply (e, t) -> ""
-      | Pack ((interface_tv, interface_typ), typ, e) -> ""
-      | LetPack (tv, oid, e1, e2) -> "")
+      | LetBinding (iddef, e, e2) ->
+          Printf.sprintf "let %s = %s \n%s in %s"
+            (IdentifierDefn.pretty_print iddef)
+            (pretty_print_aux true (alinea_size + 1) e)
+            (Utils.generate_alinea alinea_size)
+            (pretty_print_aux true (alinea_size + 1) e2)
+      | LetRec (iddef, e, e2) ->
+          Printf.sprintf "let rec %s = %s \n%s in %s"
+            (IdentifierDefn.pretty_print iddef)
+            (pretty_print_aux true (alinea_size + 1) e)
+            (Utils.generate_alinea alinea_size)
+            (pretty_print_aux true (alinea_size + 1) e2)
+      | LetRecMutual (iddef_e_list, e2) ->
+          Printf.sprintf "let rec %s \n%s in %s"
+            (Utils.list_pretty_print
+               ~sep:("\n" ^ Utils.generate_alinea alinea_size ^ "and ")
+               ~pretty_print:(fun ((id, typ), e) ->
+                 Printf.sprintf "%s = %s"
+                   (IdentifierDefn.pretty_print (id, typ))
+                   (pretty_print_aux true (alinea_size + 1) e))
+               iddef_e_list)
+            (Utils.generate_alinea alinea_size)
+            (pretty_print_aux true (alinea_size + 1) e2)
+      | Box (tvctx, ctx, e) ->
+          let pretty_print =
+            if TypeVarContext.is_empty tvctx then
+              Printf.sprintf "box (%s|- %s \n%s)"
+            else
+              Printf.sprintf "box (%s; %s|- %s \n%s)"
+                (TypeVarContext.pretty_print tvctx)
+          in
+          pretty_print (Context.pretty_print ctx)
+            (pretty_print_aux true (alinea_size + 1) e)
+            (Utils.generate_alinea alinea_size)
+      | LetBox (metaid, e, e2) ->
+          Printf.sprintf "let box %s = %s \n%s in %s"
+            (MetaIdentifier.get_name metaid)
+            (pretty_print_aux true (alinea_size + 1) e)
+            (Utils.generate_alinea alinea_size)
+            (pretty_print_aux true (alinea_size + 1) e2)
+      | Closure (metaid, typs, exprs) ->
+          let pretty_print =
+            if List.is_empty typs then Printf.sprintf "%s with (%s)"
+            else fun metaid_str exprs_str ->
+              Printf.sprintf "%s with [%s](%s)" metaid_str
+                (Utils.list_pretty_print ~sep:", "
+                   ~pretty_print:Typ.pretty_print typs)
+                exprs_str
+          in
+          if List.length exprs <= 2 then
+            pretty_print
+              (MetaIdentifier.pretty_print metaid)
+              (Utils.list_pretty_print ~sep:", "
+                 ~pretty_print:(pretty_print_aux false (alinea_size + 1))
+                 exprs)
+          else
+            pretty_print
+              (MetaIdentifier.pretty_print metaid)
+              (Utils.list_pretty_print ~sep:", "
+                 ~pretty_print:(pretty_print_aux true (alinea_size + 1))
+                 exprs
+              ^ "\n"
+              ^ Utils.generate_alinea alinea_size)
+      | Constr (tid, tlist, e_opt) -> (
+          match e_opt with
+          | None ->
+              if List.is_empty tlist then
+                Printf.sprintf "%s [%s]"
+                  (Constructor.pretty_print tid)
+                  (Utils.list_pretty_print ~pretty_print:Typ.pretty_print tlist)
+              else Printf.sprintf "%s" (Constructor.pretty_print tid)
+          | Some e ->
+              if List.is_empty tlist then
+                Printf.sprintf "%s (%s)"
+                  (Constructor.pretty_print tid)
+                  (pretty_print_aux false alinea_size e)
+              else
+                Printf.sprintf "%s [%s](%s)"
+                  (Constructor.pretty_print tid)
+                  (Utils.list_pretty_print ~pretty_print:Typ.pretty_print tlist)
+                  (pretty_print_aux false alinea_size e))
+      | Match (e, pattn_expr_list) ->
+          Printf.sprintf "match %s with \n%s%s"
+            (pretty_print_aux false alinea_size e)
+            (Utils.generate_alinea alinea_size)
+            (Utils.list_pretty_print
+               ~sep:("\n" ^ Utils.generate_alinea alinea_size ^ "| ")
+               ~pretty_print:(fun (pattn, expr) ->
+                 Pattern.pretty_print pattn ^ "->"
+                 ^ pretty_print_aux true (alinea_size + 1) expr)
+               pattn_expr_list)
+      | Lift (typ, expr) ->
+          Printf.sprintf "lift[%s] %s" (Typ.pretty_print typ)
+            (pretty_print_aux false alinea_size expr)
+      | EValue v -> Value.pretty_print v ~alinea_size
+      | Ref e ->
+          Printf.sprintf "ref (%s)" (pretty_print_aux false alinea_size e)
+      | While (p, e) ->
+          Printf.sprintf "while (%s) do %s \n%sdone"
+            (pretty_print_aux false alinea_size p)
+            (pretty_print_aux false alinea_size e)
+            (Utils.generate_alinea alinea_size)
+      | Array es ->
+          Printf.sprintf "[|%s|]"
+            (Utils.list_pretty_print ~sep:", "
+               ~pretty_print:(pretty_print_aux false alinea_size)
+               es)
+      | ArrayAssign (e1, e2, e3) ->
+          Printf.sprintf "(%s).(%s) <- %s"
+            (pretty_print_aux false alinea_size e1)
+            (pretty_print_aux false alinea_size e2)
+            (pretty_print_aux false alinea_size e3)
+      | BigLambda (v, e) ->
+          Printf.sprintf "'%s. %s" (TypeVar.get_name v)
+            (pretty_print_aux true (alinea_size + 1) e)
+      | TypeApply (e, t) ->
+          Printf.sprintf "(%s)[%s]"
+            (pretty_print_aux false alinea_size e)
+            (Typ.pretty_print t)
+      | Pack ((interface_tv, interface_typ), typ, e) ->
+          Printf.sprintf "pack(\n%sexists %s. %s, \n%s%s, %s\n%s)"
+            (Utils.generate_alinea (alinea_size + 1))
+            (TypeVar.get_name interface_tv)
+            (Typ.pretty_print interface_typ)
+            (Utils.generate_alinea (alinea_size + 1))
+            (Typ.pretty_print typ)
+            (pretty_print_aux true (alinea_size + 1) e)
+            (Utils.generate_alinea alinea_size)
+      | LetPack (tv, oid, e1, e2) ->
+          Printf.sprintf "let pack (%s, %s) = %s \n%s in %s"
+            (TypeVar.get_name tv)
+            (ObjIdentifier.get_name oid)
+            (pretty_print_aux true (alinea_size + 1) e1)
+            (Utils.generate_alinea alinea_size)
+            (pretty_print_aux true (alinea_size + 1) e2))
 
-  let rec pretty_print _ = ""
+  let pretty_print ?(alinea_size = 0) expr =
+    pretty_print_aux false alinea_size expr
 end
 
 and Value : sig
@@ -1744,7 +1869,7 @@ and Value : sig
 
   val to_expr : Value.t -> Expr.t
   val to_expr_intensional : Value.t -> Expr.t
-  val pretty_print : t -> string
+  val pretty_print : ?alinea_size:int -> t -> string
 end = struct
   type t =
     | Constant of Constant.t (*c*)
@@ -1793,6 +1918,74 @@ end = struct
     | BigLambda (typvar, e) -> Expr.BigLambda (typvar, e)
     | Pack ((interface_tv, interface_typ), typ, v) ->
         Expr.Pack ((interface_tv, interface_typ), typ, to_expr_intensional v)
+
+  let rec pretty_print_aux (insert_line_break : bool) (alinea_size : int) v =
+    (* Maintain invariant: the value itself ALWAYS puts parens when needed *)
+    Printf.sprintf "%s%s%s"
+      (if insert_line_break then "\n" else "")
+      (if insert_line_break then Utils.generate_alinea alinea_size else "")
+      (match v with
+      | Constant c -> Constant.pretty_print c
+      | Prod vs ->
+          Printf.sprintf "(%s)"
+            (Utils.list_pretty_print
+               ~pretty_print:(pretty_print_aux false alinea_size)
+               vs)
+      | Left (t1, t2, v) ->
+          Printf.sprintf "L[%s, %s] (%s)" (Typ.pretty_print t1)
+            (Typ.pretty_print t2)
+            (pretty_print_aux false alinea_size v)
+      | Right (t1, t2, v) ->
+          Printf.sprintf "R[%s, %s] (%s)" (Typ.pretty_print t1)
+            (Typ.pretty_print t2)
+            (pretty_print_aux false alinea_size v)
+      | Lambda (iddef, e) ->
+          Printf.sprintf "(fun (%s) -> %s)"
+            (IdentifierDefn.pretty_print iddef)
+            (Expr.pretty_print_aux true (alinea_size + 1) e)
+      | Box (tvctx, ctx, e) ->
+          let pretty_print =
+            if TypeVarContext.is_empty tvctx then
+              Printf.sprintf "box (%s|- %s \n%s)"
+            else
+              Printf.sprintf "box (%s; %s|- %s \n%s)"
+                (TypeVarContext.pretty_print tvctx)
+          in
+          pretty_print (Context.pretty_print ctx)
+            (Expr.pretty_print_aux true (alinea_size + 1) e)
+            (Utils.generate_alinea alinea_size)
+      | Constr (tid, tlist, v_opt) -> (
+          match v_opt with
+          | None ->
+              if List.is_empty tlist then
+                Printf.sprintf "%s [%s]"
+                  (Constructor.pretty_print tid)
+                  (Utils.list_pretty_print ~pretty_print:Typ.pretty_print tlist)
+              else Printf.sprintf "%s" (Constructor.pretty_print tid)
+          | Some v ->
+              if List.is_empty tlist then
+                Printf.sprintf "%s (%s)"
+                  (Constructor.pretty_print tid)
+                  (pretty_print_aux false alinea_size v)
+              else
+                Printf.sprintf "%s [%s](%s)"
+                  (Constructor.pretty_print tid)
+                  (Utils.list_pretty_print ~pretty_print:Typ.pretty_print tlist)
+                  (pretty_print_aux false alinea_size v))
+      | BigLambda (v, e) ->
+          Printf.sprintf "'%s. %s" (TypeVar.get_name v)
+            (Expr.pretty_print_aux true (alinea_size + 1) e)
+      | Pack ((interface_tv, interface_typ), typ, v) ->
+          Printf.sprintf "pack(\n%sexists %s. %s, \n%s%s, %s\n%s)"
+            (Utils.generate_alinea (alinea_size + 1))
+            (TypeVar.get_name interface_tv)
+            (Typ.pretty_print interface_typ)
+            (Utils.generate_alinea (alinea_size + 1))
+            (Typ.pretty_print typ)
+            (pretty_print_aux true (alinea_size + 1) v)
+            (Utils.generate_alinea alinea_size))
+
+  let pretty_print ?(alinea_size = 0) v = pretty_print_aux false alinea_size v
 end
 
 and Directive : sig
@@ -1807,6 +2000,8 @@ end = struct
     | Past.Directive.Reset -> Reset
     | Past.Directive.Env -> Env
     | Past.Directive.Quit -> Quit
+
+  let pretty_print = function Reset -> "RESET" | Env -> "ENV" | Quit -> "QUIT"
 end
 
 and TopLevelDefn : sig
@@ -1943,6 +2138,55 @@ end = struct
         |> Or_error.combine_errors
         >>= fun id_constr_typ_list_list ->
         Ok (DatatypeDecl id_constr_typ_list_list)
+
+  let pretty_print = function
+    | Definition (iddef, expr) ->
+        Printf.sprintf "let %s = %s;;"
+          (IdentifierDefn.pretty_print iddef)
+          (Expr.pretty_print_aux true 1 expr)
+    | RecursiveDefinition (iddef, expr) ->
+        Printf.sprintf "let rec %s = %s;;"
+          (IdentifierDefn.pretty_print iddef)
+          (Expr.pretty_print_aux true 1 expr)
+    | MutualRecursiveDefinition typ_iddef_e_list ->
+        Printf.sprintf "let rec %s;;"
+          (Utils.list_pretty_print ~sep:"\nand "
+             ~pretty_print:(fun ((id, typ), e) ->
+               Printf.sprintf "%s = %s"
+                 (IdentifierDefn.pretty_print (id, typ))
+                 (Expr.pretty_print_aux true 1 e))
+             typ_iddef_e_list)
+    | Expression expr -> Expr.pretty_print expr ^ ";;"
+    | Directive d -> Directive.pretty_print d ^ ";;"
+    | DatatypeDecl id_constr_typ_list_list ->
+        let pretty_print_constr_typ_list =
+          Utils.list_pretty_print ~sep:" | " ~pretty_print:(fun (c, typ_opt) ->
+              match typ_opt with
+              | None -> Constructor.pretty_print c
+              | Some typ ->
+                  Printf.sprintf "%s of (%s)"
+                    (Constructor.pretty_print c)
+                    (Typ.pretty_print typ))
+        in
+        "datatype "
+        ^ Utils.list_pretty_print id_constr_typ_list_list
+            ~sep:(Printf.sprintf "\n%sand " (Utils.generate_alinea 1))
+            ~pretty_print:(fun (typevarctx, id, constr_typ_list) ->
+              if TypeVarContext.is_empty typevarctx then
+                if List.is_empty constr_typ_list then
+                  TypeIdentifier.pretty_print id
+                else
+                  Printf.sprintf "%s = %s"
+                    (TypeIdentifier.pretty_print id)
+                    (pretty_print_constr_typ_list constr_typ_list)
+              else if List.is_empty constr_typ_list then
+                TypeIdentifier.pretty_print id
+              else
+                Printf.sprintf "(%s) %s = %s"
+                  (TypeVarContext.pretty_print typevarctx)
+                  (TypeIdentifier.pretty_print id)
+                  (pretty_print_constr_typ_list constr_typ_list))
+        ^ ";;"
 end
 
 and Program : sig
@@ -1958,6 +2202,9 @@ end = struct
 
   let populate_index program =
     List.map program ~f:TopLevelDefn.populate_index |> Or_error.combine_errors
+
+  let pretty_print =
+    Utils.list_pretty_print ~sep:"\n" ~pretty_print:TopLevelDefn.pretty_print
 end
 
 module TypedTopLevelDefn : sig
@@ -2002,6 +2249,20 @@ end = struct
     | TopLevelDefn.Directive d -> Directive d
     | TopLevelDefn.DatatypeDecl id_constr_typ_list_list ->
         DatatypeDecl id_constr_typ_list_list
+
+  let ignore_types = function
+    | Definition (_, iddef, e) -> TopLevelDefn.Definition (iddef, e)
+    | RecursiveDefinition (_, iddef, e) ->
+        TopLevelDefn.RecursiveDefinition (iddef, e)
+    | MutualRecursiveDefinition iddef_e_list ->
+        TopLevelDefn.MutualRecursiveDefinition
+          (List.map ~f:(fun (_, iddef, e) -> (iddef, e)) iddef_e_list)
+    | Expression (_, e) -> TopLevelDefn.Expression e
+    | Directive d -> TopLevelDefn.Directive d
+    | DatatypeDecl id_constr_typ_list_list ->
+        DatatypeDecl id_constr_typ_list_list
+
+  let pretty_print defn = defn |> ignore_types |> TopLevelDefn.pretty_print
 end
 
 module TypedProgram : sig
@@ -2014,4 +2275,8 @@ end = struct
 
   let convert_from_untyped_without_typecheck =
     List.map ~f:TypedTopLevelDefn.convert_from_untyped_without_typecheck
+
+  let pretty_print =
+    Utils.list_pretty_print ~sep:"\n"
+      ~pretty_print:TypedTopLevelDefn.pretty_print
 end
