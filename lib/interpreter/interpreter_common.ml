@@ -105,10 +105,15 @@ module TopLevelEvaluationResult = struct
   [@@deriving sexp, compare, equal, show]
 
   let get_str_output ?(pretty_print = false) res =
-    let show_typ, show_val =
+    let show_typ, show_val, show_verbose =
       if pretty_print then
-        (Ast.Typ.pretty_print, Ast.Value.pretty_print ~alinea_size:1)
-      else (Ast.Typ.show, Ast.Value.show)
+        ( Ast.Typ.pretty_print,
+          Ast.Value.pretty_print ~alinea_size:1,
+          fun { steps } ->
+            Lys_utils.Utils.list_pretty_print ~sep:"\n=====>>>>>\n"
+              ~pretty_print:(Ast.Expr.pretty_print ~alinea_size:0)
+              steps )
+      else (Ast.Typ.show, Ast.Value.show, show_verbose)
     in
     Printf.sprintf "------------------------------\n"
     ^
