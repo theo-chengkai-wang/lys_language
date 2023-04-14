@@ -1756,7 +1756,7 @@ end = struct
             (pretty_print_aux true (alinea_size + 1) e2)
       | Closure (metaid, typs, exprs) ->
           let pretty_print =
-            if List.is_empty typs then Printf.sprintf "%s with (%s)"
+            if List.is_empty typs then Printf.sprintf "(%s with (%s))"
             else fun metaid_str exprs_str ->
               Printf.sprintf "%s with [%s](%s)" metaid_str
                 (Utils.list_pretty_print ~sep:", "
@@ -1781,10 +1781,22 @@ end = struct
           match e_opt with
           | None ->
               if List.is_empty tlist then
+                Printf.sprintf "%s" (Constructor.pretty_print tid)
+              else
                 Printf.sprintf "%s [%s]"
                   (Constructor.pretty_print tid)
                   (Utils.list_pretty_print ~pretty_print:Typ.pretty_print tlist)
-              else Printf.sprintf "%s" (Constructor.pretty_print tid)
+          | Some (Prod es) ->
+              let e = Prod es in
+              if List.is_empty tlist then
+                Printf.sprintf "%s %s"
+                  (Constructor.pretty_print tid)
+                  (pretty_print_aux false alinea_size e)
+              else
+                Printf.sprintf "%s [%s]%s"
+                  (Constructor.pretty_print tid)
+                  (Utils.list_pretty_print ~pretty_print:Typ.pretty_print tlist)
+                  (pretty_print_aux false alinea_size e)
           | Some e ->
               if List.is_empty tlist then
                 Printf.sprintf "%s (%s)"
@@ -1919,73 +1931,7 @@ end = struct
     | Pack ((interface_tv, interface_typ), typ, v) ->
         Expr.Pack ((interface_tv, interface_typ), typ, to_expr_intensional v)
 
-  let rec pretty_print_aux (insert_line_break : bool) (alinea_size : int) v =
-    (* Maintain invariant: the value itself ALWAYS puts parens when needed *)
-    Printf.sprintf "%s%s%s"
-      (if insert_line_break then "\n" else "")
-      (if insert_line_break then Utils.generate_alinea alinea_size else "")
-      (match v with
-      | Constant c -> Constant.pretty_print c
-      | Prod vs ->
-          Printf.sprintf "(%s)"
-            (Utils.list_pretty_print
-               ~pretty_print:(pretty_print_aux false alinea_size)
-               vs)
-      | Left (t1, t2, v) ->
-          Printf.sprintf "L[%s, %s] (%s)" (Typ.pretty_print t1)
-            (Typ.pretty_print t2)
-            (pretty_print_aux false alinea_size v)
-      | Right (t1, t2, v) ->
-          Printf.sprintf "R[%s, %s] (%s)" (Typ.pretty_print t1)
-            (Typ.pretty_print t2)
-            (pretty_print_aux false alinea_size v)
-      | Lambda (iddef, e) ->
-          Printf.sprintf "(fun (%s) -> %s)"
-            (IdentifierDefn.pretty_print iddef)
-            (Expr.pretty_print_aux true (alinea_size + 1) e)
-      | Box (tvctx, ctx, e) ->
-          let pretty_print =
-            if TypeVarContext.is_empty tvctx then
-              Printf.sprintf "box (%s|- %s \n%s)"
-            else
-              Printf.sprintf "box (%s; %s|- %s \n%s)"
-                (TypeVarContext.pretty_print tvctx)
-          in
-          pretty_print (Context.pretty_print ctx)
-            (Expr.pretty_print_aux true (alinea_size + 1) e)
-            (Utils.generate_alinea alinea_size)
-      | Constr (tid, tlist, v_opt) -> (
-          match v_opt with
-          | None ->
-              if List.is_empty tlist then
-                Printf.sprintf "%s [%s]"
-                  (Constructor.pretty_print tid)
-                  (Utils.list_pretty_print ~pretty_print:Typ.pretty_print tlist)
-              else Printf.sprintf "%s" (Constructor.pretty_print tid)
-          | Some v ->
-              if List.is_empty tlist then
-                Printf.sprintf "%s (%s)"
-                  (Constructor.pretty_print tid)
-                  (pretty_print_aux false alinea_size v)
-              else
-                Printf.sprintf "%s [%s](%s)"
-                  (Constructor.pretty_print tid)
-                  (Utils.list_pretty_print ~pretty_print:Typ.pretty_print tlist)
-                  (pretty_print_aux false alinea_size v))
-      | BigLambda (v, e) ->
-          Printf.sprintf "'%s. %s" (TypeVar.get_name v)
-            (Expr.pretty_print_aux true (alinea_size + 1) e)
-      | Pack ((interface_tv, interface_typ), typ, v) ->
-          Printf.sprintf "pack(\n%sexists %s. %s, \n%s%s, %s\n%s)"
-            (Utils.generate_alinea (alinea_size + 1))
-            (TypeVar.get_name interface_tv)
-            (Typ.pretty_print interface_typ)
-            (Utils.generate_alinea (alinea_size + 1))
-            (Typ.pretty_print typ)
-            (pretty_print_aux true (alinea_size + 1) v)
-            (Utils.generate_alinea alinea_size))
-
-  let pretty_print ?(alinea_size = 0) v = pretty_print_aux false alinea_size v
+  let pretty_print ?(alinea_size = 0) v = v |> to_expr |> Expr.pretty_print ~alinea_size
 end
 
 and Directive : sig
