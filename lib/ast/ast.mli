@@ -31,6 +31,7 @@ module type Identifier_type = sig
     t Or_error.t
 
   val shift : t -> depth:int -> offset:int -> t Or_error.t
+  val pretty_print : t -> string
 end
 
 module type ObjIdentifier_type =
@@ -42,6 +43,7 @@ module type Constructor_type = sig
   val of_string : string -> t
   val of_past : Past.Constructor.t -> t
   val get_name : t -> string
+  val pretty_print : t -> string
 end
 
 module type TypeIdentifier_type = sig
@@ -51,6 +53,7 @@ module type TypeIdentifier_type = sig
   val get_name : t -> string
   val of_string : string -> t
   val of_past : Past.Identifier.t -> t
+  val pretty_print : t -> string
 end
 
 module type MetaIdentifier_type =
@@ -92,6 +95,7 @@ and Typ : sig
     t Or_error.t
 
   val shift_indices : t -> type_depth:int -> type_offset:int -> t Or_error.t
+  val pretty_print : t -> string
 end
 
 and IdentifierDefn : sig
@@ -256,7 +260,7 @@ and Expr : sig
     | ArrayAssign of t * t * t
     | BigLambda of TypeVar.t * t
     | TypeApply of t * Typ.t
-    | Pack of  (TypeVar.t * Typ.t) * Typ.t * t
+    | Pack of (TypeVar.t * Typ.t) * Typ.t * t
     | LetPack of
         TypeVar.t * ObjIdentifier.t * t * t (* let pack ('a, x) = e in e' *)
   [@@deriving sexp, show, compare, equal]
@@ -284,6 +288,7 @@ and Expr : sig
     t Or_error.t
 
   val to_val : t -> Value.t option
+  val pretty_print : ?alinea_size:int -> t -> string
 end
 
 and Value : sig
@@ -296,11 +301,12 @@ and Value : sig
     | Box of TypeVarContext.t * Context.t * Expr.t (*box (x:A, y:B |- e)*)
     | Constr of Constructor.t * Typ.t list * t option
     | BigLambda of TypeVar.t * Expr.t
-    | Pack of  (TypeVar.t * Typ.t) * Typ.t * t
+    | Pack of (TypeVar.t * Typ.t) * Typ.t * t
   [@@deriving sexp, show, compare, equal]
 
   val to_expr : Value.t -> Expr.t
   val to_expr_intensional : Value.t -> Expr.t
+  val pretty_print : ?alinea_size:int -> t -> string
 end
 
 and Directive : sig
@@ -325,6 +331,7 @@ and TopLevelDefn : sig
 
   val of_past : Past.TopLevelDefn.t -> t
   val populate_index : t -> t Or_error.t
+  val pretty_print : t -> string
 end
 
 and Program : sig
@@ -332,6 +339,7 @@ and Program : sig
 
   val of_past : Past.Program.t -> t
   val populate_index : t -> t Or_error.t
+  val pretty_print : t -> string
 end
 
 module TypedTopLevelDefn : sig
@@ -349,10 +357,12 @@ module TypedTopLevelDefn : sig
   [@@deriving sexp, show, compare, equal]
 
   val convert_from_untyped_without_typecheck : TopLevelDefn.t -> t
+  val pretty_print : t -> string
 end
 
 module TypedProgram : sig
   type t = TypedTopLevelDefn.t list [@@deriving sexp, show, compare, equal]
 
   val convert_from_untyped_without_typecheck : Program.t -> t
+  val pretty_print : t -> string
 end

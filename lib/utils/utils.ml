@@ -11,3 +11,13 @@ let rec list_traverse_and_try (xs : 'a list) ~(f : 'a -> 'b option) =
   | [] -> None
   | x :: xs -> (
       match f x with None -> list_traverse_and_try xs ~f | Some y -> Some y)
+
+let rec list_pretty_print ?(sep = ", ") ~pretty_print xs =
+  match xs with
+  | [] -> ""
+  | [ x ] -> Printf.sprintf "%s" (pretty_print x)
+  | x :: xs ->
+      Printf.sprintf "%s%s%s" (pretty_print x) sep
+        (list_pretty_print ~sep ~pretty_print xs)
+
+let generate_alinea size = String.init size ~f:(fun _ -> '\t')

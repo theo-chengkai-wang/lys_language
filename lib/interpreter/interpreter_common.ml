@@ -104,7 +104,12 @@ module TopLevelEvaluationResult = struct
         list
   [@@deriving sexp, compare, equal, show]
 
-  let get_str_output res =
+  let get_str_output ?(pretty_print = false) res =
+    let show_typ, show_val =
+      if pretty_print then
+        (Ast.Typ.pretty_print, Ast.Value.pretty_print ~alinea_size:1)
+      else (Ast.Typ.show, Ast.Value.show)
+    in
     Printf.sprintf "------------------------------\n"
     ^
     match res with
@@ -128,7 +133,7 @@ module TopLevelEvaluationResult = struct
         in
 
         Printf.sprintf "%s%sval:\n\t%s \n=\n\t %s\n%s" time_preface
-          reduction_steps_preface (Ast.Typ.show typ) (Ast.Value.show v)
+          reduction_steps_preface (show_typ typ) (show_val v)
           reduction_steps_postface
     | Defn ((id, typ), v, time_elapsed_opt, reduction_steps_opt, verbose_opt) ->
         let time_preface =
@@ -151,7 +156,7 @@ module TopLevelEvaluationResult = struct
         Printf.sprintf "%s%sval %s :\n\t%s \n=\n\t %s\n%s" time_preface
           reduction_steps_preface
           (Ast.ObjIdentifier.get_name id)
-          (Ast.Typ.show typ) (Ast.Value.show v) reduction_steps_postface
+          (show_typ typ) (show_val v) reduction_steps_postface
     | RecDefn ((id, typ), v, time_elapsed_opt, reduction_steps_opt, verbose_opt)
       ->
         let time_preface =
@@ -174,7 +179,7 @@ module TopLevelEvaluationResult = struct
         Printf.sprintf "%s%sval rec %s:\n\t %s \n=\n\t %s\n%s" time_preface
           reduction_steps_preface
           (Ast.ObjIdentifier.get_name id)
-          (Ast.Typ.show typ) (Ast.Value.show v) reduction_steps_postface
+          (show_typ typ) (show_val v) reduction_steps_postface
     | MutRecDefn iddef_v_time_red_verbose_list ->
         let process_1
             ((id, typ), v, time_elapsed_opt, reduction_steps_opt, verbose_opt) =
@@ -198,7 +203,7 @@ module TopLevelEvaluationResult = struct
           Printf.sprintf "%s%sval rec %s:\n\t %s \n=\n\t %s\n%s" time_preface
             reduction_steps_preface
             (Ast.ObjIdentifier.get_name id)
-            (Ast.Typ.show typ) (Ast.Value.show v) reduction_steps_postface
+            (show_typ typ) (show_val v) reduction_steps_postface
         in
         let processed = List.map ~f:process_1 iddef_v_time_red_verbose_list in
         String.concat ~sep:"-------------------------\nand\n" processed
@@ -234,7 +239,7 @@ module TopLevelEvaluationResult = struct
               | Some typ ->
                   Printf.sprintf "\t| %s of\n\t\t%s\n"
                     (Ast.Constructor.get_name constr)
-                    (Ast.Typ.show typ))
+                    (show_typ typ))
         in
         List.fold id_constr_typ_list_list ~init:""
           ~f:(fun acc (tvctx, tid, constr_typ_list) ->
