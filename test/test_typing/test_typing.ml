@@ -606,6 +606,23 @@ let test_reg_unpack_fails_because_leaks_inner_type_even_if_shadowing _ =
   assert_bool "Expecting type check to fail but it hasn't failed"
     (Option.is_none (type_check_program_from_str program))
 
+let test_poly_regression_sim_type_sub _ =
+  let program =
+    "datatype ('a, 'b) sum = Inl of ('a) | Inr of ('b);;\n\n\
+    \    Inr[int, string] \"123\";;"
+  in
+  assert_bool "Type check has failed"
+    (Option.is_some (type_check_program_from_str program))
+
+let test_poly_regression_sim_type_sub_match _ =
+  let program =
+    "datatype ('a, 'b) sum = Inl of ('a) | Inr of ('b);;\n\n\
+     fun (x: (int, string) sum) -> match x with Inl (x) -> \"something\" | Inr \
+     (y) -> y;;"
+  in
+  assert_bool "Type check has failed"
+    (Option.is_some (type_check_program_from_str program))
+
 let polymorphism_suite =
   "polymorphism_suite"
   >::: [
@@ -630,6 +647,10 @@ let polymorphism_suite =
          >:: test_unpack_fails_because_leaks_inner_type;
          "test_reg_unpack_fails_because_leaks_inner_type_even_if_shadowing"
          >:: test_reg_unpack_fails_because_leaks_inner_type_even_if_shadowing;
+         "test_poly_regression_sim_type_sub"
+         >:: test_poly_regression_sim_type_sub;
+         "test_poly_regression_sim_type_sub_match"
+         >:: test_poly_regression_sim_type_sub_match;
        ]
 
 let suite =
