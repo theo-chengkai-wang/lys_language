@@ -9,3 +9,17 @@ let pow: int -> [x: int |- int] = fun (n: int) ->
     !c;;
 
 pow 2;;
+
+
+(*Calcagno, Moggi, Sheard*)
+let rec pow2: int -> [x: int, y: int ref |- unit] =
+    fun (n: int) ->
+    if n = 0 then box (x: int, y: int ref|- y:= 1)
+    else 
+        let box u = pow2 (n-1) in
+        box (x: int, y: int ref |- 
+            u with (x, y);
+            y := x * (!y)
+        );;
+
+pow2 2;;
