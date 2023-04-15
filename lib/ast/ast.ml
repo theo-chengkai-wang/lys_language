@@ -267,7 +267,7 @@ end = struct
         Printf.sprintf "(%s + %s)" (pretty_print t1) (pretty_print t2)
     | TRef t -> Printf.sprintf "(%s ref)" (pretty_print t)
     | TArray t -> Printf.sprintf "(%s array)" (pretty_print t)
-    | TVar v -> TypeVar.pretty_print v
+    | TVar v -> "'" ^ TypeVar.pretty_print v
     | TForall (v, typ) ->
         Printf.sprintf "(forall '%s. %s)" (TypeVar.get_name v)
           (pretty_print typ)
@@ -1931,7 +1931,8 @@ end = struct
     | Pack ((interface_tv, interface_typ), typ, v) ->
         Expr.Pack ((interface_tv, interface_typ), typ, to_expr_intensional v)
 
-  let pretty_print ?(alinea_size = 0) v = v |> to_expr |> Expr.pretty_print ~alinea_size
+  let pretty_print ?(alinea_size = 0) v =
+    v |> to_expr |> Expr.pretty_print ~alinea_size
 end
 
 and Directive : sig
