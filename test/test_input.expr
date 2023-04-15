@@ -5,3 +5,10 @@ let pack ('a, m) = module_impl in (m[2]) ((m[1]) ((m[1]) (m[0])));;
 
 
 ('a. fun (x: int) -> let pack ('a, m) = module_impl in (m[2]) ((m[1]) ((m[1]) (m[0]))))[int] (1);;
+
+datatype ('a, 'b) sum = Inl of ('a) | Inr of ('b);;
+
+(*Inr[int, string] "123";;*)
+
+fun (x: (int, string) sum) -> match x with Inl (x) -> "something" | Inr (y) -> y;;
+
