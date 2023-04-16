@@ -952,11 +952,9 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
               |> Or_error.tag
                    ~tag:
                      (Printf.sprintf
-                        "TypeInferenceError: On Constructor %s: expected %i \
-                         arguments, got %i"
-                        (Ast.Constructor.get_name constr)
-                        (List.length constr_record.type_params)
-                        (List.length tlist))
+                        "TypeInferenceError: Simultaneous type substitution \
+                         error on Constructor %s."
+                        (Ast.Constructor.get_name constr))
               >>= fun t ->
               (* Defined, so check arguments *)
               type_check_expression meta_ctx ctx type_ctx typevar_ctx
@@ -1085,8 +1083,7 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
       |> Or_error.tag
            ~tag:
              "TypeInferenceError: At Pack, error when substituting the hidden \
-              type in \n\
-             \        the interface"
+              type in the interface"
       >>= fun e_typ ->
       type_check_expression meta_ctx ctx type_ctx typevar_ctx
         ~current_type_depth e e_typ
