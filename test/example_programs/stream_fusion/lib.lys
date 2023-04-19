@@ -158,4 +158,114 @@ fold_staged [int][int] (box (acc: int, x: int |- acc + x)) (box (|- 0)) (
     (map_staged[int][int] (box (x_a: int |- x_a * x_a)) (
         of_arr_staged [int] (box (|- [|1, 2, 3, 4, 5|])))));;
 
-(* Fusing the stepper *)
+(* Fusing the stepper by using continuation passing style *)
+
+(*
+datatype 'a st_stream_2 = St_staged_2 of (
+    exists 's. 
+        forall 'o. ([]'s * 
+            ([]'s -> [stream: ([]'a, []'s) stream_shape |- 'o] -> []'o)
+        )
+);;
+*)
+
+datatype 'a st_stream_2 = St_staged_2 of (
+    exists 's. 
+        ([]'s * 
+            ['fold_loop_type, 'fold_z_type, 'o; cons_cont: [fold_loop: 'fold_loop_type, fold_z: 'fold_z_type, a: 'a, t:'s |- 'o] |- [fold_loop: 'fold_loop_type, fold_z: 'fold_z_type, state:'s, nil_cont: 'o |- 'o]])
+);;
+
+
+(*
+let map : (α code → β code) →
+α st_stream → β st_stream =
+fun f (s,step) →
+    let new_step s k = step s @@ function
+    | Nil → k Nil
+    | Cons (a,t) → .〈let a' = ∼(f a) in
+        ∼(k @@ Cons (.〈a'〉., t))〉.
+in (s,new_step)
+*)
+
+
+let map_staged_2: forall 'a. forall 'b. [x_a: 'a |- 'b] -> 'a st_stream_2 -> 'b st_stream_2 =
+    'a. 'b.
+    fun (f_meta: [x_a: 'a |- 'b]) -> fun (a_st: 'a st_stream_2) ->
+        match a_st with
+        | St_staged_2 (pk) ->
+            let pack ('s, packed_val) = pk in
+            match packed_val with
+            | (s, step) ->
+                let box f = f_meta in
+                let new_step: ['fold_loop_type, 'fold_z_type, 'o; cons_cont: [fold_loop: 'fold_loop_type, fold_z: 'fold_z_type, a: 'b, t:'s |- 'o] |- [fold_loop: 'fold_loop_type, fold_z: 'fold_z_type, state:'s, nil_cont: 'o |- 'o]] = 
+                    let box step = step in
+                    box ('fold_loop_type, 'fold_z_type, 'o; cons_cont: [fold_loop: 'fold_loop_type, fold_z: 'fold_z_type, a: 'b, t:'s |- 'o]|- 
+                        let box cons_cont = cons_cont in
+                        let box step_with_cons_cont = 
+                            step with ['fold_loop_type, 'fold_z_type, 'o] ((box (fold_loop: 'fold_loop_type, fold_z: 'fold_z_type, a: 'a, t: 's |- 
+                                let a2: 'b = f with (a) in
+                                cons_cont with (fold_loop, fold_z, a2, t)
+                            )))
+                        in
+                        box (fold_loop: 'fold_loop_type, fold_z: 'fold_z_type, state: 's, nil_cont: 'o |- 
+                            step_with_cons_cont with (fold_loop, fold_z, state, nil_cont)
+                        )
+                    )
+                in
+                St_staged_2 ['b] (
+                    pack (exists 's. ([]'s * (['fold_loop_type, 'fold_z_type, 'o; cons_cont: [fold_loop: 'fold_loop_type, fold_z: 'fold_z_type, a: 'b, t:'s |- 'o] |- [fold_loop: 'fold_loop_type, fold_z: 'fold_z_type, state:'s, nil_cont: 'o |- 'o]])), 's, (s, new_step))
+                );;
+
+
+
+let fold_staged_2: forall 'acc. forall 'c. [acc: 'acc, x: 'c |- 'acc] -> []'acc -> 'c st_stream_2 -> []'acc =
+'acc. 'c.
+fun (f: [acc: 'acc, x: 'c |- 'acc]) -> fun (init: []'acc) -> fun (stream_tuple: 'c st_stream_2) ->
+    match stream_tuple with
+    | St_staged_2 (pk) ->
+        let pack ('state, packed_val) = pk in
+        let box f = f in
+        let box s = packed_val[0] in 
+        let box step = packed_val[1] in
+        let box step_with_cons_cont = step with ['acc -> 'state -> 'acc, 'acc, 'acc](box (fold_loop: 'acc -> 'state -> 'acc, fold_z: 'acc, a: 'c, t: 'state |- 
+            fold_loop (f with (fold_z, a)) t
+        )) in
+        let box init = init in
+        box (|- 
+            let rec loop: 'acc -> 'state -> 'acc = fun (z: 'acc) -> fun (s: 'state) ->  
+                step_with_cons_cont with (loop, z, s, z)
+            in
+            loop (init with ()) (s with ())
+        );;
+
+
+
+let of_arr_staged_2: forall 'c. ([]'c array -> 'c st_stream_2) =
+    'c.
+    let step: ['fold_loop_type, 'fold_z_type, 'o; cons_cont: [fold_loop: 'fold_loop_type, fold_z: 'fold_z_type, a: 'c, t:(int * ('c array)) |- 'o] |- 
+                [fold_loop: 'fold_loop_type, fold_z: 'fold_z_type, state:(int * ('c array)), nil_cont: 'o |- 'o]] = 
+        box ('fold_loop_type, 'fold_z_type, 'o; cons_cont: [fold_loop: 'fold_loop_type, fold_z: 'fold_z_type, a: 'c, t:(int * ('c array)) |- 'o] |- 
+            let box cons_cont = cons_cont in
+            box (fold_loop: 'fold_loop_type, fold_z: 'fold_z_type, state: (int * 'c array), nil_cont: 'o |-
+                match state with
+                | (i, arr)  ->
+                if i < len (arr) then 
+                    let el: 'c = arr.(i) in
+                    cons_cont with (fold_loop, fold_z, el, (i + 1, arr)) 
+                else nil_cont
+            )
+        )
+    in
+    fun (arr: []('c array)) -> 
+        let box arr = arr in
+        St_staged_2['c] (
+            pack(
+                exists 's. ([]'s * ['fold_loop_type, 'fold_z_type, 'o; cons_cont: [fold_loop: 'fold_loop_type, fold_z: 'fold_z_type, a: 'c, t:'s |- 'o] |- [fold_loop: 'fold_loop_type, fold_z: 'fold_z_type, state:'s, nil_cont: 'o |- 'o]]),
+                ((int * 'c array)),
+                (box (|- (0, arr with ())), step)
+            ));;
+
+fold_staged_2 [int][int] (box (acc: int, x: int |- acc + x)) (box (|- 0)) (
+    (map_staged_2 [int][int] (box (x_a: int |- x_a * x_a)) (
+        of_arr_staged_2 [int] (box (|- [|1, 2, 3, 4, 5|])))));;
+

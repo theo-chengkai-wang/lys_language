@@ -196,11 +196,13 @@ let rec type_check_expression meta_ctx ctx
   else
     error
       (Printf.sprintf
-         "TypeCheckError: Inferred type %s\n\
-         \ Not Equal to checked type %s. (expr, inferred_typ, typ, ctx, \
-          meta_ctx)"
-         (Ast.Typ.show inferred_typ)
-         (Ast.Typ.show typ))
+         "TypeCheckError: Inferred type\n\
+         \          %s\n\
+         \ Not Equal to checked type\n\
+         \         %s. 
+         (expr, inferred_typ, typ, ctx, meta_ctx)"
+         (Ast.Typ.pretty_print inferred_typ)
+         (Ast.Typ.pretty_print typ))
       (expr, inferred_typ, typ, ctx, meta_ctx)
       [%sexp_of:
         Ast.Expr.t
@@ -503,8 +505,9 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
            ~current_type_depth e2 arg_typ)
         ~tag:
           (Printf.sprintf
-             "TypeInferenceError: Type mismatch: expected argument of type %s."
-             (Ast.Typ.show arg_typ))
+             "TypeInferenceError: Type mismatch: expected argument of type 
+             %s."
+             (Ast.Typ.pretty_print arg_typ))
       >>= fun () -> Ok res_typ
   | Ast.Expr.IfThenElse (b, e1, e2) ->
       Or_error.tag
@@ -530,10 +533,11 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
            ~current_type_depth e typ)
         ~tag:
           (Printf.sprintf
-             "TypeInferenceError: variable %s is declared of type %s but bound \
-              to an expression of a different type"
+             "TypeInferenceError: variable %s is declared of type 
+                %s 
+              but bound to an expression of a different type"
              (Ast.ObjIdentifier.show id)
-             (Ast.Typ.show typ))
+             (Ast.Typ.pretty_print typ))
       >>= fun () ->
       let new_ctx =
         Typing_context.ObjTypingContext.add_mapping ctx id
@@ -553,10 +557,11 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
            ~current_type_depth e typ)
         ~tag:
           (Printf.sprintf
-             "TypeInferenceError: recursive variable %s is declared of type %s \
+             "TypeInferenceError: recursive variable %s is declared of type 
+              %s 
               but bound to an expression of a different type"
              (Ast.ObjIdentifier.show id)
-             (Ast.Typ.show typ))
+             (Ast.Typ.pretty_print typ))
       >>= fun () ->
       type_inference_expression meta_ctx new_ctx type_ctx typevar_ctx
         ~current_type_depth e2
@@ -578,9 +583,11 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
                ~tag:
                  (Printf.sprintf
                     "TypeInferenceError: recursive variable %s is declared of \
-                     type %s but bound to an expression of a different type"
+                     type 
+                     %s 
+                     but bound to an expression of a different type"
                     (Ast.ObjIdentifier.show id)
-                    (Ast.Typ.show typ)))
+                    (Ast.Typ.pretty_print typ)))
       |> Or_error.combine_errors_unit
       |> Or_error.tag
            ~tag:
@@ -965,7 +972,7 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
                         "TypeInferenceError: On Constructor %s: argument type \
                          mismatch. Expected type %s"
                         (Ast.Constructor.get_name constr)
-                        (Ast.Typ.show t))
+                        (Ast.Typ.pretty_print t))
           | _ ->
               Or_error.error
                 (Printf.sprintf
