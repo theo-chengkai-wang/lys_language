@@ -269,3 +269,63 @@ fold_staged_2 [int][int] (box (acc: int, x: int |- acc + x)) (box (|- 0)) (
     (map_staged_2 [int][int] (box (x_a: int |- x_a * x_a)) (
         of_arr_staged_2 [int] (box (|- [|1, 2, 3, 4, 5|])))));;
 
+
+(*Fusing the stream state*)
+
+(*
+
+Using CPS on state and update the state IN PLACE using references.
+
+type α st_stream =
+∃σ.
+    (∀ ω. (σ → ω code) → ω code) *
+    (∀ ω. σ →
+    ((α code,unit) stream_shape → ω code) →
+    ω code)
+*)
+
+
+datatype 'a st_stream_3 = St_staged_3 of (
+    exists 's. 
+        ((['o; cont:[state: 's |- 'o] |- 'o]) * 
+            ([state:'s |- 
+                ['fold_loop_type, 'fold_z_type, 'o; cons_cont: [fold_loop: 'fold_loop_type, fold_z: 'fold_z_type, a: 'a |- 'o] |- 
+                    [fold_loop: 'fold_loop_type, fold_z: 'fold_z_type, nil_cont: 'o |- 'o]]]))
+);;
+
+(*
+    let of_arr : α array code → α st_stream =
+        let init arr k =
+            .〈let i = ref 0 and
+            arr = ∼arr in ∼(k (.〈i〉.,.〈arr〉.))〉.
+        and step (i,arr) k =
+            .〈if !(∼i) < Array.length ∼arr
+            then
+            let el = (∼arr).(!(∼i)) in
+            incr ∼i;
+            ∼(k @@ Cons (.〈el〉., ()))
+            else ∼(k Nil)〉.
+
+*)
+    (* 's => ([] int ref * [] 'c array) *)
+(*
+let of_array_3: forall 'c. ([]'c array -> 'c st_stream_3) =
+    'c.
+    let init: []'c array -> forall 'o. ('s -> []'o) -> []'o = 
+        fun (arr: []'c array)->
+        let box arr = arr in
+        'o. 
+        fun (cont: [state: 's |- 'o]) ->
+        let box cont_applied = cont (box (i: int ref |- i)) (box (arr: 'c array |- arr))
+        in 
+        box (|- 
+            let i = ref 0 in
+            let arr = (arr with ()) in
+            cont_applied with ()
+        )
+    in
+    let step:  ((int ref * 'c array) -> ['fold_loop_type, 'fold_z_type, 'o; cons_cont: [fold_loop: 'fold_loop_type, fold_z: 'fold_z_type, a: 'a |- 'o] 
+                |- [fold_loop: 'fold_loop_type, fold_z: 'fold_z_type, nil_cont: 'o |- 'o]])
+    = fun (s: (int ref * 'c array)) ->
+*)
+
