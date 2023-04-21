@@ -11,17 +11,19 @@ map [int] [int] (Cons[int] (1, Cons [int] (2, Cons [int] (3, Nil [int])))) (fun 
 
 (* Limitation: can't lift arbitrary values *)
 
-let rec map_staged: forall 'a. ([]'a) list -> ['b; f:'a -> 'b |- 'b list] =
-    'a. fun (xs: ([]'a) list) ->
+let rec map_staged: forall 'a. 'a list -> ('a -> []'a) -> ['b; f:'a -> 'b |- 'b list] =
+    'a. fun (xs: ('a) list) -> fun (lift_a: 'a -> []'a) ->
         match xs with
         | Nil -> box ('b; f: 'a -> 'b |- Nil['b])
         | Cons (x, xs) -> 
-            let box u = map_staged ['a] xs in
-            let box x = x in 
+            let box u = map_staged ['a] xs lift_a in
+            let box x = lift_a x in 
             box ('b; f: 'a -> 'b |- Cons['b] (f (x with ()), u with ['b](f)))
 ;;
 
-let box u = map_staged [int] (Cons[[]int] (box(|-1), Cons [[]int] (box(|-2), Cons[[]int] (box (|-3), Nil[[]int]))))
+map_staged [int] (Cons[int] (1, Cons [int] (2, Cons[int] (3, Nil[int])))) (fun (x: int) -> lift[int] x);;
+
+let box u = map_staged [int] (Cons[int] (1, Cons [int] (2, Cons[int] (3, Nil[int])))) (fun (x: int) -> lift[int] x)
 in u with [int](fun (x:int) -> x * 2)
 ;;
 

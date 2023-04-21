@@ -14,9 +14,20 @@ let rec fold_int_int_int: (intlist -> int -> (int -> int -> int) -> int) =
 
 (*Unfortunately lifting is necessary*)
 (*
-    let rec lift_int: int -> []int = fun (n:int) -> 
+    let rec lift_int_inefficient: int -> []int = fun (n:int) -> 
         if n = 0 then box (|- 0) else let box u = lift_int (n-1) in box (|- (u with ()) + 1);;
 *)
+
+let rec lift_int_efficient: int -> []int = fun (n: int) ->
+    if n < 0 then lift_int_efficient (-n)
+    else
+        let box u = lift_int_efficient (n/2) in
+        if (n % 2 = 0) then  
+            box (|- 2 * (u with ()))
+        else
+            box (|- 2 * (u with ()) + 1);;
+
+
 (* Powerful new lifting primitive! *)
 let lift_int: int -> []int = fun (n:int) -> lift[int] n;;
 

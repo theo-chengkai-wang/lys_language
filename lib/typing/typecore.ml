@@ -196,11 +196,13 @@ let rec type_check_expression meta_ctx ctx
   else
     error
       (Printf.sprintf
-         "TypeCheckError: Inferred type %s\n\
-         \ Not Equal to checked type %s. (expr, inferred_typ, typ, ctx, \
-          meta_ctx)"
-         (Ast.Typ.show inferred_typ)
-         (Ast.Typ.show typ))
+         "TypeCheckError: Inferred type\n\
+         \          %s\n\
+         \ Not Equal to checked type\n\
+         \         %s. 
+         (expr, inferred_typ, typ, ctx, meta_ctx)"
+         (Ast.Typ.pretty_print inferred_typ)
+         (Ast.Typ.pretty_print typ))
       (expr, inferred_typ, typ, ctx, meta_ctx)
       [%sexp_of:
         Ast.Expr.t
@@ -503,8 +505,9 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
            ~current_type_depth e2 arg_typ)
         ~tag:
           (Printf.sprintf
-             "TypeInferenceError: Type mismatch: expected argument of type %s."
-             (Ast.Typ.show arg_typ))
+             "TypeInferenceError: Type mismatch: expected argument of type 
+             %s."
+             (Ast.Typ.pretty_print arg_typ))
       >>= fun () -> Ok res_typ
   | Ast.Expr.IfThenElse (b, e1, e2) ->
       Or_error.tag
@@ -530,10 +533,11 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
            ~current_type_depth e typ)
         ~tag:
           (Printf.sprintf
-             "TypeInferenceError: variable %s is declared of type %s but bound \
-              to an expression of a different type"
+             "TypeInferenceError: variable %s is declared of type 
+                %s 
+              but bound to an expression of a different type"
              (Ast.ObjIdentifier.show id)
-             (Ast.Typ.show typ))
+             (Ast.Typ.pretty_print typ))
       >>= fun () ->
       let new_ctx =
         Typing_context.ObjTypingContext.add_mapping ctx id
@@ -553,10 +557,11 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
            ~current_type_depth e typ)
         ~tag:
           (Printf.sprintf
-             "TypeInferenceError: recursive variable %s is declared of type %s \
+             "TypeInferenceError: recursive variable %s is declared of type 
+              %s 
               but bound to an expression of a different type"
              (Ast.ObjIdentifier.show id)
-             (Ast.Typ.show typ))
+             (Ast.Typ.pretty_print typ))
       >>= fun () ->
       type_inference_expression meta_ctx new_ctx type_ctx typevar_ctx
         ~current_type_depth e2
@@ -578,9 +583,11 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
                ~tag:
                  (Printf.sprintf
                     "TypeInferenceError: recursive variable %s is declared of \
-                     type %s but bound to an expression of a different type"
+                     type 
+                     %s 
+                     but bound to an expression of a different type"
                     (Ast.ObjIdentifier.show id)
-                    (Ast.Typ.show typ)))
+                    (Ast.Typ.pretty_print typ)))
       |> Or_error.combine_errors_unit
       |> Or_error.tag
            ~tag:
@@ -695,21 +702,33 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
               (box_context, Ast.Expr.Closure (meta_id, typs, exprs))
               [%sexp_of: Ast.Context.t * Ast.Expr.t])
         >>= fun zipped_list ->
-        (* 2- check types *)
-        Or_error.tag
-          (Or_error.combine_errors_unit
-             (List.map zipped_list ~f:(fun ((_, typ), e) ->
-                  (* Subsitute type *)
-                  Substitutions.sim_type_type_substitute typs box_tvctx typ
-                  >>= fun typ ->
-                  type_check_expression meta_ctx ctx type_ctx typevar_ctx
-                    ~current_type_depth e typ)))
-          ~tag:
-            "TypeInferenceError: Type mismatch between context and expressions \
-             provided to substitute in."
-        >>= fun () ->
-        (* Now substitute the typ *)
-        Substitutions.sim_type_type_substitute typs box_tvctx box_typ
+        if not (List.is_empty typs) then
+          (* 2- check types *)
+          Or_error.tag
+            (Or_error.combine_errors_unit
+               (List.map zipped_list ~f:(fun ((_, typ), e) ->
+                    (* Subsitute type *)
+                    Substitutions.sim_type_type_substitute typs box_tvctx typ
+                    >>= fun typ ->
+                    type_check_expression meta_ctx ctx type_ctx typevar_ctx
+                      ~current_type_depth e typ)))
+            ~tag:
+              "TypeInferenceError: Type mismatch between context and \
+               expressions provided to substitute in."
+          >>= fun () ->
+          (* Now substitute the typ *)
+          Substitutions.sim_type_type_substitute typs box_tvctx box_typ
+        else
+          Or_error.tag
+            (Or_error.combine_errors_unit
+               (List.map zipped_list ~f:(fun ((_, typ), e) ->
+                    (* Subsitute type *)
+                    type_check_expression meta_ctx ctx type_ctx typevar_ctx
+                      ~current_type_depth e typ)))
+            ~tag:
+              "TypeInferenceError: Type mismatch between context and \
+               expressions provided to substitute in."
+          >>= fun () -> Ok box_typ
   | Ast.Expr.Match (e, pattn_expr_list) -> (
       (*
       1- infer type of e
@@ -723,6 +742,7 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
       type_inference_expression meta_ctx ctx type_ctx typevar_ctx
         ~current_type_depth e
       >>= fun inferred_typ ->
+      (* print_endline (Ast.Typ.pretty_print inferred_typ); *)
       (match inferred_typ with
       | Ast.Typ.TProd typs ->
           List.map pattn_expr_list ~f:(fun (pattn, expr) ->
@@ -836,6 +856,7 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
                     | Some typ -> [ typ ]
                     | None -> []
                   in
+                  (* print_endline ([%sexp_of: Ast.Typ.t list] typs |> Sexp.to_string_hum); *)
                   (* 2.5- *NEW*: Do the type substitutions *)
                   List.map
                     ~f:
@@ -848,6 +869,7 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
                          "TypeInferenceError: Error when type substituting the \
                           type arguments in the constructor param types."
                   >>= fun typs ->
+                  (* print_endline ([%sexp_of: Ast.Typ.t list] typs |> Sexp.to_string_hum); *)
                   (*3- Match id list*)
                   Utils.try_zip_list_or_error id_list typs
                     (Or_error.error
@@ -937,11 +959,9 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
               |> Or_error.tag
                    ~tag:
                      (Printf.sprintf
-                        "TypeInferenceError: On Constructor %s: expected %i \
-                         arguments, got %i"
-                        (Ast.Constructor.get_name constr)
-                        (List.length constr_record.type_params)
-                        (List.length tlist))
+                        "TypeInferenceError: Simultaneous type substitution \
+                         error on Constructor %s."
+                        (Ast.Constructor.get_name constr))
               >>= fun t ->
               (* Defined, so check arguments *)
               type_check_expression meta_ctx ctx type_ctx typevar_ctx
@@ -952,7 +972,7 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
                         "TypeInferenceError: On Constructor %s: argument type \
                          mismatch. Expected type %s"
                         (Ast.Constructor.get_name constr)
-                        (Ast.Typ.show t))
+                        (Ast.Typ.pretty_print t))
           | _ ->
               Or_error.error
                 (Printf.sprintf
@@ -1070,8 +1090,7 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
       |> Or_error.tag
            ~tag:
              "TypeInferenceError: At Pack, error when substituting the hidden \
-              type in \n\
-             \        the interface"
+              type in the interface"
       >>= fun e_typ ->
       type_check_expression meta_ctx ctx type_ctx typevar_ctx
         ~current_type_depth e e_typ
@@ -1084,6 +1103,7 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
       type_inference_expression meta_ctx ctx type_ctx typevar_ctx
         ~current_type_depth e1
       >>= fun e1_typ ->
+      (* print_endline (Ast.Typ.pretty_print e1_typ); *)
       (match e1_typ with
       | Ast.Typ.TExists (exists_tv, exists_typ) -> Ok (exists_tv, exists_typ)
       | _ ->
@@ -1095,11 +1115,20 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
       (* Substitute tv for exists_tv in exists_typ so we have an existential
          typ that depends on tv. *)
       Ast.DeBruijnIndex.create 0 >>= fun db_index ->
+      (* print_endline (Ast.Typ.pretty_print exists_typ); *)
+      (* Here all we want is alpha renaming, but substitution assumes
+         type-application-like semantics, so the solution is
+         the shift everything apart from depth 0 up, and then
+          do the substitution. Shift with type depth 1 so that we don't touch
+         anything with index 0. *)
+      Ast.Typ.shift_indices exists_typ ~type_depth:1 ~type_offset:1
+      >>= fun exists_typ ->
       Substitutions.type_type_substitute
         (Ast.Typ.TVar
            (Ast.TypeVar.of_string_and_index (Ast.TypeVar.get_name tv) db_index))
         exists_tv exists_typ
       >>= fun new_exists_typ ->
+      (* print_endline (Ast.Typ.pretty_print new_exists_typ); *)
       let new_typevar_ctx =
         Typing_context.PolyTypeVarContext.add_mapping typevar_ctx tv
           current_type_depth
