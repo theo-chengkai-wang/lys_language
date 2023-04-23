@@ -69,7 +69,7 @@ let rec run: int -> command -> env -> command_list -> int = fun (l: int) -> fun 
 let interpret: (string_list * command_list) -> int_list -> int
 = fun (program: (string_list * command_list)) -> fun (args: int_list) ->
     let store: env = zip (program[0]) args in
-    match program[1] with
+    match (program[1]) with
     | Cons_c (c, cs) ->
         run 1 c store (program[1]);;
 
@@ -118,28 +118,28 @@ let nth_box: [](command_list -> int -> command) = box (|-
 );;
 
 
-let rec eval_staged: expr -> [store: env] int = 
+let rec eval_staged: expr -> [lookup: env -> string -> int, store: env] int = 
 let box lookup = lookup_box in 
 fun (e: expr) -> 
     match e with
-    | Int (n) -> let box lifted_n = lift[int] n in box (store: env |- lifted_n with ())
-    | Var (x) -> let box lifted_x = lift[string] x in box (store: env |- (lookup with ()) store (lifted_x with ()))
+    | Int (n) -> let box lifted_n = lift[int] n in box (lookup: env -> string -> int, store: env |- lifted_n with ())
+    | Var (x) -> let box lifted_x = lift[string] x in box (lookup: env -> string -> int, store: env |- (lookup) store (lifted_x with ()))
     | Add (e1, e2) -> 
         let box partial_1 = eval_staged e1 in
         let box partial_2 = eval_staged e2 in
-        box (store: env |- 
-            (partial_1 with (store)) + (partial_2 with (store))
+        box (lookup: env -> string -> int, store: env |- 
+            (partial_1 with (lookup, store)) + (partial_2 with (lookup, store))
         )
     | Leq (e1, e2) ->
         let box partial_1 = eval_staged e1 in
         let box partial_2 = eval_staged e2 in
-        box (store: env |- 
-            if ((partial_1 with (store)) <= (partial_2 with (store))) then 0 else 1
+        box (lookup: env -> string -> int, store: env |- 
+            if ((partial_1 with (lookup, store)) <= (partial_2 with (lookup, store))) then 0 else 1
         );;
 
 datatype result = Res of int | JumpTo of (int * env);;
 
-datatype memo_list = Nil_m | Cons_m of ((int * [store: env](result)) * memo_list);;
+datatype memo_list = Nil_m | Cons_m of ((int * [update: env -> (string * int) -> env, lookup: env -> string -> int, store: env](result)) * memo_list);;
 
 let rec get_all_jump_destinations: command_list -> int_list = fun (cs: command_list) ->
     match cs with
@@ -166,33 +166,32 @@ let rec sort_and_unique_int_list: int_list -> int_list = fun (xs: int_list) ->
     | Cons_i (x, xs) ->
         let left: int_list = filter_i xs (fun (y: int) -> y < x) in
         let right: int_list = filter_i xs (fun (y: int) -> y > x) in
-        append_i left (Cons_i (x, right));;
+        append_i (sort_and_unique_int_list left) (Cons_i (x, (sort_and_unique_int_list right)));;
 
 let rec from_c: command_list -> int -> command_list = fun (cs: command_list) -> fun (l: int) ->
     match cs with
     | Cons_c (c, cs) -> if l = 1 then Cons_c (c, cs) else from_c cs (l-1);;
 
 (*This is the only way that might work because otherwise even compilation can have cycles*)
-let compile_from_root: int -> int -> command_list -> [store: env](result) = 
-let box update = update_box in
+let compile_from_root: int -> int -> command_list -> [update: env -> (string * int) -> env, lookup: env -> string -> int, store: env](result) = 
 (*Start incl, End excl*)
 fun (start: int) -> fun (end: int) -> fun (cs: command_list) -> (*l must start from 1*)
     let from_start: command_list = from_c cs start in
     let max_steps: int = end - start in
-    let rec compile_aux: int -> int -> command_list -> [store: env](result) = 
+    let rec compile_aux: int -> int -> command_list -> [update: env -> (string * int) -> env, lookup: env -> string -> int, store: env](result) = 
         fun (l: int) -> fun (max_steps: int) -> fun (cs: command_list) ->
         match cs with
         | Cons_c (c, cs) ->
             match c with
             | Goto (n) -> 
                 let box lifted_n = lift[int] n in
-                box (store: env|- JumpTo (lifted_n with (), store))
+                box (update: env -> (string * int) -> env, lookup: env -> string -> int, store: env|- JumpTo (lifted_n with (), store))
             | If (e, m, n) ->
                 let box eval_partial = eval_staged e in
                 let box lifted_n = lift[int] n in
                 let box lifted_m = lift[int] m in
-                box (store: env |- 
-                    if (eval_partial with (store)) = 0 then
+                box (update: env -> (string * int) -> env, lookup: env -> string -> int, store: env |- 
+                    if (eval_partial with (lookup, store)) = 0 then
                         JumpTo (lifted_m with (), store)
                     else
                         JumpTo (lifted_n with (), store)
@@ -202,18 +201,19 @@ fun (start: int) -> fun (end: int) -> fun (cs: command_list) -> (*l must start f
                 let box eval_e_partial = eval_staged e in
                 let box lifted_l = lift[int] l in
                 if max_steps = 1 then 
-                    box (store: env|-
-                        let s1: env = (update with ()) store (lifted_x with (), eval_e_partial with (store)) in
+                    box (update: env -> (string * int) -> env, lookup: env -> string -> int, store: env|-
+                        let s1: env = update store (lifted_x with (), eval_e_partial with (lookup, store)) in
                         JumpTo (lifted_l with (), s1)
                     )
                 else
                     let box compile_rest = compile_aux (l + 1) (max_steps - 1) cs in
-                    box (store: env|-
-                        let s1: env = (update with ()) store (lifted_x with (), eval_e_partial with (store)) in
-                        compile_rest with (s1)
+                    box (update: env -> (string * int) -> env, lookup: env -> string -> int, store: env|-
+                        let s1: env = (update) store (lifted_x with (), eval_e_partial with (lookup, store)) in
+                        compile_rest with (update, lookup, s1)
                     )
             | Return (e) ->
-                let box u = eval_staged e in box (store: env |- Res (u with (store)))
+                let box u = eval_staged e in 
+                    box (update: env -> (string * int) -> env, lookup: env -> string -> int, store: env |- Res (u with (lookup, store)))
     in
     compile_aux start max_steps from_start;;
 
@@ -237,8 +237,8 @@ let compile: command_list -> memo_list = fun (cs: command_list) ->
     in
     foreach_destination (all_destinations);;
 
-let list_find_m_box: [](memo_list -> int -> [store: env](result)) = box (|- 
-    let rec list_find_m: memo_list -> int -> [store: env](result) = fun (ms: memo_list) -> fun (k: int) -> 
+let list_find_m_box: [](memo_list -> int -> [update: env -> (string * int) -> env, lookup: env -> string -> int, store: env](result)) = box (|- 
+    let rec list_find_m: memo_list -> int -> [update: env -> (string * int) -> env, lookup: env -> string -> int, store: env](result) = fun (ms: memo_list) -> fun (k: int) -> 
         match ms with
         | Cons_m (m, ms) -> if m[0] = k then m[1] else list_find_m (ms) k
     in list_find_m
@@ -247,16 +247,24 @@ let list_find_m_box: [](memo_list -> int -> [store: env](result)) = box (|-
 let interpret_staged: (string_list * command_list) -> [args: int_list]int = 
     let box zip = zip_box in
     let box list_find_m = list_find_m_box in
+    let box update = update_box in
+    let box lookup = lookup_box in
     fun (program: (string_list * command_list)) ->
         let compiled_program: memo_list = compile (program[1]) in
         let box lifted_compiled_program = lift[memo_list] compiled_program in
         let box lifted_inputs = lift[string_list] (program[0]) in
         box (args: int_list |- 
-            let store: env = (zip with ()) (lifted_inputs with ()) args in
+            let update: env -> (string * int) -> env = update with () in
+            let lookup: env -> string -> int = lookup with () in
+            let list_find_m: memo_list -> int -> [update: env -> (string * int) -> env, lookup: env -> string -> int, store: env](result) = 
+                list_find_m with ()
+            in
+            let zip: string_list -> int_list -> env = zip with () in
+            let store: env = (zip) (lifted_inputs with ()) args in
             let compiled_program: memo_list = (lifted_compiled_program with ()) in
             let rec execute: int -> env -> int = fun (l: int) -> fun (store: env) -> 
-                let box current_exec = (list_find_m with ()) compiled_program l in
-                match (current_exec with (store)) with
+                let box current_exec = (list_find_m) compiled_program l in
+                match (current_exec with (update, lookup, store)) with
                 | Res (n) -> n
                 | JumpTo (n, new_store) -> execute n (new_store)
             in execute 1 store
@@ -326,9 +334,9 @@ let p2: (string_list * command_list) = (
 );;
 
 (*
-let compiled_list: memo_list = compile_to_list 1 (fib_program[1]);;
+let compiled_list: memo_list = compile_to_list 1 fib_program[1];;
 
-let box u = from_memo_box in (u with ()) compiled_list 1 (zip (fib_program[0]) a);;
+let box u = from_memo_box in (u with ()) compiled_list 1 (zip fib_program[0] a);;
 *)
 
 let compiled:[args: int_list]int = interpret_staged fib_program;;

@@ -1,0 +1,25 @@
+(*Failed attempt following https://okmij.org/ftp/tagless-final/JFP.pdf*)
+
+let int_: int -> []int = fun (x: int) -> lift[int] x;;
+
+let int_: int -> ['a; cont: [x: int |- 'a] |- 'a] = fun (x: int) -> 
+    let box x = lift[int] x in box ('a; cont: [x: int |- 'a] |- let box cont = cont in cont with (x with ()));;
+
+let bool_: bool -> []bool = fun(b: bool) -> lift[bool] b;;
+let lam: forall 'a. forall 'b. [x: 'a]'b -> []('a -> 'b) = 
+    'a. 'b.
+    fun (f: [x: 'a]'b) ->
+        let box f = f in
+        box (|- fun (x: 'a) -> f with (x));;
+let app: forall 'a. forall 'b. []('a -> 'b) -> []'a -> []'b =
+    'a. 'b. 
+    fun (f: []('a -> 'b)) -> fun (x: []'a) ->
+        let box f = f in
+        let box x = x in
+        box (|- (f with ()) (x with ()));;
+
+let fix: forall 'a. forall 'b. [](('a -> 'b) -> ('a -> 'b)) -> []('a -> 'b) = 
+    'a. 'b. fun (f: [](('a -> 'b) -> ('a -> 'b))) ->
+        let box f = f in
+        box (|- let rec self: ('a -> 'b) = fun (n: 'a) -> (f with ()) self n in self);;
+

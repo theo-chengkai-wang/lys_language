@@ -1,3 +1,2 @@
 let m5: forall '_a. []'_a -> '_a = '_a.
-    fun (x: []'_a) -> let box u = x in u with ()
-in ();;
+    fun (x: []'_a) -> let box u = x in u with ();;

@@ -3,7 +3,4 @@ let m8: forall '_a. forall '_b. forall '_c. [x: '_a]('_a -> '_b) -> [y: '_b]'_c 
         fun (x2: [y: '_b]'_c) -> 
             let box u = x1 in 
                 let box v = x2 in
-                    box (z: '_a |- v with ((u with (z)) z))
-in ()
-;;
-                                    
+                    box (z: '_a |- v with ((u with (z)) z));;

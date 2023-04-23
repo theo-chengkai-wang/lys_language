@@ -6,7 +6,7 @@ open Lys_benchmarks
 let benchmarks : Bench_defns.Current.Benchmark_config.base_benchmark_record list
     =
   [
-    {
+    (* {
       base_program_loc = "test/example_programs/simple_programs/convolution.lys";
       run = 1000;
       program =
@@ -38,7 +38,7 @@ let benchmarks : Bench_defns.Current.Benchmark_config.base_benchmark_record list
                          "Cons" "Nil";
                    };
                  ] ));
-    };
+    }; *)
     (* {
          base_program_loc = "test/example_programs/simple_programs/hello_world.lys";
          run = 10000;
@@ -117,9 +117,9 @@ let benchmarks : Bench_defns.Current.Benchmark_config.base_benchmark_record list
                 ({ name = Some (Int.to_string i); body = regexp }, mapped_strs))
               regexps);
        }; *)
-    (* {
-         base_program_loc = "test/example_programs/while_language/while.lys";
-         run = 200;
+    {
+         base_program_loc = "test/example_programs/while_language/while_better.lys";
+         run = 100;
          name = "while";
          program =
            {
@@ -131,17 +131,17 @@ let benchmarks : Bench_defns.Current.Benchmark_config.base_benchmark_record list
          arguments =
            [
              ( { name = Some "fib_program"; body = "fib_program" },
-               [ 1; 2; 5; 10; 20; 50; 100 ]
+               [ (*1; 2; 5; 10; 20; 50; 100;*) 200; 500 ]
                |> List.map ~f:(fun i ->
                       {
-                        name = Some (Int.to_string i);
+                        Bench_defns.Current.Benchmark_config.name = Some (Int.to_string i);
                         body =
                           Benchmark_utils.print_int_list [ i ] "Cons_i" "Nil_i";
                       }) );
            ];
-       }; *)
+       };
     (* {
-         base_program_loc = "test/example_programs/flowchart/flowchart.lys";
+         base_program_loc = "test/example_programs/flowchart/flowchart_better.lys";
          run = 100;
          name = "flowchart";
          program =
@@ -157,7 +157,7 @@ let benchmarks : Bench_defns.Current.Benchmark_config.base_benchmark_record list
                [ 1; 2; 5; 10; 20; 50; 100 ]
                |> List.map ~f:(fun i ->
                       {
-                        name = Some (Int.to_string i);
+                        Bench_defns.Current.Benchmark_config.name = Some (Int.to_string i);
                         body =
                           Benchmark_utils.print_int_list [ i ] "Cons_i" "Nil_i";
                       }) );
