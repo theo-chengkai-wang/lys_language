@@ -1,31 +1,9 @@
-let rec lift_int_inefficient: int -> []int = fun (n: int) ->
-    if n < 0 then lift_int (-n)
-    else if n = 0 then box (|- 0)
-    else let box lifted = lift_int_inefficient (n-1) in
-    box (|- 1 + lifted with ())
-
-let rec lift_int_efficient: int -> []int = fun (n: int) ->
-    if n < 0 then lift_int (-n)
-    else if n = 0 then box (|- 0)
-    else if n = 1 then box (|- 1)
-    else
-        if (n % 2 = 0) then
-            let box u = lift_int_efficient (n/2) in
-            box (|- 2 * (u with ()))
-        else
-            let box u = lift_int_efficient ((n-1)/2) in
-            box (|- 2 * (u with ()) + 1);;
-
-lift_int (39);;
-
-datatype intlist = Nil | Cons of (int * intlist);;
-
-let rec lift_intlist: intlist -> []intlist = fun (xs: intlist) ->
-    match xs with
-    | Nil -> box (|- Nil)
-    | Cons (x, xs) -> 
-        let box lifted_x = lift_int x in
-        let box lifted_xs = lift_intlist xs in
-        box (|- Cons (lifted_x with (), lifted_xs with ()));;
-
-lift_intlist (Cons (1, Cons (2, Nil)));;
+let rec (pow: int -> [x:int]int) = fun (n:int) -> 
+if n = 0 then box (x:int |- 1)
+else 
+    let box u = pow (n-1) in 
+        box (x:int |- 
+            x * (u with (x))
+        )
+in
+pow 2;;

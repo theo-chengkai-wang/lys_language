@@ -131,7 +131,7 @@ let benchmarks : Bench_defns.Current.Benchmark_config.base_benchmark_record list
          arguments =
            [
              ( { name = Some "fib_program"; body = "fib_program" },
-               [ (*1; 2; 5; 10; 20; 50; 100;*) 200; 500 ]
+               [ 1; 2; 5; 10; 20; 50; 100; (*200; 500*) ]
                |> List.map ~f:(fun i ->
                       {
                         Bench_defns.Current.Benchmark_config.name = Some (Int.to_string i);
@@ -140,7 +140,7 @@ let benchmarks : Bench_defns.Current.Benchmark_config.base_benchmark_record list
                       }) );
            ];
        };
-    (* {
+    {
          base_program_loc = "test/example_programs/flowchart/flowchart_better.lys";
          run = 100;
          name = "flowchart";
@@ -162,7 +162,7 @@ let benchmarks : Bench_defns.Current.Benchmark_config.base_benchmark_record list
                           Benchmark_utils.print_int_list [ i ] "Cons_i" "Nil_i";
                       }) );
            ];
-       }; *)
+       };
   ]
 
 let benchmarks2 :
@@ -401,11 +401,11 @@ let (additional_benchmarks2 :
         List.map
           [
             (* (2, [ 1; 2; 4; 8; 16; 32; 64; 128; 256; 512 ]);
-               (4, [ 1; 2; 4; 8; 16; 32; 64; 128; 256; 512 ]);
-               (8, [ 1; 2; 4; 8; 16; 32; 64; 128; 256; 512 ]); *)
+            (4, [ 1; 2; 4; 8; 16; 32; 64; 128; 256; 512 ]);
+            (8, [ 1; 2; 4; 8; 16; 32; 64; 128; 256; 512 ]); *)
             (16, [ 1; 2; 4; 8; 16; 32; 64; 128; 256; 512 ]);
             (* (32, [ 1; 2; 4; 8; 16; 32; 64; 128; 256; 512 ]);
-               (64, [ 1; 2; 4; 8; 16; 32; 64; 128; 256; 512 ]); *)
+            (64, [ 1; 2; 4; 8; 16; 32; 64; 128; 256; 512 ]);  *)
           ]
           ~f:(fun (exponent, length_list) ->
             List.map length_list ~f:(fun length ->
@@ -487,9 +487,10 @@ let () =
     (fun filename_opt () ->
       let bench =
         (* Bench_cb.compile_bench benchmarks2 *)
-        Bench_cb.compile_bench benchmarks
         (* Bench_cb.compile_bench benchmarks *)
-        (* @ Bench_cb.compile_bench_legacy additional_benchmarks2 *)
+        (* Bench_cb.compile_bench benchmarks *)
+        []
+        @ Bench_cb.compile_bench_legacy additional_benchmarks2
       in
       match filename_opt with
       | None ->

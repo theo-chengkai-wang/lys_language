@@ -228,9 +228,7 @@ let run_bench_exn
     (compiled_tests :
       (Bench.Run_config.t * Bench.Analysis_config.t list * Bench.Test.t list)
       list) =
-  (Gc.get ()).minor_heap_size <- 50000000;
   List.map compiled_tests ~f:(fun (rc, acs, tests) ->
-      Gc.full_major ();
       bench_without_display_or_error ~run_config:rc ~analysis_configs:acs tests
       |> ok_exn)
   |> List.concat |> List.rev

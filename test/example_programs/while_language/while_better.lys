@@ -276,3 +276,13 @@ let compiled: [args: int_list]int_list = interpret_staged fib_program;;
 let box u = compiled in u with (args);;
 
 interpret fib_program args;;
+
+let example_program: (string_list * string_list * com) = 
+(
+    Cons_s ("i", Nil_s),
+    Cons_s ("i", Nil_s),
+    Seq (Assign ("j", Int (1)), 
+        Assign ("i", Add (Var ("j"), Var ("i"))))
+);;
+
+interpret_staged example_program;;

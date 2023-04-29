@@ -2,4 +2,5 @@
  (name lys_typing)
  (libraries core lys_ast lys_utils lys_substitutions)
  (preprocess
-  (pps ppx_deriving.show ppx_deriving.ord ppx_sexp_conv ppx_compare)))
+  (pps ppx_deriving.show ppx_deriving.ord ppx_sexp_conv ppx_compare))
+  (instrumentation (backend bisect_ppx)))
