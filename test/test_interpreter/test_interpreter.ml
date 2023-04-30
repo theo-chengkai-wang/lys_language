@@ -1201,7 +1201,7 @@ let suite =
   "interpreter_suite"
   >::: [
          generate_tests_for_interpreter
-           (Interpreter.SingleStep { show_step_count = false; verbose = false });
+           (Interpreter.SingleStep { show_step_count = false; verbose = false; type_check_each_step=true });
          generate_tests_for_interpreter
            (Interpreter.MultiStep { show_time = false });
        ]

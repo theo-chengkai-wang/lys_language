@@ -24,7 +24,7 @@ let rec perform_run steps_only run_cnt base_program_loc
     (*Step*)
     let top_level_results, _, _ =
       evaluate_from_lexbuf_given_context
-        (Interpreter.SingleStep { show_step_count = true; verbose = false })
+        (Interpreter.SingleStep { show_step_count = true; verbose = false; type_check_each_step = false })
         (Lexing.from_string body) eval_ctx typ_ctx
     in
     let results_step =

@@ -179,7 +179,7 @@ let rec is_valid_type_for_recursion typ =
 let rec type_check_expression meta_ctx ctx
     (type_ctx : Typing_context.TypeConstrContext.t)
     (typevar_ctx : int Typing_context.PolyTypeVarContext.t)
-    ?(current_type_depth = 0) ?(allow_refs=false) expr typ =
+    ?(current_type_depth = 0) ?(allow_refs = false) expr typ =
   let open Or_error.Monad_infix in
   is_valid_type type_ctx typevar_ctx ~current_type_depth typ |> fun or_error ->
   Or_error.tag_arg or_error
@@ -213,7 +213,7 @@ let rec type_check_expression meta_ctx ctx
           Typing_context.MetaTypingContext.t]
 
 and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
-    ?(current_type_depth = 0) ?(allow_refs=false) e =
+    ?(current_type_depth = 0) ?(allow_refs = false) e =
   (* Invariant: type_inference at type_depth d should yield DB indices which correspond to this exact type depth *)
   let open Or_error.Monad_infix in
   match e with
@@ -244,29 +244,32 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
       | Ast.Constant.Unit -> Ok Ast.Typ.TUnit
       | Ast.Constant.Character _ -> Ok Ast.Typ.TChar
       | Ast.Constant.String _ -> Ok Ast.Typ.TString
-      | Ast.Constant.Array arr_cell  ->
+      | Ast.Constant.Array arr_cell ->
           if not allow_refs then
-          error
-            "TypeInferenceError: Can't type check a reference or an array \
-             constant"
-            c [%sexp_of: Ast.Constant.t]
-          else 
+            error
+              "TypeInferenceError: Can't type check a reference or an array \
+               constant"
+              c [%sexp_of: Ast.Constant.t]
+          else
             let open Ast.ArrayCell in
             (* Safe because we disallow empty arrays *)
             type_inference_expression meta_ctx ctx type_ctx typevar_ctx
-            ~current_type_depth ~allow_refs (Ast.Value.to_expr (get arr_cell 0))
-      | Ast.Constant.Reference ref_cell  ->
-        if not allow_refs then
-        error
-          "TypeInferenceError: Can't type check a reference or an array \
-           constant"
-          c [%sexp_of: Ast.Constant.t]
-        else 
-          let open Ast.RefCell in
+              ~current_type_depth ~allow_refs
+              (Ast.Value.to_expr (get arr_cell 0))
+            >>= fun typ -> Ok (Ast.Typ.TArray typ)
+      | Ast.Constant.Reference ref_cell ->
+          if not allow_refs then
+            error
+              "TypeInferenceError: Can't type check a reference or an array \
+               constant"
+              c [%sexp_of: Ast.Constant.t]
+          else
+            let open Ast.RefCell in
             (* Safe because we disallow empty arrays *)
             type_inference_expression meta_ctx ctx type_ctx typevar_ctx
-            ~current_type_depth ~allow_refs (Ast.Value.to_expr (!ref_cell))
-          )
+              ~current_type_depth ~allow_refs
+              (Ast.Value.to_expr !ref_cell)
+            >>= fun typ -> Ok (Ast.Typ.TRef typ))
   | Ast.Expr.UnaryOp (op, expr) -> (
       match op with
       | Ast.UnaryOperator.NEG ->
@@ -1045,8 +1048,8 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
           >>= fun x_typ ->
           (* Check that all other ones are of the same type *)
           List.map xs ~f:(fun x ->
-              type_check_expression meta_ctx ctx type_ctx typevar_ctx ~allow_refs
-                ~current_type_depth x x_typ)
+              type_check_expression meta_ctx ctx type_ctx typevar_ctx
+                ~allow_refs ~current_type_depth x x_typ)
           |> Or_error.combine_errors_unit
           >>= fun () -> Ok (Ast.Typ.TArray x_typ))
   | Ast.Expr.ArrayAssign (arr, index, e) -> (
@@ -1188,7 +1191,8 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
       Ast.Typ.shift_indices e2_typ ~type_depth:1 ~type_offset:(-1)
       >>= fun e2_typ -> Ok e2_typ
 
-let process_top_level meta_ctx ctx type_ctx typevar_ctx ?(allow_refs=false) = function
+let process_top_level meta_ctx ctx type_ctx typevar_ctx ?(allow_refs = false) =
+  function
   | Ast.TopLevelDefn.Definition (iddef, e) ->
       let id, typ = iddef in
       let new_ctx =
@@ -1290,14 +1294,16 @@ let process_top_level meta_ctx ctx type_ctx typevar_ctx ?(allow_refs=false) = fu
           new_type_ctx,
           typevar_ctx )
 
-let rec type_check_program_aux meta_ctx ctx type_ctx typevar_ctx ~allow_refs program =
+let rec type_check_program_aux meta_ctx ctx type_ctx typevar_ctx ~allow_refs
+    program =
   match program with
   | [] -> Ok []
   | top :: tops ->
       let open Or_error.Monad_infix in
       process_top_level meta_ctx ctx type_ctx typevar_ctx ~allow_refs top
       >>= fun (typed_top, new_meta, new_ctx, new_type_ctx, new_typevar_ctx) ->
-      type_check_program_aux new_meta new_ctx new_type_ctx new_typevar_ctx ~allow_refs tops
+      type_check_program_aux new_meta new_ctx new_type_ctx new_typevar_ctx
+        ~allow_refs tops
       >>= fun program_rest -> Ok (typed_top :: program_rest)
 
 let type_check_program
@@ -1305,6 +1311,6 @@ let type_check_program
     ?(obj_ctx = Typing_context.ObjTypingContext.create_empty_context ())
     ?(type_ctx = Typing_context.TypeConstrContext.empty)
     ?(typevar_ctx = Typing_context.PolyTypeVarContext.create_empty_context ())
-    ?(allow_refs = false)
-    program =
-  program |> type_check_program_aux meta_ctx obj_ctx type_ctx typevar_ctx ~allow_refs
+    ?(allow_refs = false) program =
+  program
+  |> type_check_program_aux meta_ctx obj_ctx type_ctx typevar_ctx ~allow_refs
