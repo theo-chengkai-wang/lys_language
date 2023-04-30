@@ -179,7 +179,7 @@ let rec is_valid_type_for_recursion typ =
 let rec type_check_expression meta_ctx ctx
     (type_ctx : Typing_context.TypeConstrContext.t)
     (typevar_ctx : int Typing_context.PolyTypeVarContext.t)
-    ?(current_type_depth = 0) expr typ =
+    ?(current_type_depth = 0) ?(allow_refs=false) expr typ =
   let open Or_error.Monad_infix in
   is_valid_type type_ctx typevar_ctx ~current_type_depth typ |> fun or_error ->
   Or_error.tag_arg or_error
@@ -187,7 +187,7 @@ let rec type_check_expression meta_ctx ctx
     (typ, current_type_depth) [%sexp_of: Ast.Typ.t * int]
   >>= fun () ->
   type_inference_expression meta_ctx ctx type_ctx typevar_ctx
-    ~current_type_depth expr
+    ~current_type_depth ~allow_refs expr
   >>= fun inferred_typ ->
   (*
      TODO: Dodgy equality check here: what if the DB indices aren't the same?
@@ -199,8 +199,8 @@ let rec type_check_expression meta_ctx ctx
          "TypeCheckError: Inferred type\n\
          \          %s\n\
          \ Not Equal to checked type\n\
-         \         %s. 
-         (expr, inferred_typ, typ, ctx, meta_ctx)"
+         \         %s. \n\
+         \         (expr, inferred_typ, typ, ctx, meta_ctx)"
          (Ast.Typ.pretty_print inferred_typ)
          (Ast.Typ.pretty_print typ))
       (expr, inferred_typ, typ, ctx, meta_ctx)
@@ -213,7 +213,7 @@ let rec type_check_expression meta_ctx ctx
           Typing_context.MetaTypingContext.t]
 
 and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
-    ?(current_type_depth = 0) e =
+    ?(current_type_depth = 0) ?(allow_refs=false) e =
   (* Invariant: type_inference at type_depth d should yield DB indices which correspond to this exact type depth *)
   let open Or_error.Monad_infix in
   match e with
@@ -244,24 +244,42 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
       | Ast.Constant.Unit -> Ok Ast.Typ.TUnit
       | Ast.Constant.Character _ -> Ok Ast.Typ.TChar
       | Ast.Constant.String _ -> Ok Ast.Typ.TString
-      | _ ->
+      | Ast.Constant.Array arr_cell  ->
+          if not allow_refs then
           error
             "TypeInferenceError: Can't type check a reference or an array \
              constant"
-            c [%sexp_of: Ast.Constant.t])
+            c [%sexp_of: Ast.Constant.t]
+          else 
+            let open Ast.ArrayCell in
+            (* Safe because we disallow empty arrays *)
+            type_inference_expression meta_ctx ctx type_ctx typevar_ctx
+            ~current_type_depth ~allow_refs (Ast.Value.to_expr (get arr_cell 0))
+      | Ast.Constant.Reference ref_cell  ->
+        if not allow_refs then
+        error
+          "TypeInferenceError: Can't type check a reference or an array \
+           constant"
+          c [%sexp_of: Ast.Constant.t]
+        else 
+          let open Ast.RefCell in
+            (* Safe because we disallow empty arrays *)
+            type_inference_expression meta_ctx ctx type_ctx typevar_ctx
+            ~current_type_depth ~allow_refs (Ast.Value.to_expr (!ref_cell))
+          )
   | Ast.Expr.UnaryOp (op, expr) -> (
       match op with
       | Ast.UnaryOperator.NEG ->
-          type_check_expression meta_ctx ctx type_ctx typevar_ctx
+          type_check_expression meta_ctx ctx type_ctx typevar_ctx ~allow_refs
             ~current_type_depth expr Ast.Typ.TInt
           >>= fun () -> Ok Ast.Typ.TInt
       | Ast.UnaryOperator.NOT ->
           type_check_expression meta_ctx ctx type_ctx typevar_ctx
-            ~current_type_depth expr Ast.Typ.TBool
+            ~current_type_depth ~allow_refs expr Ast.Typ.TBool
           >>= fun () -> Ok Ast.Typ.TBool
       | Ast.UnaryOperator.DEREF -> (
           type_inference_expression meta_ctx ctx type_ctx typevar_ctx
-            ~current_type_depth expr
+            ~current_type_depth ~allow_refs expr
           >>= fun typ ->
           match typ with
           | Ast.Typ.TRef typ -> Ok typ
@@ -272,7 +290,7 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
                 (expr, typ) [%sexp_of: Ast.Expr.t * Ast.Typ.t])
       | Ast.UnaryOperator.ARRAY_LEN -> (
           type_inference_expression meta_ctx ctx type_ctx typevar_ctx
-            ~current_type_depth expr
+            ~current_type_depth ~allow_refs expr
           >>= function
           | Ast.Typ.TArray _ -> Ok Ast.Typ.TInt
           | typ ->
@@ -283,10 +301,10 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
   | Ast.Expr.BinaryOp (op, expr, expr2) -> (
       let check_both typ_to_check ok_typ =
         type_check_expression meta_ctx ctx type_ctx typevar_ctx
-          ~current_type_depth expr typ_to_check
+          ~current_type_depth ~allow_refs expr typ_to_check
         >>= fun () ->
         type_check_expression meta_ctx ctx type_ctx typevar_ctx
-          ~current_type_depth expr2 typ_to_check
+          ~current_type_depth ~allow_refs expr2 typ_to_check
         >>= fun () -> Ok ok_typ
       in
       match op with
@@ -302,7 +320,7 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
       *)
           (*First check if non functional type: only allow equality between functional types*)
           type_inference_expression meta_ctx ctx type_ctx typevar_ctx
-            ~current_type_depth expr
+            ~current_type_depth ~allow_refs expr
           >>= fun typ ->
           if includes_function_type ~type_ctx typ then
             Or_error.error
@@ -312,7 +330,7 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
           else
             let or_error =
               type_check_expression meta_ctx ctx type_ctx typevar_ctx
-                ~current_type_depth expr2 typ
+                ~current_type_depth ~allow_refs expr2 typ
             in
             Or_error.tag or_error
               ~tag:
@@ -321,11 +339,11 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
             >>= fun _ -> Ok Ast.Typ.TBool
       | Ast.BinaryOperator.NEQ ->
           type_inference_expression meta_ctx ctx type_ctx typevar_ctx
-            ~current_type_depth expr
+            ~current_type_depth ~allow_refs expr
           >>= fun typ ->
           let or_error =
             type_check_expression meta_ctx ctx type_ctx typevar_ctx
-              ~current_type_depth expr2 typ
+              ~current_type_depth ~allow_refs expr2 typ
           in
           Or_error.tag or_error
             ~tag:
@@ -340,28 +358,28 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
       | Ast.BinaryOperator.OR -> check_both Ast.Typ.TBool Ast.Typ.TBool
       | Ast.BinaryOperator.CHARSTRINGCONCAT ->
           type_check_expression meta_ctx ctx type_ctx typevar_ctx
-            ~current_type_depth expr Ast.Typ.TChar
+            ~current_type_depth ~allow_refs expr Ast.Typ.TChar
           >>= fun () ->
           type_check_expression meta_ctx ctx type_ctx typevar_ctx
-            ~current_type_depth expr2 Ast.Typ.TString
+            ~current_type_depth ~allow_refs expr2 Ast.Typ.TString
           >>= fun () -> Ok Ast.Typ.TString
       | Ast.BinaryOperator.STRINGCONCAT ->
           check_both Ast.Typ.TString Ast.Typ.TString
       | Ast.BinaryOperator.SEQ ->
           type_check_expression meta_ctx ctx type_ctx typevar_ctx
-            ~current_type_depth expr Ast.Typ.TUnit
+            ~current_type_depth ~allow_refs expr Ast.Typ.TUnit
           >>= fun () ->
           type_inference_expression meta_ctx ctx type_ctx typevar_ctx
-            ~current_type_depth expr2
+            ~current_type_depth ~allow_refs expr2
       | Ast.BinaryOperator.ASSIGN -> (
           type_inference_expression meta_ctx ctx type_ctx typevar_ctx
-            ~current_type_depth expr
+            ~current_type_depth ~allow_refs expr
           >>= fun t1 ->
           match t1 with
           | Ast.Typ.TRef typ ->
               (* Now check typ of second value *)
               ( type_check_expression meta_ctx ctx type_ctx typevar_ctx
-                  ~current_type_depth expr2 typ
+                  ~current_type_depth ~allow_refs expr2 typ
               >>= fun () -> Ok Ast.Typ.TUnit )
               |> fun or_error ->
               Or_error.tag_arg or_error
@@ -375,11 +393,11 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
                 (expr, t1) [%sexp_of: Ast.Expr.t * Ast.Typ.t])
       | Ast.BinaryOperator.ARRAY_INDEX -> (
           type_inference_expression meta_ctx ctx type_ctx typevar_ctx
-            ~current_type_depth expr
+            ~current_type_depth ~allow_refs expr
           >>= function
           | Ast.Typ.TArray val_typ ->
               type_check_expression meta_ctx ctx type_ctx typevar_ctx
-                ~current_type_depth expr2 Ast.Typ.TInt
+                ~current_type_depth ~allow_refs expr2 Ast.Typ.TInt
               |> Or_error.tag
                    ~tag:"TypeInferenceError: array index not of int type"
               >>= fun () -> Ok val_typ
@@ -391,7 +409,7 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
       List.map exprs
         ~f:
           (type_inference_expression meta_ctx ctx type_ctx typevar_ctx
-             ~current_type_depth)
+             ~current_type_depth ~allow_refs)
       |> Or_error.combine_errors
       >>= fun typs -> Ok (Ast.Typ.TProd typs)
   (* | Ast.Expr.Fst expr -> (
@@ -412,7 +430,7 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
                expr [%sexp_of: Ast.Expr.t]) *)
   | Ast.Expr.Nth (expr, i) -> (
       type_inference_expression meta_ctx ctx type_ctx typevar_ctx
-        ~current_type_depth expr
+        ~current_type_depth ~allow_refs expr
       >>= fun typ ->
       (match typ with
       | Ast.Typ.TProd typs -> Ok typs
@@ -434,7 +452,7 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
   | Ast.Expr.Left (t1, t2, expr) ->
       Or_error.tag
         (type_check_expression meta_ctx ctx type_ctx typevar_ctx
-           ~current_type_depth expr t1)
+           ~current_type_depth ~allow_refs expr t1)
         ~tag:
           ("TypeInferenceError: the given expression must be of the left type \
             of the given sum type: " ^ Ast.Typ.show t1)
@@ -442,14 +460,14 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
   | Ast.Expr.Right (t1, t2, expr) ->
       Or_error.tag
         (type_check_expression meta_ctx ctx type_ctx typevar_ctx
-           ~current_type_depth expr t2)
+           ~current_type_depth ~allow_refs expr t2)
         ~tag:
           ("TypeInferenceError: the given expression must be of of the right \
             type of the given sum type: " ^ Ast.Typ.show t2)
       >>= fun () -> Ok (Ast.Typ.TSum (t1, t2))
   | Ast.Expr.Case (e, iddef1, e1, iddef2, e2) ->
       type_inference_expression meta_ctx ctx type_ctx typevar_ctx
-        ~current_type_depth e
+        ~current_type_depth ~allow_refs e
       >>= fun e_typ ->
       (match e_typ with
       | Ast.Typ.TSum (_, _) -> Ok ()
@@ -463,7 +481,7 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
           (typ1, current_type_depth)
       in
       type_inference_expression meta_ctx new_ctx1 type_ctx typevar_ctx
-        ~current_type_depth e1
+        ~current_type_depth ~allow_refs e1
       >>= fun e1_type ->
       let id2, typ2 = iddef2 in
       let new_ctx2 =
@@ -473,7 +491,7 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
       (*Types should match, or there is a Type mismatch error*)
       let or_error =
         type_check_expression meta_ctx new_ctx2 type_ctx typevar_ctx
-          ~current_type_depth e2 e1_type
+          ~current_type_depth ~allow_refs e2 e1_type
       in
       Or_error.tag or_error
         ~tag:
@@ -486,11 +504,11 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
           (typ, current_type_depth)
       in
       type_inference_expression meta_ctx new_ctx type_ctx typevar_ctx
-        ~current_type_depth e
+        ~current_type_depth ~allow_refs e
       >>= fun e_typ -> Ok (Ast.Typ.TFun (typ, e_typ))
   | Ast.Expr.Application (e1, e2) ->
       type_inference_expression meta_ctx ctx type_ctx typevar_ctx
-        ~current_type_depth e1
+        ~current_type_depth ~allow_refs e1
       >>= fun e1_typ ->
       (match e1_typ with
       | Ast.Typ.TFun (arg_typ, res_typ) -> Ok (arg_typ, res_typ)
@@ -502,27 +520,27 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
       >>= fun (arg_typ, res_typ) ->
       Or_error.tag
         (type_check_expression meta_ctx ctx type_ctx typevar_ctx
-           ~current_type_depth e2 arg_typ)
+           ~current_type_depth ~allow_refs e2 arg_typ)
         ~tag:
           (Printf.sprintf
-             "TypeInferenceError: Type mismatch: expected argument of type 
-             %s."
+             "TypeInferenceError: Type mismatch: expected argument of type \n\
+             \             %s."
              (Ast.Typ.pretty_print arg_typ))
       >>= fun () -> Ok res_typ
   | Ast.Expr.IfThenElse (b, e1, e2) ->
       Or_error.tag
         (type_check_expression meta_ctx ctx type_ctx typevar_ctx
-           ~current_type_depth b Ast.Typ.TBool)
+           ~current_type_depth ~allow_refs b Ast.Typ.TBool)
         ~tag:
           "TypeInferenceError: the predicate of an if-then-else expression \
            must be of boolean type"
       >>= fun () ->
       type_inference_expression meta_ctx ctx type_ctx typevar_ctx
-        ~current_type_depth e1
+        ~current_type_depth ~allow_refs e1
       >>= fun e1_typ ->
       Or_error.tag_arg
         (type_check_expression meta_ctx ctx type_ctx typevar_ctx
-           ~current_type_depth e2 e1_typ)
+           ~current_type_depth ~allow_refs e2 e1_typ)
         "TypeInferenceError: All outcomes of an if-then-else expression must \
          be of the same type."
         (e2, e1_typ) [%sexp_of: Ast.Expr.t * Ast.Typ.t]
@@ -530,12 +548,12 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
   | Ast.Expr.LetBinding ((id, typ), e, e2) ->
       Or_error.tag
         (type_check_expression meta_ctx ctx type_ctx typevar_ctx
-           ~current_type_depth e typ)
+           ~current_type_depth ~allow_refs e typ)
         ~tag:
           (Printf.sprintf
-             "TypeInferenceError: variable %s is declared of type 
-                %s 
-              but bound to an expression of a different type"
+             "TypeInferenceError: variable %s is declared of type \n\
+             \                %s \n\
+             \              but bound to an expression of a different type"
              (Ast.ObjIdentifier.show id)
              (Ast.Typ.pretty_print typ))
       >>= fun () ->
@@ -544,7 +562,7 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
           (typ, current_type_depth)
       in
       type_inference_expression meta_ctx new_ctx type_ctx typevar_ctx
-        ~current_type_depth e2
+        ~current_type_depth ~allow_refs e2
   | Ast.Expr.LetRec ((id, typ), e, e2) ->
       (*We only allow types which are of the form A->B*)
       is_valid_type_for_recursion typ >>= fun () ->
@@ -554,17 +572,17 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
       in
       Or_error.tag
         (type_check_expression meta_ctx new_ctx type_ctx typevar_ctx
-           ~current_type_depth e typ)
+           ~current_type_depth ~allow_refs e typ)
         ~tag:
           (Printf.sprintf
-             "TypeInferenceError: recursive variable %s is declared of type 
-              %s 
-              but bound to an expression of a different type"
+             "TypeInferenceError: recursive variable %s is declared of type \n\
+             \              %s \n\
+             \              but bound to an expression of a different type"
              (Ast.ObjIdentifier.show id)
              (Ast.Typ.pretty_print typ))
       >>= fun () ->
       type_inference_expression meta_ctx new_ctx type_ctx typevar_ctx
-        ~current_type_depth e2
+        ~current_type_depth ~allow_refs e2
   | Ast.Expr.LetRecMutual (idddef_e_list, e2) ->
       (* First get the types *)
       let iddefs, _ = List.unzip idddef_e_list in
@@ -578,14 +596,15 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
       in
       List.map idddef_e_list ~f:(fun ((id, typ), e) ->
           type_check_expression meta_ctx new_ctx type_ctx typevar_ctx
-            ~current_type_depth e typ
+            ~current_type_depth ~allow_refs e typ
           |> Or_error.tag
                ~tag:
                  (Printf.sprintf
                     "TypeInferenceError: recursive variable %s is declared of \
-                     type 
-                     %s 
-                     but bound to an expression of a different type"
+                     type \n\
+                    \                     %s \n\
+                    \                     but bound to an expression of a \
+                     different type"
                     (Ast.ObjIdentifier.show id)
                     (Ast.Typ.pretty_print typ)))
       |> Or_error.combine_errors_unit
@@ -594,7 +613,7 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
              "TypeInferenceError: Type error at mutually recursive declaration"
       >>= fun () ->
       type_inference_expression meta_ctx new_ctx type_ctx typevar_ctx
-        ~current_type_depth e2
+        ~current_type_depth ~allow_refs e2
   | Ast.Expr.Box (box_tvctx, box_context, e) ->
       (if Ast.Context.contains_duplicate_ids box_context then
        error
@@ -623,12 +642,12 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
                (id, (typ, new_type_depth))))
       in
       type_inference_expression meta_ctx new_ctx type_ctx new_typevar_ctx
-        ~current_type_depth:new_type_depth e
+        ~current_type_depth:new_type_depth ~allow_refs e
       >>= fun e_typ -> Ok (Ast.Typ.TBox (box_tvctx, box_context, e_typ))
   | Ast.Expr.LetBox (metaid, e, e2) ->
       ( (*First check that e gives a box*)
         type_inference_expression meta_ctx ctx type_ctx typevar_ctx
-          ~current_type_depth e
+          ~current_type_depth ~allow_refs e
       >>= fun e_typ ->
         match e_typ with
         | Ast.Typ.TBox (box_tvctx, box_context, box_typ) ->
@@ -644,7 +663,7 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
           (box_tvctx, box_context, box_typ, current_type_depth)
       in
       type_inference_expression new_meta_ctx ctx type_ctx typevar_ctx
-        ~current_type_depth e2
+        ~current_type_depth ~allow_refs e2
   | Ast.Expr.Closure (meta_id, typs, exprs) ->
       let meta_var_option =
         Typing_context.MetaTypingContext.get_last_mapping meta_ctx meta_id
@@ -711,7 +730,7 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
                     Substitutions.sim_type_type_substitute typs box_tvctx typ
                     >>= fun typ ->
                     type_check_expression meta_ctx ctx type_ctx typevar_ctx
-                      ~current_type_depth e typ)))
+                      ~current_type_depth ~allow_refs e typ)))
             ~tag:
               "TypeInferenceError: Type mismatch between context and \
                expressions provided to substitute in."
@@ -724,7 +743,7 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
                (List.map zipped_list ~f:(fun ((_, typ), e) ->
                     (* Subsitute type *)
                     type_check_expression meta_ctx ctx type_ctx typevar_ctx
-                      ~current_type_depth e typ)))
+                      ~current_type_depth ~allow_refs e typ)))
             ~tag:
               "TypeInferenceError: Type mismatch between context and \
                expressions provided to substitute in."
@@ -740,7 +759,7 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
       3- check that if we put all the binders in the types required we get what we want
     *)
       type_inference_expression meta_ctx ctx type_ctx typevar_ctx
-        ~current_type_depth e
+        ~current_type_depth ~allow_refs e
       >>= fun inferred_typ ->
       (* print_endline (Ast.Typ.pretty_print inferred_typ); *)
       (match inferred_typ with
@@ -764,17 +783,17 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
                            (id, (typ, current_type_depth))))
                   in
                   type_inference_expression meta_ctx new_ctx type_ctx
-                    typevar_ctx ~current_type_depth expr
+                    typevar_ctx ~current_type_depth ~allow_refs expr
               | Ast.Pattern.Id id ->
                   let new_ctx =
                     Typing_context.ObjTypingContext.add_mapping ctx id
                       (inferred_typ, current_type_depth)
                   in
                   type_inference_expression meta_ctx new_ctx type_ctx
-                    typevar_ctx ~current_type_depth expr
+                    typevar_ctx ~current_type_depth ~allow_refs expr
               | Ast.Pattern.Wildcard ->
                   type_inference_expression meta_ctx ctx type_ctx typevar_ctx
-                    ~current_type_depth expr
+                    ~current_type_depth ~allow_refs expr
               | _ ->
                   Or_error.error
                     "TypeInferenceError: Mismatch between type and pattern."
@@ -790,24 +809,24 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
                       (t1, current_type_depth)
                   in
                   type_inference_expression meta_ctx new_ctx type_ctx
-                    typevar_ctx ~current_type_depth expr
+                    typevar_ctx ~current_type_depth ~allow_refs expr
               | Ast.Pattern.Inr id ->
                   let new_ctx =
                     Typing_context.ObjTypingContext.add_mapping ctx id
                       (t2, current_type_depth)
                   in
                   type_inference_expression meta_ctx new_ctx type_ctx
-                    typevar_ctx ~current_type_depth expr
+                    typevar_ctx ~current_type_depth ~allow_refs expr
               | Ast.Pattern.Id id ->
                   let new_ctx =
                     Typing_context.ObjTypingContext.add_mapping ctx id
                       (inferred_typ, current_type_depth)
                   in
                   type_inference_expression meta_ctx new_ctx type_ctx
-                    typevar_ctx ~current_type_depth expr
+                    typevar_ctx ~current_type_depth ~allow_refs expr
               | Ast.Pattern.Wildcard ->
                   type_inference_expression meta_ctx ctx type_ctx typevar_ctx
-                    ~current_type_depth expr
+                    ~current_type_depth ~allow_refs expr
               | _ ->
                   Or_error.error
                     "TypeInferenceError: Mismatch between type and pattern."
@@ -823,10 +842,10 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
                       (inferred_typ, current_type_depth)
                   in
                   type_inference_expression meta_ctx new_ctx type_ctx
-                    typevar_ctx ~current_type_depth expr
+                    typevar_ctx ~current_type_depth ~allow_refs expr
               | Ast.Pattern.Wildcard ->
                   type_inference_expression meta_ctx ctx type_ctx typevar_ctx
-                    ~current_type_depth expr
+                    ~current_type_depth ~allow_refs expr
               | Ast.Pattern.Datatype (constr, id_list) ->
                   (*1- check that constructor is of the type needed*)
                   let constr_record_opt =
@@ -886,7 +905,7 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
                            (id, (typ, current_type_depth))))
                   in
                   type_inference_expression meta_ctx new_ctx type_ctx
-                    typevar_ctx ~current_type_depth expr
+                    typevar_ctx ~current_type_depth ~allow_refs expr
               | _ ->
                   Or_error.error
                     "TypeInferenceError: Mismatch between type and pattern."
@@ -901,13 +920,13 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
                       (inferred_typ, current_type_depth)
                   in
                   type_inference_expression meta_ctx new_ctx type_ctx
-                    typevar_ctx ~current_type_depth expr
+                    typevar_ctx ~current_type_depth ~allow_refs expr
               | Ast.Pattern.Wildcard ->
                   type_inference_expression meta_ctx ctx type_ctx typevar_ctx
-                    ~current_type_depth expr
+                    ~current_type_depth ~allow_refs expr
               | Ast.Pattern.String _ ->
                   type_inference_expression meta_ctx ctx type_ctx typevar_ctx
-                    ~current_type_depth expr
+                    ~current_type_depth ~allow_refs expr
               | Ast.Pattern.ConcatCharString (cid, sid) ->
                   let new_ctx =
                     Typing_context.ObjTypingContext.add_all_mappings ctx
@@ -917,7 +936,7 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
                       ]
                   in
                   type_inference_expression meta_ctx new_ctx type_ctx
-                    ~current_type_depth typevar_ctx expr
+                    ~current_type_depth ~allow_refs typevar_ctx expr
               | _ ->
                   Or_error.error
                     "TypeInferenceError: Mismatch between type and pattern."
@@ -965,7 +984,7 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
               >>= fun t ->
               (* Defined, so check arguments *)
               type_check_expression meta_ctx ctx type_ctx typevar_ctx
-                ~current_type_depth e t
+                ~current_type_depth ~allow_refs e t
               |> Or_error.tag
                    ~tag:
                      (Printf.sprintf
@@ -994,24 +1013,24 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
           typ [%sexp_of: Ast.Typ.t]
       else
         type_check_expression meta_ctx ctx type_ctx typevar_ctx
-          ~current_type_depth expr typ
+          ~current_type_depth ~allow_refs expr typ
         >>= fun () -> Ok (Ast.Typ.TBox ([], [], typ))
   | Ast.Expr.EValue v ->
       type_inference_expression meta_ctx ctx type_ctx typevar_ctx
-        ~current_type_depth (Ast.Value.to_expr v)
+        ~current_type_depth ~allow_refs (Ast.Value.to_expr v)
   | Ast.Expr.Ref expr ->
       type_inference_expression meta_ctx ctx type_ctx typevar_ctx
-        ~current_type_depth expr
+        ~current_type_depth ~allow_refs expr
       >>= fun typ -> Ok (Ast.Typ.TRef typ)
   | Ast.Expr.While (p, e) ->
       type_check_expression meta_ctx ctx type_ctx typevar_ctx
-        ~current_type_depth p Ast.Typ.TBool
+        ~current_type_depth ~allow_refs p Ast.Typ.TBool
       |> Or_error.tag
            ~tag:
              "TypeInferenceError: Expected bool type for while loop predicate."
       >>= fun () ->
       type_check_expression meta_ctx ctx type_ctx typevar_ctx
-        ~current_type_depth e Ast.Typ.TUnit
+        ~current_type_depth ~allow_refs e Ast.Typ.TUnit
       |> Or_error.tag
            ~tag:"TypeInferenceError: Expected unit type body for while loops"
       >>= fun () -> Ok Ast.Typ.TUnit
@@ -1022,21 +1041,21 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
             (Ast.Expr.Array es) [%sexp_of: Ast.Expr.t]
       | x :: xs ->
           type_inference_expression meta_ctx ctx type_ctx typevar_ctx
-            ~current_type_depth x
+            ~current_type_depth ~allow_refs x
           >>= fun x_typ ->
           (* Check that all other ones are of the same type *)
           List.map xs ~f:(fun x ->
-              type_check_expression meta_ctx ctx type_ctx typevar_ctx
+              type_check_expression meta_ctx ctx type_ctx typevar_ctx ~allow_refs
                 ~current_type_depth x x_typ)
           |> Or_error.combine_errors_unit
           >>= fun () -> Ok (Ast.Typ.TArray x_typ))
   | Ast.Expr.ArrayAssign (arr, index, e) -> (
       type_inference_expression meta_ctx ctx type_ctx typevar_ctx
-        ~current_type_depth arr
+        ~current_type_depth ~allow_refs arr
       >>= function
       | Ast.Typ.TArray val_typ ->
           type_check_expression meta_ctx ctx type_ctx typevar_ctx
-            ~current_type_depth index Ast.Typ.TInt
+            ~current_type_depth ~allow_refs index Ast.Typ.TInt
           |> fun or_error ->
           Or_error.tag_arg or_error
             "TypeInferenceError: At Array Assignment: index not of type int \
@@ -1044,7 +1063,7 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
             index [%sexp_of: Ast.Expr.t]
           >>= fun () ->
           type_check_expression meta_ctx ctx type_ctx typevar_ctx
-            ~current_type_depth e val_typ
+            ~current_type_depth e val_typ ~allow_refs
           |> fun or_error ->
           Or_error.tag_arg or_error
             "TypeInferenceError: At Array Assignment: type mismatch between \
@@ -1062,11 +1081,11 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
           current_type_depth
       in
       type_inference_expression meta_ctx ctx type_ctx new_typevar_ctx
-        ~current_type_depth:(current_type_depth + 1) e
+        ~current_type_depth:(current_type_depth + 1) ~allow_refs e
       >>= fun typ -> Ok (Ast.Typ.TForall (v, typ))
   | Ast.Expr.TypeApply (e, t) -> (
       type_inference_expression meta_ctx ctx type_ctx typevar_ctx
-        ~current_type_depth e
+        ~current_type_depth ~allow_refs e
       >>= fun e_typ ->
       (* Check is right type (big lambda) *)
       match e_typ with
@@ -1093,14 +1112,14 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
               type in the interface"
       >>= fun e_typ ->
       type_check_expression meta_ctx ctx type_ctx typevar_ctx
-        ~current_type_depth e e_typ
+        ~current_type_depth ~allow_refs e e_typ
       |> Or_error.tag
            ~tag:
              "TypeInferenceError: at Pack, mismatch between interface type and \
               implementation type."
       >>= fun () -> Ok (Ast.Typ.TExists (i_tv, i_typ))
   | Ast.Expr.LetPack (tv, oid, e1, e2) ->
-      type_inference_expression meta_ctx ctx type_ctx typevar_ctx
+      type_inference_expression meta_ctx ctx type_ctx typevar_ctx ~allow_refs
         ~current_type_depth e1
       >>= fun e1_typ ->
       (* print_endline (Ast.Typ.pretty_print e1_typ); *)
@@ -1140,7 +1159,7 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
         (* This new type depends on the typevar declaration for `tv` *)
       in
       type_inference_expression meta_ctx new_obj_ctx type_ctx new_typevar_ctx
-        ~current_type_depth:new_type_depth e2
+        ~current_type_depth:new_type_depth ~allow_refs e2
       |> fun or_error ->
       Or_error.tag_arg or_error
         "TypeInferenceError: at let pack, error at infering the body \
@@ -1169,7 +1188,7 @@ and type_inference_expression meta_ctx ctx type_ctx typevar_ctx
       Ast.Typ.shift_indices e2_typ ~type_depth:1 ~type_offset:(-1)
       >>= fun e2_typ -> Ok e2_typ
 
-let process_top_level meta_ctx ctx type_ctx typevar_ctx = function
+let process_top_level meta_ctx ctx type_ctx typevar_ctx ?(allow_refs=false) = function
   | Ast.TopLevelDefn.Definition (iddef, e) ->
       let id, typ = iddef in
       let new_ctx =
@@ -1177,7 +1196,7 @@ let process_top_level meta_ctx ctx type_ctx typevar_ctx = function
       in
       (* 0 not because it is right, but because the type at the top level must be closed, so it doesn't matter which level we choose. *)
       let open Or_error.Monad_infix in
-      type_check_expression meta_ctx ctx type_ctx typevar_ctx
+      type_check_expression meta_ctx ctx type_ctx typevar_ctx ~allow_refs
         ~current_type_depth:0 e typ
       >>= fun _ ->
       Ok
@@ -1188,7 +1207,7 @@ let process_top_level meta_ctx ctx type_ctx typevar_ctx = function
           typevar_ctx )
   | Ast.TopLevelDefn.RecursiveDefinition (iddef, e) ->
       let open Or_error.Monad_infix in
-      type_check_expression meta_ctx ctx type_ctx typevar_ctx
+      type_check_expression meta_ctx ctx type_ctx typevar_ctx ~allow_refs
         ~current_type_depth:0
         (Ast.Expr.LetRec (iddef, e, Ast.Expr.Constant Ast.Constant.Unit))
         Ast.Typ.TUnit
@@ -1208,7 +1227,7 @@ let process_top_level meta_ctx ctx type_ctx typevar_ctx = function
   | Ast.TopLevelDefn.MutualRecursiveDefinition iddef_e_list ->
       let open Or_error.Monad_infix in
       type_check_expression meta_ctx ctx type_ctx typevar_ctx
-        ~current_type_depth:0
+        ~current_type_depth:0 ~allow_refs
         (Ast.Expr.LetRecMutual
            (iddef_e_list, Ast.Expr.Constant Ast.Constant.Unit))
         Ast.Typ.TUnit
@@ -1248,7 +1267,7 @@ let process_top_level meta_ctx ctx type_ctx typevar_ctx = function
   | Ast.TopLevelDefn.Expression e ->
       let open Or_error.Monad_infix in
       type_inference_expression meta_ctx ctx type_ctx typevar_ctx
-        ~current_type_depth:0 e
+        ~current_type_depth:0 ~allow_refs e
       >>= fun typ ->
       Ok
         ( Ast.TypedTopLevelDefn.Expression (typ, e),
@@ -1271,14 +1290,14 @@ let process_top_level meta_ctx ctx type_ctx typevar_ctx = function
           new_type_ctx,
           typevar_ctx )
 
-let rec type_check_program_aux meta_ctx ctx type_ctx typevar_ctx program =
+let rec type_check_program_aux meta_ctx ctx type_ctx typevar_ctx ~allow_refs program =
   match program with
   | [] -> Ok []
   | top :: tops ->
       let open Or_error.Monad_infix in
-      process_top_level meta_ctx ctx type_ctx typevar_ctx top
+      process_top_level meta_ctx ctx type_ctx typevar_ctx ~allow_refs top
       >>= fun (typed_top, new_meta, new_ctx, new_type_ctx, new_typevar_ctx) ->
-      type_check_program_aux new_meta new_ctx new_type_ctx new_typevar_ctx tops
+      type_check_program_aux new_meta new_ctx new_type_ctx new_typevar_ctx ~allow_refs tops
       >>= fun program_rest -> Ok (typed_top :: program_rest)
 
 let type_check_program
@@ -1286,5 +1305,6 @@ let type_check_program
     ?(obj_ctx = Typing_context.ObjTypingContext.create_empty_context ())
     ?(type_ctx = Typing_context.TypeConstrContext.empty)
     ?(typevar_ctx = Typing_context.PolyTypeVarContext.create_empty_context ())
+    ?(allow_refs = false)
     program =
-  program |> type_check_program_aux meta_ctx obj_ctx type_ctx typevar_ctx
+  program |> type_check_program_aux meta_ctx obj_ctx type_ctx typevar_ctx ~allow_refs
