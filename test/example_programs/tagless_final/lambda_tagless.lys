@@ -1,0 +1,49 @@
+datatype ('a, 'h) repr = Ctx of [h: 'h |- 'a];;
+
+let integer: forall 'h. int -> (int, 'h) repr = 
+'h. fun (n: int) ->
+    let box u = lift[int] n in
+    Ctx[int, 'h] (box (h: 'h |- u with ()));;
+
+let add: forall 'h. (int, 'h) repr -> (int, 'h) repr -> (int, 'h) repr = 
+    'h.
+    fun (i1: (int, 'h) repr) -> fun (i2: (int, 'h) repr) ->
+    match i1 with
+    | Ctx (i1) ->
+    match i2 with
+    | Ctx (i2) -> 
+    let box u = i1 in
+    let box v = i2 in
+    Ctx[int, 'h] (box (h: 'h |- u with (h) + v with (h)));;
+
+let lam: forall 'a. forall 'b. forall 'h. ('b, ('a * 'h)) repr -> ('a -> 'b, 'h) repr = 
+    'a. 'b. 'h. fun (b: ('b, ('a * 'h)) repr) -> 
+    match b with
+    | Ctx (b) ->
+    let box u = b in
+    Ctx['a -> 'b, 'h] (box (h: 'h |- fun (x: 'a) -> u with ((x, h))));;
+
+let app: forall 'a. forall 'b. forall 'h. ('a -> 'b, 'h) repr -> ('a, 'h) repr -> ('b, 'h) repr
+= 'a. 'b. 'h. fun (f: ('a -> 'b, 'h) repr) -> fun (x: ('a, 'h) repr) -> 
+    match f with
+    | Ctx (f) ->
+    match x with 
+    | Ctx (x) -> 
+    let box ff = f in
+    let box xx = x in
+    Ctx['b, 'h] (box (h: 'h |- (ff with (h)) (xx with (h))));;
+
+let z: forall 'a. forall 'h. ('a, ('a * 'h)) repr
+    = 'a. 'h. Ctx['a, ('a * 'h)] (box (h: ('a * 'h) |- match h with (a, h) -> a));;
+
+let s: forall 'a. forall 'b. forall 'h. ('a, 'h) repr -> ('a, ('b * 'h)) repr
+    = 'a. 'b. 'h. 
+    fun (x: ('a, 'h) repr) ->
+        match x with
+        | Ctx (x) ->
+        let box u = x in
+        Ctx['a, ('b * 'h)] (box (h: ('b * 'h) |- match h with (b, h) -> u with (h)));;
+
+('h. add['h] (integer['h] 1) (integer['h] 2))[unit];;
+
+('h. lam[int][int]['h] (add[(int * 'h)] (z[int][('h)]) (z[int][('h)])))[unit];;
