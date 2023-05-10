@@ -5,7 +5,7 @@ open Interpreter_common
 type t =
   | MultiStep of { show_time : bool }
   (*Show Time and Show Steps*)
-  | SingleStep of { show_step_count : bool; verbose : bool }
+  | SingleStep of { show_step_count : bool; verbose : bool; type_check_each_step: bool }
 (*Show Steps and Verbose*)
 [@@deriving show, sexp]
 
@@ -14,9 +14,10 @@ let arg_type =
       match s with
       | "m" -> MultiStep { show_time = false }
       | "mt" -> MultiStep { show_time = true }
-      | "s" -> SingleStep { show_step_count = false; verbose = false }
-      | "ss" -> SingleStep { show_step_count = true; verbose = false }
-      | "ssv" -> SingleStep { show_step_count = true; verbose = true }
+      | "s" -> SingleStep { show_step_count = false; verbose = false; type_check_each_step = false }
+      | "ss" -> SingleStep { show_step_count = true; verbose = false; type_check_each_step = false }
+      | "ssv" -> SingleStep { show_step_count = true; verbose = true; type_check_each_step = false }
+      | "sst" -> SingleStep { show_step_count = true; verbose = false; type_check_each_step = true }
       | _ -> failwith "Invalid interpreter choice.")
 
 let rec evaluate_top_level_defns ?(top_level_context = EvaluationContext.empty)
@@ -30,9 +31,9 @@ let rec evaluate_top_level_defns ?(top_level_context = EvaluationContext.empty)
       | MultiStep { show_time } ->
           Multi_step.evaluate_top_level_defn ~top_level_context
             ~type_constr_context ~time_exec:show_time top
-      | SingleStep { show_step_count; verbose } ->
+      | SingleStep { show_step_count; verbose; type_check_each_step } ->
           Single_step.evaluate_top_level_defn top ~top_level_context
-            ~type_constr_context ~show_step_count ~verbose)
+            ~type_constr_context ~show_step_count ~verbose ~type_check_each_step)
       >>= fun (top_level_result, new_context, new_typ_context) ->
       match top_level_result with
       | TopLevelEvaluationResult.Directive (Ast.Directive.Quit, _) ->

@@ -4,6 +4,4 @@ let m4: forall '_a. forall '_b. forall '_c. ([x: '_a]'_b) -> ([y1: '_a][y2: '_b]
         let box u = x1 in 
             let box v = x2 in 
                 box (z: '_a |- let box w = (v with (z)) in 
-                    w with ((u with (z))))
-in ()
-;;
+                    w with ((u with (z))));;

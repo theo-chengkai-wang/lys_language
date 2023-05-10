@@ -1,0 +1,24 @@
+let pow: [](int -> int -> int) = 
+    box (|- 
+        let rec (pow: int -> int -> int) = fun (n:int) -> fun (x:int) -> 
+            if n = 0 then 1
+            else (x * (pow (n-1) x))
+        in pow
+    );;
+
+let rec pow_bad: int -> int -> int = fun (n: int) -> fun (x:int) -> let box u = pow in (u with ()) (n+x) (x);;
+
+let rec pow_bad_staged: int -> [x:int |- int] = 
+    let box pow = pow in
+    fun (n: int) -> 
+        if n = 0 then box (x: int |- (pow with ()) x x)
+        else 
+            let box u = pow_bad_staged (n-1)
+            in box (x: int |- x * u with (x))
+    ;;
+
+let compiled: [x: int |- int] = pow_bad_staged 10;;
+
+let box u = compiled in u with (100);;
+
+pow_bad 10 100;;

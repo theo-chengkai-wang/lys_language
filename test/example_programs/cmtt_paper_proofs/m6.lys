@@ -1,5 +1,3 @@
 let m6: forall '_a. forall '_c. forall '_d. [x:'_c]'_a -> [y1:'_d][y2:'_c]'_a = 
     '_a. '_c. '_d. fun (x1: [x:'_c]'_a) -> 
-        let box u = x1 in box (y1: '_d |- box (y2: '_c |- u with (y2)))
-in ()
-;;
+        let box u = x1 in box (y1: '_d |- box (y2: '_c |- u with (y2)));;

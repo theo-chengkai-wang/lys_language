@@ -4,7 +4,8 @@
  lys_ast
  lys_parsing
  lys_typing
- lys_benchmarks))
+ lys_benchmarks)
+ (instrumentation (backend bisect_ppx)))
 (env
   (dev
     (flags (:standard -warn-error -A))))

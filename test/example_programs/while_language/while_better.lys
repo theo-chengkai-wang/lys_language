@@ -124,91 +124,93 @@ let update_box: [](env -> (string * int) -> env) = box (|-
     in update
 );;
 
-let rec env_to_out_staged: string_list -> [store: env]int_list = 
-let box lookup = lookup_box in
+let rec env_to_out_staged: string_list -> [lookup: env -> string -> int, store: env]int_list = 
 fun (xs: string_list) ->
     match xs with
-    | Nil_s -> box (store: env |- Nil_i)
+    | Nil_s -> box (lookup: env -> string -> int, store: env |- Nil_i)
     | Cons_s (x, xs) -> 
         let box lifted_x = lift[string] x in
         let box env_to_out_partial = env_to_out_staged xs in
-        box (store: env |- 
-            Cons_i ((lookup with ()) store (lifted_x with ()), env_to_out_partial with (store))
+        box (lookup: env -> string -> int, store: env |- 
+            Cons_i ((lookup) store (lifted_x with ()), env_to_out_partial with (lookup, store))
         );;
 
-let rec eval_staged: expr -> [store: env] int = 
-let box lookup = lookup_box in 
+let rec eval_staged: expr -> [lookup: env -> string -> int, store: env] int = 
 fun (e: expr) -> 
     match e with
-    | Int (n) -> let box lifted_n = lift[int] n in box (store: env |- lifted_n with ())
-    | Var (x) -> let box lifted_x = lift[string] x in box (store: env |- (lookup with ()) store (lifted_x with ()))
+    | Int (n) -> let box lifted_n = lift[int] n in box (lookup: env -> string -> int, store: env |- lifted_n with ())
+    | Var (x) -> let box lifted_x = lift[string] x in box (lookup: env -> string -> int, store: env |- (lookup) store (lifted_x with ()))
     | Add (e1, e2) -> 
         let box partial_1 = eval_staged e1 in
         let box partial_2 = eval_staged e2 in
-        box (store: env |- 
-            (partial_1 with (store)) + (partial_2 with (store))
+        box (lookup: env -> string -> int, store: env |- 
+            (partial_1 with (lookup, store)) + (partial_2 with (lookup, store))
         )
     | Leq (e1, e2) ->
         let box partial_1 = eval_staged e1 in
         let box partial_2 = eval_staged e2 in
-        box (store: env |- 
-            if ((partial_1 with (store)) <= (partial_2 with (store))) then 1 else 0
+        box (lookup: env -> string -> int, store: env |- 
+            if ((partial_1 with (lookup, store)) <= (partial_2 with (lookup, store))) then 1 else 0
         )
     | Mul (e1, e2) -> 
         let box partial_1 = eval_staged e1 in
         let box partial_2 = eval_staged e2 in
-        box (store: env |- 
-            (partial_1 with (store)) * (partial_2 with (store))
+        box (lookup: env -> string -> int, store: env |- 
+            (partial_1 with (lookup, store)) * (partial_2 with (lookup, store))
         );;
 
-let rec run_staged: com -> [store: env] env = 
-let box update = update_box in
+let rec run_staged: com -> [update: env -> (string * int) -> env, lookup: env -> string -> int, store: env] env = 
 fun (c: com) ->
     match c with
     | Assign (s, e) -> 
         let box eval_partial = eval_staged e in
         let box lifted_s = lift[string] s in
-        box (store: env |-
-            (update with ()) store (lifted_s with (), eval_partial with (store))
+        box (update: env -> (string * int) -> env, lookup: env -> string -> int, store: env |-
+            (update) store (lifted_s with (), eval_partial with (lookup, store))
         )
     | Seq (c1, c2) -> 
         let box run_partial_1 = run_staged c1 in
         let box run_partial_2 = run_staged c2 in
-        box (store: env |- 
-            let new_store: env = run_partial_1 with (store) in
-            run_partial_2 with (new_store)
+        box (update: env -> (string * int) -> env, lookup: env -> string -> int, store: env |- 
+            let new_store: env = run_partial_1 with (update, lookup, store) in
+            run_partial_2 with (update, lookup, new_store)
         )
     | Cond (e, c1, c2) -> 
         let box eval_partial = eval_staged e in
         let box run_partial_1 = run_staged c1 in
         let box run_partial_2 = run_staged c2 in
-        box (store: env |- 
-            if (eval_partial with (store) = 0) then run_partial_2 with (store) else run_partial_1 with (store)
+        box (update: env -> (string * int) -> env, lookup: env -> string -> int, store: env |- 
+            if (eval_partial with (lookup, store) = 0) then run_partial_2 with (update, lookup, store) else run_partial_1 with (update, lookup, store)
         )
     | While (e, c) -> 
         let box eval_partial = eval_staged e in
         let box loop_body_partial = run_staged c in 
-        box (store: env |- 
+        box (update: env -> (string * int) -> env, lookup: env -> string -> int, store: env |- 
             let rec loop: env -> env = fun (store: env) ->
-                if (eval_partial with (store)) = 0 then store
-                else let new_store: env = loop_body_partial with (store) in 
+                if (eval_partial with (lookup, store)) = 0 then store
+                else let new_store: env = loop_body_partial with (update, lookup, store) in 
                 loop new_store
             in
             loop store
         )
-    | DoNothing -> box (store: env |- store)
+    | DoNothing -> box (update: env -> (string * int) -> env, lookup: env -> string -> int, store: env |- store)
     ;;
 
 let interpret_staged: (string_list * string_list * com) -> [args: int_list] int_list =
 let box zip = zip_box in
+let box update = update_box in
+let box lookup = lookup_box in
 fun (program: (string_list * string_list * com)) -> 
     let box lifted_input = lift[string_list] (program[0]) in
     let box env_to_out_partial = env_to_out_staged (program[1]) in
     let box run_partial = run_staged (program[2]) in
     box (args: int_list|-
-        let zipped_env: env = (zip with ()) (lifted_input with ()) args in
-        let new_env: env = run_partial with (zipped_env) in
-        (env_to_out_partial with (new_env))
+        let zip: string_list -> int_list -> env = (zip with ()) in
+        let lookup: env -> string -> int = lookup with () in
+        let update: env -> (string * int) -> env = update with () in
+        let zipped_env: env = zip (lifted_input with ()) args in
+        let new_env: env = run_partial with (update, lookup, zipped_env) in
+        (env_to_out_partial with (lookup, new_env))
     );;
 
 
@@ -274,3 +276,13 @@ let compiled: [args: int_list]int_list = interpret_staged fib_program;;
 let box u = compiled in u with (args);;
 
 interpret fib_program args;;
+
+let example_program: (string_list * string_list * com) = 
+(
+    Cons_s ("i", Nil_s),
+    Cons_s ("i", Nil_s),
+    Seq (Assign ("j", Int (1)), 
+        Assign ("i", Add (Var ("j"), Var ("i"))))
+);;
+
+interpret_staged example_program;;

@@ -41,12 +41,14 @@ map_int_int (pow_10_compiled) (Cons (1, Cons (2, Nil)));;
 pow_compiled 0;;
 pow 512 0;;
 
+(*
 let rec run_n_times: (int -> int) -> int -> intlist -> intlist =
     fun (f: int -> int) -> fun (x: int) ->  fun (xs: intlist) -> 
         match xs with
         | Cons (x, xs) ->
             Cons(f 0, run_n_times f (x-1) xs)
         | Nil -> Nil;;
+*)
 
 (*
 run_n_times pow_compiled 512;;

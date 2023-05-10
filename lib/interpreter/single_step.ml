@@ -3,6 +3,7 @@ open Lys_substitutions
 open Core
 open Interpreter_common
 open Lys_utils
+open Lys_typing
 
 module ReduceResult : sig
   type t =
@@ -32,6 +33,61 @@ end = struct
         match reduced_to_val with
         | None -> v |> Ast.Value.to_expr |> reduced
         | Some r -> v |> r)
+end
+
+module TypeCheckEachStep : sig
+  type t =
+    | NoCheck
+    | CheckType of Ast.Typ.t
+    | CheckRec of Ast.IdentifierDefn.t list * Ast.Typ.t
+
+  val type_check_if_needed :
+    EvaluationContext.t ->
+    TypeConstrContext.t ->
+    int ->
+    Ast.Expr.t ->
+    t ->
+    unit Or_error.t
+end = struct
+  type t =
+    | NoCheck
+    | CheckType of Ast.Typ.t
+    | CheckRec of Ast.IdentifierDefn.t list * Ast.Typ.t
+
+  let type_check_if_needed top_level_context type_constr_context step_cnt expr
+      type_to_check =
+    match type_to_check with
+    | NoCheck -> Ok ()
+    | CheckType typ ->
+        Typecore.type_check_expression
+          (Typing_context.MetaTypingContext.create_empty_context ())
+          (Interpreter_common.EvaluationContext.to_typing_obj_context
+             top_level_context)
+          type_constr_context
+          (Typing_context.PolyTypeVarContext.create_empty_context ())
+          ~allow_refs:true expr typ
+        |> Or_error.tag
+             ~tag:
+               (Printf.sprintf
+                  "SingleStepEvaluationTypeCheckError: Type preservation \
+                   failed at step %i"
+                  step_cnt)
+    | CheckRec (iddefs, typ) ->
+        Typecore.type_check_expression
+          (Typing_context.MetaTypingContext.create_empty_context ())
+          (Typing_context.ObjTypingContext.add_all_mappings
+             (Interpreter_common.EvaluationContext.to_typing_obj_context
+                top_level_context)
+             (List.map iddefs ~f:(fun (x, typ) -> (x, (typ, 0)))))
+          type_constr_context
+          (Typing_context.PolyTypeVarContext.create_empty_context ())
+          ~allow_refs:true expr typ
+        |> Or_error.tag
+             ~tag:
+               (Printf.sprintf
+                  "SingleStepEvaluationTypeCheckError: Type preservation \
+                   failed at step %i"
+                  step_cnt)
 end
 
 let rec reduce ~top_level_context ~type_constr_context expr =
@@ -850,8 +906,8 @@ let rec reduce ~top_level_context ~type_constr_context expr =
                       Ok (ReduceResult.ReducedToExpr substitued_e)
                   | _ ->
                       Or_error.error
-                        "SingleStepReductionError: FATAL: can only type apply on a big \
-                         lambda. (term)"
+                        "SingleStepReductionError: FATAL: can only type apply \
+                         on a big lambda. (term)"
                         (Ast.Expr.TypeApply (e, typ))
                         [%sexp_of: Ast.Expr.t])
       | Ast.Expr.Pack (interface, typ, e) ->
@@ -885,16 +941,21 @@ let rec reduce ~top_level_context ~type_constr_context expr =
                       >>= fun e2 -> Ok (ReduceResult.ReducedToExpr e2)
                   | _ ->
                       Or_error.error
-                        "SingleStepReductionError: FATAL: value given to unpack doesn't \
-                         reduce to a pack. (e_to_unpack)"
+                        "SingleStepReductionError: FATAL: value given to \
+                         unpack doesn't reduce to a pack. (e_to_unpack)"
                         e1 [%sexp_of: Ast.Expr.t]))
 
 let multi_step_reduce ~top_level_context ~type_constr_context ?(verbose = false)
-    expr =
+    ?(type_to_check = TypeCheckEachStep.NoCheck) expr =
   let open Or_error.Monad_infix in
   if verbose then
     let rec multi_step_reduce_aux ~top_level_context ~type_constr_context
         ~steps_reversed expr =
+      TypeCheckEachStep.type_check_if_needed top_level_context
+        type_constr_context
+        (List.length steps_reversed)
+        expr type_to_check
+      >>= fun () ->
       reduce ~top_level_context ~type_constr_context expr >>= fun res ->
       match res with
       | ReduceResult.NotReduced v -> Ok (v, steps_reversed)
@@ -911,6 +972,9 @@ let multi_step_reduce ~top_level_context ~type_constr_context ?(verbose = false)
   else
     let rec multi_step_reduce_aux ~top_level_context ~type_constr_context ~count
         expr =
+      TypeCheckEachStep.type_check_if_needed top_level_context
+        type_constr_context count expr type_to_check
+      >>= fun () ->
       reduce ~top_level_context ~type_constr_context expr >>= fun res ->
       match res with
       | ReduceResult.NotReduced v -> Ok (v, count)
@@ -924,11 +988,17 @@ let multi_step_reduce ~top_level_context ~type_constr_context ?(verbose = false)
 
 let evaluate_top_level_defn ?(top_level_context = EvaluationContext.empty)
     ?(type_constr_context = TypeConstrContext.empty) ?(show_step_count = false)
-    ?(verbose = false) top_level_defn =
+    ?(verbose = false) ?(type_check_each_step = false) top_level_defn =
   let open Or_error.Monad_infix in
   match top_level_defn with
   | Ast.TypedTopLevelDefn.Definition (typ, (id, _), e) ->
-      multi_step_reduce ~top_level_context ~type_constr_context ~verbose e
+      (if type_check_each_step then
+       multi_step_reduce ~top_level_context ~type_constr_context ~verbose
+         ~type_to_check:
+           (if type_check_each_step then TypeCheckEachStep.CheckType typ
+           else NoCheck)
+         e
+      else multi_step_reduce ~top_level_context ~type_constr_context ~verbose e)
       >>= fun (v, count, steps_opt) ->
       let new_context =
         EvaluationContext.set top_level_context
@@ -947,7 +1017,12 @@ let evaluate_top_level_defn ?(top_level_context = EvaluationContext.empty)
           new_context,
           type_constr_context )
   | Ast.TypedTopLevelDefn.RecursiveDefinition (typ, (id, _), e) ->
-      multi_step_reduce ~top_level_context ~type_constr_context ~verbose e
+      multi_step_reduce ~top_level_context ~type_constr_context ~verbose
+        ~type_to_check:
+          (if type_check_each_step then
+           TypeCheckEachStep.CheckRec ([ (id, typ) ], typ)
+          else NoCheck)
+        e
       >>= fun (v, count, steps_opt) ->
       let new_entry : EvaluationContext.single_record =
         { rec_preface = [ ((id, typ), Ast.Value.to_expr v) ]; typ; value = v }
@@ -968,7 +1043,10 @@ let evaluate_top_level_defn ?(top_level_context = EvaluationContext.empty)
           new_context,
           type_constr_context )
   | Ast.TypedTopLevelDefn.Expression (typ, e) ->
-      multi_step_reduce ~top_level_context ~type_constr_context ~verbose e
+      (if type_check_each_step then
+       multi_step_reduce ~top_level_context ~type_constr_context ~verbose
+         ~type_to_check:(TypeCheckEachStep.CheckType typ) e
+      else multi_step_reduce ~top_level_context ~type_constr_context ~verbose e)
       >>= fun (v, count, steps_opt) ->
       let count_opt = if show_step_count then Some count else None in
       let verbose_opt =
@@ -982,8 +1060,14 @@ let evaluate_top_level_defn ?(top_level_context = EvaluationContext.empty)
           top_level_context,
           type_constr_context )
   | Ast.TypedTopLevelDefn.MutualRecursiveDefinition iddef_e_list ->
-      List.map iddef_e_list ~f:(fun (_, iddef, e) ->
-          multi_step_reduce ~top_level_context ~type_constr_context ~verbose e
+      let iddefs = List.map iddef_e_list ~f:(fun (_, iddef, _) -> iddef) in
+      List.map iddef_e_list ~f:(fun (typ, iddef, e) ->
+          multi_step_reduce ~top_level_context ~type_constr_context ~verbose
+            ~type_to_check:
+              (if type_check_each_step then
+               TypeCheckEachStep.CheckRec (iddefs, typ)
+              else NoCheck)
+            e
           >>= fun (v, count, verbose_opt) ->
           let count_opt = if show_step_count then Some count else None in
           let verbose_opt =

@@ -6,7 +6,7 @@ open Lys_benchmarks
 let benchmarks : Bench_defns.Current.Benchmark_config.base_benchmark_record list
     =
   [
-    {
+    (* {
       base_program_loc = "test/example_programs/simple_programs/convolution.lys";
       run = 1000;
       program =
@@ -38,35 +38,64 @@ let benchmarks : Bench_defns.Current.Benchmark_config.base_benchmark_record list
                          "Cons" "Nil";
                    };
                  ] ));
-    };
+    }; *)
     (* {
-         base_program_loc = "test/example_programs/simple_programs/hello_world.lys";
-         run = 10000;
-         name = "pow";
-         program =
-           {
-             program_run = "pow";
-             program_compile = "pow2";
-             program_staged_name = "p";
-             compiled_type = "[x:int]int";
-           };
-         arguments =
-           [
-             (2, [ 1; 2; 5; 10; 20; 50; 100 ]);
-             (5, [ 1; 2; 5; 10; 20; 50; 100 ]);
-             (10, [ 1; 2; 5; 10; 20; 50; 100 ]);
-             (50, [ 1; 2; 5; 10; 20; 50; 100 ]);
-           ]
-           |> List.map ~f:(fun (stage_0, stage_1_list) ->
-                  let str_stage_0 = Int.to_string stage_0 in
-                  let str_stage_1 =
-                    List.map
-                      ~f:(fun i ->
-                        { name = Some (Int.to_string i); body = Int.to_string i })
-                      stage_1_list
-                  in
-                  ({ name = Some str_stage_0; body = str_stage_0 }, str_stage_1));
-       };
+      base_program_loc = "test/example_programs/simple_programs/hello_world.lys";
+      run = 10000;
+      name = "pow";
+      program =
+        {
+          program_run = "pow";
+          program_compile = "pow2";
+          program_staged_name = "p";
+          compiled_type = "[x:int]int";
+        };
+      arguments =
+        [
+          (* (2, [ 1; 2; 5; 10; 20; 50; 100 ]);
+          (5, [ 1; 2; 5; 10; 20; 50; 100 ]); *)
+          (10, [ 1; 2; 5; 10; 20; 50; 100; 200 ]);
+          (* (50, [ 1; 2; 5; 10; 20; 50; 100 ]); *)
+        ]
+        |> List.map ~f:(fun (stage_0, stage_1_list) ->
+               let str_stage_0 = Int.to_string stage_0 in
+               let str_stage_1 =
+                 List.map
+                   ~f:(fun i ->
+                     { Bench_defns.Current.Benchmark_config.name = Some (Int.to_string i); body = Int.to_string i })
+                   stage_1_list
+               in
+               ({ Bench_defns.Current.Benchmark_config.name = Some str_stage_0; body = str_stage_0 }, str_stage_1));
+    }; *)
+    {
+      base_program_loc = "test/example_programs/simple_programs/pow_failed_staging.lys";
+      run = 10000;
+      name = "pow_bad";
+      program =
+        {
+          program_run = "pow_bad";
+          program_compile = "pow_bad_staged";
+          program_staged_name = "p";
+          compiled_type = "[x:int]int";
+        };
+      arguments =
+        [
+          (* (2, [ 1; 2; 5; 10; 20; 50; 100 ]);
+          (5, [ 1; 2; 5; 10; 20; 50; 100 ]); *)
+          (10, [ 1; 2; 5; 10; 20; 50; 100; 200; 500; 1000; 2000 ]);
+          (* (50, [ 1; 2; 5; 10; 20; 50; 100 ]); *)
+        ]
+        |> List.map ~f:(fun (stage_0, stage_1_list) ->
+               let str_stage_0 = Int.to_string stage_0 in
+               let str_stage_1 =
+                 List.map
+                   ~f:(fun i ->
+                     { Bench_defns.Current.Benchmark_config.name = Some (Int.to_string i); body = Int.to_string i })
+                   stage_1_list
+               in
+               ({ Bench_defns.Current.Benchmark_config.name = Some str_stage_0; body = str_stage_0 }, str_stage_1));
+    };
+    (*
        {
          name = "regexp";
          base_program_loc = "test/example_programs/regexp/regexp.lys";
@@ -118,8 +147,8 @@ let benchmarks : Bench_defns.Current.Benchmark_config.base_benchmark_record list
               regexps);
        }; *)
     (* {
-         base_program_loc = "test/example_programs/while_language/while.lys";
-         run = 200;
+         base_program_loc = "test/example_programs/while_language/while_better.lys";
+         run = 100;
          name = "while";
          program =
            {
@@ -131,17 +160,17 @@ let benchmarks : Bench_defns.Current.Benchmark_config.base_benchmark_record list
          arguments =
            [
              ( { name = Some "fib_program"; body = "fib_program" },
-               [ 1; 2; 5; 10; 20; 50; 100 ]
+               [ 1; 2; 5; 10; 20; 50; 100; (*200; 500*) ]
                |> List.map ~f:(fun i ->
                       {
-                        name = Some (Int.to_string i);
+                        Bench_defns.Current.Benchmark_config.name = Some (Int.to_string i);
                         body =
                           Benchmark_utils.print_int_list [ i ] "Cons_i" "Nil_i";
                       }) );
            ];
-       }; *)
-    (* {
-         base_program_loc = "test/example_programs/flowchart/flowchart.lys";
+       };
+    {
+         base_program_loc = "test/example_programs/flowchart/flowchart_better.lys";
          run = 100;
          name = "flowchart";
          program =
@@ -157,7 +186,7 @@ let benchmarks : Bench_defns.Current.Benchmark_config.base_benchmark_record list
                [ 1; 2; 5; 10; 20; 50; 100 ]
                |> List.map ~f:(fun i ->
                       {
-                        name = Some (Int.to_string i);
+                        Bench_defns.Current.Benchmark_config.name = Some (Int.to_string i);
                         body =
                           Benchmark_utils.print_int_list [ i ] "Cons_i" "Nil_i";
                       }) );
@@ -401,11 +430,11 @@ let (additional_benchmarks2 :
         List.map
           [
             (* (2, [ 1; 2; 4; 8; 16; 32; 64; 128; 256; 512 ]);
-               (4, [ 1; 2; 4; 8; 16; 32; 64; 128; 256; 512 ]);
-               (8, [ 1; 2; 4; 8; 16; 32; 64; 128; 256; 512 ]); *)
+            (4, [ 1; 2; 4; 8; 16; 32; 64; 128; 256; 512 ]);
+            (8, [ 1; 2; 4; 8; 16; 32; 64; 128; 256; 512 ]); *)
             (16, [ 1; 2; 4; 8; 16; 32; 64; 128; 256; 512 ]);
             (* (32, [ 1; 2; 4; 8; 16; 32; 64; 128; 256; 512 ]);
-               (64, [ 1; 2; 4; 8; 16; 32; 64; 128; 256; 512 ]); *)
+            (64, [ 1; 2; 4; 8; 16; 32; 64; 128; 256; 512 ]);  *)
           ]
           ~f:(fun (exponent, length_list) ->
             List.map length_list ~f:(fun length ->
@@ -488,7 +517,7 @@ let () =
       let bench =
         (* Bench_cb.compile_bench benchmarks2 *)
         Bench_cb.compile_bench benchmarks
-        (* Bench_cb.compile_bench benchmarks *)
+        (* [] *)
         (* @ Bench_cb.compile_bench_legacy additional_benchmarks2 *)
       in
       match filename_opt with

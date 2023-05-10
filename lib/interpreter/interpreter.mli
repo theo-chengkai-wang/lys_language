@@ -5,7 +5,11 @@ open Interpreter_common
 type t =
   | MultiStep of { show_time : bool }
   (*Show Time and Show Steps*)
-  | SingleStep of { show_step_count : bool; verbose : bool }
+  | SingleStep of {
+      show_step_count : bool;
+      verbose : bool;
+      type_check_each_step : bool;
+    }
 (*Show Steps and Verbose*)
 [@@deriving show, sexp]
 

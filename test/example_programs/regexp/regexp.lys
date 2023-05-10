@@ -215,3 +215,12 @@ accept2 (Times (
 *)
 
 Star (Plus (Times (Const ('a'), Const ('a')), Times (Const ('a'), Const ('a'))));;
+
+let compiled_regexp: [str:string]bool = 
+    accept2 (Times (Const ('0'), Star (Times (Star (Const ('a')), Const('b')))));;
+
+let box u = compiled_regexp in
+    u with ("0aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabaaaaaaaaaaaaaaaaaaaaaaabaaaaababaaabaaaaaaabaabbaaababb")
+;;
+
+accept1 (Times (Const ('0'), Star (Times (Star (Const ('a')), Const('b'))))) "0aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabaaaaaaaaaaaaaaaaaaaaaaabaaaaababaaabaaaaaaabaabbaaababb";;
